@@ -21,20 +21,20 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #100e0b;
-    --surface: #19160f;
-    --surface-2: #221e16;
-    --ink: #f5f1e8;
-    --muted: #a39b8d;
-    --line: #2f2a20;
-    --brand: #8b76ff;
-    --brand-ink: #100e0b;
-    --brand-soft: #25205a;
-    --good: #4cd694;
-    --good-soft: #0f2f22;
-    --bad: #ff8a80;
-    --bad-soft: #3a1512;
-    --warn-soft: #3a2a08;
+    --bg: #090a0f;
+    --surface: #11131a;
+    --surface-2: #181c26;
+    --ink: #f3f4f8;
+    --muted: #8b92a5;
+    --line: #222736;
+    --brand: #6366f1;
+    --brand-ink: #ffffff;
+    --brand-soft: #1e1b4b;
+    --good: #10b981;
+    --good-soft: #064e3b;
+    --bad: #f43f5e;
+    --bad-soft: #4c0519;
+    --warn-soft: #451a03;
   }
 }
 
@@ -127,6 +127,29 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
     background-size: 24px 24px;
     background-image: radial-gradient(circle, var(--line) 1px, transparent 1px);
   }
+
+  .glow-brand {
+    box-shadow: 0 0 50px -10px rgba(99, 102, 241, 0.25);
+  }
+}
+
+@keyframes qr-scan {
+  0% {
+    top: 0%;
+    opacity: 0.8;
+  }
+  50% {
+    top: 92%;
+    opacity: 1;
+  }
+  100% {
+    top: 0%;
+    opacity: 0.8;
+  }
+}
+
+.animate-scan {
+  animation: qr-scan 2.4s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
