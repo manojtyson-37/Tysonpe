@@ -4,9 +4,11 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { createLimiter } from "@/lib/auth/rate-limit";
-import { AppError, confirmPayment, createCheckoutOrder, markOrderFailed } from "@/lib/orders";
-import { getProvider } from "@/lib/payments";
+import { AppError, confirmPayment, createCheckoutOrder, isOrderFresh, markOrderFailed } from "@/lib/orders";
+import { getEasebuzzProvider, getProvider } from "@/lib/payments";
+import { attemptTxnid } from "@/lib/payments/easebuzz";
 import { signMockPayment } from "@/lib/payments/mock";
+import { type DemoOutcome, settleDemoPayment } from "@/lib/payments/demo";
 import type { FormState } from "./auth";
 
 // Stops order spam and coupon-code guessing through the distinct error messages.
@@ -76,4 +78,80 @@ export async function mockPayAction(orderId: string, outcome: "success" | "failu
     redirect(`/checkout/pay/${order.id}?failed=1`);
   }
   redirect(`/checkout/success/${order.id}`);
+}
+
+/** Settle a demo-gateway payment (Razorpay modal or Easebuzz hosted replica). */
+export async function settleDemoAction(
+  orderId: string,
+  outcome: DemoOutcome,
+): Promise<{ ok: boolean; to: string; error?: string }> {
+  const user = await requireUser();
+  try {
+    const res = await settleDemoPayment({ userId: user.id, orderId, outcome });
+    return { ok: true, to: res.to };
+  } catch (e) {
+    if (e instanceof AppError) return { ok: false, to: `/checkout/pay/${orderId}?failed=1`, error: e.message };
+    throw e;
+  }
+}
+
+/** Form action for Easebuzz replica hosted page redirect return (303). */
+export async function settleEasebuzzDemoAction(orderId: string, outcome: DemoOutcome = "success") {
+  const user = await requireUser();
+  const res = await settleDemoPayment({ userId: user.id, orderId, outcome });
+  redirect(res.to);
+}
+
+/** Allows resetting demo enrollment so presenters can test multiple gateways repeatedly. */
+export async function resetDemoEnrollmentAction(productId: string) {
+  if (process.env.NODE_ENV === "production") throw new Error("Demo actions disabled in production.");
+  const user = await requireUser();
+  await db.enrollment.deleteMany({ where: { userId: user.id, productId } });
+  redirect(`/demo`);
+}
+
+const easebuzzStart = createLimiter({ max: 15, windowMs: 10 * 60 * 1000 });
+/** Easebuzz rejects odd characters in these free-text fields, and the hash must cover exactly what we send. */
+const clean = (v: string, max: number) => v.replace(/[^\p{L}\p{N} .,'&()/-]/gu, " ").replace(/\s+/g, " ").trim().slice(0, max);
+
+/** Exchange the pending order for a one-off Easebuzz pay link and send the buyer there. */
+export async function startEasebuzzPayment(orderId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requireUser();
+  if (!easebuzzStart.hit(user.id)) return { error: "Too many attempts. Please wait a few minutes." };
+  const phone = String(fd.get("phone") ?? "").replace(/[\s-]/g, "").replace(/^(\+91|91|0)(?=\d{10}$)/, "");
+  if (!/^\d{10}$/.test(phone)) return { error: "Enter a valid 10-digit mobile number.", fields: { phone: "Enter a valid 10-digit mobile number." } };
+
+  const order = await db.order.findFirst({ where: { id: orderId, userId: user.id }, include: { product: true } });
+  if (!order || order.provider !== "easebuzz") redirect("/library");
+  if (order.status === "paid") redirect(`/checkout/success/${order.id}`);
+  if (order.status === "refunded") redirect("/library");
+  // Never send an already-enrolled buyer to the gateway (e.g. a second order for the same product paid meanwhile).
+  const enrolled = await db.enrollment.findUnique({ where: { userId_productId: { userId: user.id, productId: order.productId } } });
+  if (enrolled) redirect(`/library/${order.productId}`);
+  // A stale order may have lost its coupon hold or old price: restart from checkout instead of paying it.
+  if (!isOrderFresh(order.createdAt)) redirect(`/checkout/${order.productId}`);
+  // A failed attempt released its coupon hold; paying it now would re-take the redemption over the cap.
+  if (order.couponId && !order.couponReserved) redirect(`/checkout/${order.productId}`);
+
+  const provider = getEasebuzzProvider();
+  const base = process.env.NEXT_PUBLIC_APP_URL;
+  if (!provider || !base) return { error: "Payments are not configured." };
+
+  let payUrl: string;
+  try {
+    ({ payUrl } = await provider.initiatePayment({
+      txnid: attemptTxnid(order.providerOrderId), // Easebuzz rejects a reused txnid, so retries need a fresh one
+      amountPaise: order.totalPaise,
+      productinfo: clean(order.product.title, 100) || "Tysonpe order",
+      firstname: clean(user.name.split(" ")[0] ?? "", 60) || "Customer",
+      email: user.email,
+      phone,
+      surl: new URL("/api/easebuzz/return", base).toString(),
+      furl: new URL("/api/easebuzz/return", base).toString(),
+    }));
+  } catch (e) {
+    console.error("easebuzz initiate failed", e);
+    return { error: "We couldn't reach the payment gateway. Please try again." };
+  }
+  redirect(payUrl);
 }

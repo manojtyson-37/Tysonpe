@@ -1,11 +1,15 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { mockPayAction } from "@/app/actions/checkout";
+import { startEasebuzzPayment } from "@/app/actions/checkout";
+import { ActionForm, Field, FormError, SubmitButton } from "@/components/form";
+import { DemoPayPageClient } from "@/components/DemoPayPageClient";
 import { RazorpayButton } from "@/components/RazorpayButton";
 import { Money } from "@/components/ui";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { isOrderFresh } from "@/lib/orders";
 import { getProvider } from "@/lib/payments";
+import { resolveGateway } from "@/lib/payments/gateways";
 
 export const metadata: Metadata = { title: "Pay" };
 
@@ -17,6 +21,7 @@ export default async function PayPage({ params, searchParams }: PageProps<"/chec
   if (!order) notFound();
   if (order.status === "paid") redirect(`/checkout/success/${order.id}`);
   if (order.status === "refunded") redirect("/library");
+  if (!isOrderFresh(order.createdAt)) redirect(`/checkout/${order.productId}`);
 
   const failed = sp.failed === "1" || order.status === "failed";
   const provider = getProvider();
@@ -44,18 +49,36 @@ export default async function PayPage({ params, searchParams }: PageProps<"/chec
               buyer={{ name: user.name, email: user.email }}
               label={`Pay ${new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(order.totalPaise / 100)}`}
             />
+          ) : order.provider === "easebuzz" && provider.name === "easebuzz" ? (
+            <ActionForm action={startEasebuzzPayment.bind(null, order.id)} className="space-y-4">
+              <Field
+                name="phone"
+                label="Mobile number"
+                type="tel"
+                autoComplete="tel-national"
+                placeholder="10-digit mobile number"
+                hint="Required by the payment gateway."
+                required
+              />
+              <FormError />
+              <SubmitButton pendingText="Opening secure payment page…" className="btn btn-primary btn-lg w-full">
+                Pay securely with Easebuzz
+              </SubmitButton>
+              {process.env.EASEBUZZ_ENV !== "prod" && (
+                <p className="rounded-xl bg-warn-soft px-3.5 py-2.5 text-xs">
+                  <strong>Test mode.</strong> Easebuzz sandbox: use a test card on the next page. No real money moves.
+                </p>
+              )}
+            </ActionForm>
           ) : order.provider === "mock" && provider.name === "mock" ? (
-            <div className="space-y-3">
-              <p className="rounded-xl bg-warn-soft px-3.5 py-2.5 text-sm">
-                <strong>Test mode.</strong> No gateway keys are configured, so this is a simulated checkout. No money moves.
-              </p>
-              <form action={mockPayAction.bind(null, order.id, "success")}>
-                <button className="btn btn-primary btn-lg w-full" type="submit">Simulate successful payment</button>
-              </form>
-              <form action={mockPayAction.bind(null, order.id, "failure")}>
-                <button className="btn btn-secondary w-full" type="submit">Simulate failed payment</button>
-              </form>
-            </div>
+            <DemoPayPageClient
+              orderId={order.id}
+              amountPaise={order.totalPaise}
+              productTitle={order.product.title}
+              initialGateway={resolveGateway(sp.gw, user.preferredGateway)}
+              buyer={{ name: user.name, email: user.email }}
+              failed={failed}
+            />
           ) : (
             <p className="text-sm text-bad">This order was created with a different payment setup. Please start a new checkout.</p>
           )}

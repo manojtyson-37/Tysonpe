@@ -31,11 +31,51 @@ function RoleFields({ initialRole }: { initialRole: "learner" | "creator" }) {
   );
 }
 
+function GatewayFields() {
+  const submitted = useFormValues();
+  const [picked, setPicked] = useState<string | null>(null);
+  const gateway = picked ?? submitted?.preferredGateway ?? "razorpay";
+  return (
+    <fieldset>
+      <legend className="label">Preferred gateway for demo</legend>
+      <p className="text-xs text-muted mb-2">Simulate checkout as your buyers will see it.</p>
+      <div className="grid grid-cols-2 gap-2">
+        {([
+          ["razorpay", "Razorpay", "In-page modal: UPI, cards & netbanking"],
+          ["easebuzz", "Easebuzz", "Hosted checkout with 15-min countdown timer"],
+        ] as const).map(([v, l, desc]) => (
+          <label
+            key={v}
+            className={`cursor-pointer rounded-xl border p-3 text-left transition has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-brand ${
+              gateway === v ? "border-brand bg-brand-soft text-brand ring-1 ring-brand" : "border-line hover:bg-surface-2"
+            }`}
+          >
+            <input
+              type="radio"
+              name="preferredGateway"
+              value={v}
+              defaultChecked={gateway === v}
+              onChange={() => setPicked(v)}
+              className="sr-only"
+            />
+            <div className="font-semibold text-sm flex items-center justify-between">
+              <span>{l}</span>
+              {gateway === v && <span className="text-xs font-bold text-brand">✓</span>}
+            </div>
+            <div className="text-xs text-muted mt-1 leading-snug">{desc}</div>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 export function SignupForm({ initialRole, next }: { initialRole: "learner" | "creator"; next?: string }) {
   return (
     <ActionForm action={signup} className="space-y-4">
       {next && <input type="hidden" name="next" value={next} />}
       <RoleFields initialRole={initialRole} />
+      <GatewayFields />
       <FormError />
       <SubmitButton pendingText="Creating account…" className="btn btn-primary w-full">Create account</SubmitButton>
     </ActionForm>

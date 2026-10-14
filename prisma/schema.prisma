@@ -16,6 +16,7 @@ model User {
   email        String   @unique
   name         String
   passwordHash String
+  preferredGateway String @default("razorpay") // razorpay | easebuzz: which gateway's checkout the demo shows
   createdAt    DateTime @default(now())
 
   creator     Creator?
@@ -223,7 +224,7 @@ model Order {
   totalPaise          Int
   gstPaise            Int // GST component included in total
   gstRatePct          Int
-  provider            String // razorpay | mock
+  provider            String // razorpay | easebuzz | mock | free
   couponReserved      Boolean   @default(false) // true while this order holds a coupon redemption
   providerOrderId     String    @unique
   providerPaymentId   String?

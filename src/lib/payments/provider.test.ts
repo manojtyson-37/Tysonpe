@@ -9,6 +9,19 @@ describe("getProvider", () => {
     vi.stubEnv("PAYMENTS_MODE", "mock");
     expect(getProvider().name).toBe("mock");
   });
+  it("PAYMENTS_MODE=demo forces the simulated gateway even when real keys are configured", () => {
+    vi.stubEnv("PAYMENTS_MODE", "demo");
+    vi.stubEnv("RAZORPAY_KEY_ID", "rzp_test_abc");
+    vi.stubEnv("RAZORPAY_KEY_SECRET", "s");
+    vi.stubEnv("EASEBUZZ_KEY", "k");
+    vi.stubEnv("EASEBUZZ_SALT", "s");
+    expect(getProvider().name).toBe("mock");
+  });
+  it("demo mode is refused in production", () => {
+    vi.stubEnv("PAYMENTS_MODE", "demo");
+    vi.stubEnv("NODE_ENV", "production");
+    expect(() => getProvider()).toThrow(/production/);
+  });
   it("without keys and without explicit mock mode it refuses to start", () => {
     vi.stubEnv("PAYMENTS_MODE", "");
     expect(() => getProvider()).toThrow(/PAYMENTS_MODE|RAZORPAY/);

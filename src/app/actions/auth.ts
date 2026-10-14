@@ -34,6 +34,7 @@ const signupSchema = z.object({
     .min(8, "Use at least 8 characters")
     .refine((v) => Buffer.byteLength(v) <= 72, "Use at most 72 bytes (bcrypt limit)"),
   role: z.enum(["learner", "creator"]),
+  preferredGateway: z.enum(["razorpay", "easebuzz"]).optional().default("razorpay"),
   handle: z.string().optional(),
 });
 
@@ -47,7 +48,7 @@ export async function signup(_prev: FormState, formData: FormData): Promise<Form
   if (!signupByIp.hit(await clientIp())) return { error: "Too many sign-ups from this network. Try again later." };
   const parsed = signupSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { fields: flatten(parsed.error) };
-  const { name, email, password, role } = parsed.data;
+  const { name, email, password, role, preferredGateway } = parsed.data;
 
   let handle: string | null = null;
   if (role === "creator") {
@@ -68,6 +69,7 @@ export async function signup(_prev: FormState, formData: FormData): Promise<Form
         name,
         email,
         passwordHash,
+        preferredGateway: preferredGateway ?? "razorpay",
         ...(handle ? { creator: { create: { handle, displayName: name } } } : {}),
       },
     });
@@ -77,7 +79,19 @@ export async function signup(_prev: FormState, formData: FormData): Promise<Form
     throw e;
   }
   await setSession(user.id);
-  redirect(safeNext(formData.get("next"), role === "creator" ? "/dashboard" : "/library"));
+  const nextParam = formData.get("next");
+  redirect(nextParam ? safeNext(nextParam, "/demo") : "/demo");
+}
+
+export async function setPreferredGateway(gateway: string) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  if (gateway !== "razorpay" && gateway !== "easebuzz") return;
+  await db.user.update({
+    where: { id: user.id },
+    data: { preferredGateway: gateway },
+  });
+  redirect("/demo");
 }
 
 export async function login(_prev: FormState, formData: FormData): Promise<FormState> {

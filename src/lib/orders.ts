@@ -3,7 +3,9 @@ import type { Prisma } from "@/generated/prisma/client";
 import { db } from "./db";
 import { fiscalYear, formatInvoiceNo } from "./invoice";
 import { feeBreakdown, priceOrder } from "./money";
-import { getProvider } from "./payments";
+import { getEasebuzzProvider, getProvider } from "./payments";
+import { orderIdFromTxnid, rupeesToPaise } from "./payments/easebuzz";
+import { isUniqueViolation } from "./errors";
 
 type Tx = Prisma.TransactionClient;
 
@@ -15,6 +17,11 @@ export { AppError };
 const MIN_CHARGE_PAISE = 100; // gateway minimum: ₹1
 /** A pending order holds its coupon redemption (and is reused on re-checkout) for this long. */
 const PENDING_HOLD_MS = 30 * 60 * 1000;
+
+/** An unpaid order older than the hold window may have lost its coupon hold or price: the buyer must re-checkout. */
+export function isOrderFresh(createdAt: Date) {
+  return createdAt.getTime() > Date.now() - PENDING_HOLD_MS;
+}
 
 const couponMessage: Record<string, string> = {
   inactive: "This coupon is no longer active.",
@@ -361,6 +368,60 @@ export async function handleWebhook(rawBody: string, signature: string | null, e
     .create({ data: { id, type: body.event ?? "unknown" } })
     .catch(() => undefined); // concurrent duplicate; processing above is idempotent
   return result;
+}
+
+/**
+ * Easebuzz surl/furl return and server-to-server webhook share this path. Nothing in the fields is
+ * trusted until the salted hash verifies; the amount must also equal the order total.
+ * Idempotent: the browser return and the webhook may both arrive, in either order, any number of times.
+ * `needsReview` means money may have moved but the order was NOT paid; it is logged and persisted for reconciliation.
+ * `easepayid` is NOT covered by Easebuzz's hash, and the browser return passes through the buyer, so only the
+ * server-to-server webhook may raise duplicate-capture flags from it.
+ */
+export async function handleEasebuzzCallback(fields: Record<string, string>, source: "webhook" | "return" = "webhook") {
+  const provider = getEasebuzzProvider();
+  if (!provider) throw new AppError("provider_mismatch");
+  if (!provider.verifyCallback(fields)) throw new AppError("bad_signature", "Payment could not be verified.");
+
+  const order = await db.order.findUnique({ where: { providerOrderId: orderIdFromTxnid(fields.txnid ?? "") } });
+  if (!order || order.provider !== "easebuzz") throw new AppError("not_found", "Order not found.");
+  const flag = (type: string, id: string) =>
+    db.webhookEvent.create({ data: { id: `easebuzz_${type}_${id}`, type: `easebuzz.${type}` } }).catch((e) => {
+      if (!isUniqueViolation(e)) console.error(`easebuzz: could not persist ${type} flag for ${id}`, e); // duplicate = already flagged
+    });
+
+  const status = (fields.status ?? "").toLowerCase();
+  if (status === "success") {
+    const amountPaise = rupeesToPaise(fields.amount);
+    if (amountPaise === null || !/^[A-Za-z0-9_-]{1,64}$/.test(fields.easepayid ?? "")) throw new AppError("invalid_payload");
+    let paid;
+    try {
+      paid = await markOrderPaid({
+        providerOrderId: order.providerOrderId,
+        paymentId: fields.easepayid,
+        expectedAmountPaise: amountPaise,
+      });
+    } catch (e) {
+      if (!(e instanceof AppError && e.code === "amount_mismatch")) throw e;
+      console.error(`easebuzz ${fields.txnid} (${fields.easepayid}): captured ${amountPaise} paise but order total is ${order.totalPaise}; order left unpaid`);
+      await flag("amount_mismatch", order.providerOrderId); // one row per order: easepayid is unsigned
+      return { orderId: order.id, paid: false, needsReview: true };
+    }
+    if (source === "webhook" && paid.providerPaymentId && paid.providerPaymentId !== fields.easepayid) {
+      // A second successful capture for an already-paid order (two attempts both paid): needs a manual refund.
+      console.error(`easebuzz ${fields.txnid}: duplicate capture ${fields.easepayid}; order already paid by ${paid.providerPaymentId}`);
+      await flag("duplicate_capture", `${order.providerOrderId}_${fields.easepayid}`);
+      return { orderId: order.id, paid: paid.status === "paid", needsReview: true };
+    }
+    return { orderId: order.id, paid: paid.status === "paid", needsReview: false };
+  }
+  if (status === "failure" || status === "usercancelled" || status === "bounced") {
+    const o = await markOrderFailed({ providerOrderId: order.providerOrderId });
+    return { orderId: order.id, paid: o.status === "paid", needsReview: false };
+  }
+  // pending / initiated / dropped: no state change; the buyer can retry from the pay page.
+  const current = await db.order.findUniqueOrThrow({ where: { id: order.id } });
+  return { orderId: order.id, paid: current.status === "paid", needsReview: false };
 }
 
 /* ---------- refunds ---------- */
