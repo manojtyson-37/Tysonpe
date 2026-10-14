@@ -105,10 +105,39 @@ async function main() {
     create: { creatorId: creator.id, code: "WELCOME20", percentOff: 20 },
   });
 
-  await db.user.upsert({
+  const learner = await db.user.upsert({
     where: { email: "learner@demo.tysonpe.test" },
     update: {},
     create: { email: "learner@demo.tysonpe.test", name: "Ravi Kumar", passwordHash },
+  });
+
+  const demoOrder = await db.order.upsert({
+    where: { providerOrderId: "order_mock_seed_ravi_course" },
+    update: {},
+    create: {
+      userId: learner.id,
+      productId: course.id,
+      creatorId: creator.id,
+      status: "paid",
+      subtotalPaise: 299900,
+      totalPaise: 353882,
+      gstPaise: 53982,
+      gstRatePct: 18,
+      provider: "razorpay",
+      providerOrderId: "order_mock_seed_ravi_course",
+      providerPaymentId: "pay_mock_seed_ravi",
+      paidAt: new Date(),
+    },
+  });
+
+  await db.enrollment.upsert({
+    where: { userId_productId: { userId: learner.id, productId: course.id } },
+    update: {},
+    create: {
+      userId: learner.id,
+      productId: course.id,
+      orderId: demoOrder.id,
+    },
   });
 
   console.log("Seeded. Demo logins: asha@demo.tysonpe.test (creator), learner@demo.tysonpe.test (learner).");
