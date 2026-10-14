@@ -1,0 +1,172 @@
+// Tysonpe core commerce schema.
+// Money is integer paise. Statuses are strings (validated in code) so the
+// schema ports to Postgres by changing the datasource provider + adapter only.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  creator     Creator?
+  orders      Order[]
+  enrollments Enrollment[]
+}
+
+model Creator {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  handle      String   @unique
+  displayName String
+  bio         String   @default("")
+  brandColor  String   @default("#6d28d9")
+  planKey     String   @default("basic") // basic | pro | advanced | ultimate
+  createdAt   DateTime @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  products Product[]
+  coupons  Coupon[]
+  orders   Order[]
+  ledger   LedgerEntry[]
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  creatorId   String
+  slug        String
+  type        String // course | membership | webinar | download | consultation
+  title       String
+  tagline     String   @default("")
+  description String   @default("")
+  pricePaise  Int // GST-inclusive
+  gstRatePct  Int      @default(18)
+  billing     String   @default("one_time") // one_time | monthly (label only in v1)
+  status      String   @default("draft") // draft | published
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator     Creator       @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  items       ContentItem[]
+  orders      Order[]
+  enrollments Enrollment[]
+
+  @@unique([creatorId, slug])
+  @@index([creatorId])
+}
+
+model ContentItem {
+  id        String @id @default(cuid())
+  productId String
+  title     String
+  kind      String // video | pdf | text | link
+  url       String @default("")
+  body      String @default("")
+  position  Int    @default(0)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, position])
+}
+
+model Coupon {
+  id             String    @id @default(cuid())
+  creatorId      String
+  code           String // stored uppercase
+  percentOff     Int? // 1..100
+  flatOffPaise   Int?
+  maxRedemptions Int?
+  redeemed       Int       @default(0)
+  expiresAt      DateTime?
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  orders  Order[]
+
+  @@unique([creatorId, code])
+}
+
+model Order {
+  id                  String    @id @default(cuid())
+  userId              String
+  productId           String
+  creatorId           String
+  couponId            String?
+  status              String    @default("created") // created | paid | failed | refunded
+  subtotalPaise       Int
+  discountPaise       Int       @default(0)
+  totalPaise          Int
+  gstPaise            Int // GST component included in total
+  gstRatePct          Int
+  provider            String // razorpay | mock
+  couponReserved      Boolean   @default(false) // true while this order holds a coupon redemption
+  providerOrderId     String    @unique
+  providerPaymentId   String?
+  invoiceNo           String? // consecutive per seller + fiscal year, see InvoiceCounter
+  createdAt           DateTime  @default(now())
+  paidAt              DateTime?
+  refundedAt          DateTime?
+
+  user       User          @relation(fields: [userId], references: [id])
+  product    Product       @relation(fields: [productId], references: [id])
+  creator    Creator       @relation(fields: [creatorId], references: [id])
+  coupon     Coupon?       @relation(fields: [couponId], references: [id])
+  enrollment Enrollment?
+  ledger     LedgerEntry?
+
+  @@index([userId])
+  @@unique([creatorId, invoiceNo])
+  @@index([creatorId, status])
+}
+
+model Enrollment {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  orderId   String   @unique
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+  order   Order   @relation(fields: [orderId], references: [id])
+
+  @@unique([userId, productId])
+}
+
+model LedgerEntry {
+  id             String   @id @default(cuid())
+  creatorId      String
+  orderId        String   @unique
+  grossPaise     Int
+  platformFeePaise Int
+  gatewayFeePaise  Int
+  netPaise       Int
+  createdAt      DateTime @default(now())
+
+  creator Creator @relation(fields: [creatorId], references: [id])
+  order   Order   @relation(fields: [orderId], references: [id])
+
+  @@index([creatorId])
+}
+
+model WebhookEvent {
+  id        String   @id // provider event id
+  type      String
+  createdAt DateTime @default(now())
+}
+
+/// Consecutive invoice numbers per seller per Indian fiscal year (Apr–Mar).
+model InvoiceCounter {
+  key String @id // `${creatorId}:${fiscalYear}`
+  seq Int    @default(0)
+}
