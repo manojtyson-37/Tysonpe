@@ -27,14 +27,33 @@ export default async function PayPage({ params, searchParams }: PageProps<"/chec
   const provider = getProvider();
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-14 sm:px-6">
-      <h1 className="text-3xl font-bold">Complete your payment</h1>
-      <div className="card mt-6 p-6">
-        <p className="font-semibold">{order.product.title}</p>
-        <p className="mt-1 text-3xl font-extrabold"><Money paise={order.totalPaise} /></p>
+    <div className="mx-auto max-w-xl px-4 py-12 sm:px-6">
+      <div className="text-center sm:text-left mb-6">
+        <span className="badge badge-brand text-[11px] font-bold uppercase tracking-wider mb-2">
+          Secure Payment
+        </span>
+        <h1 className="text-3xl font-extrabold tracking-tight text-ink font-display">
+          Complete Your Purchase
+        </h1>
+        <p className="text-sm text-muted mt-1">Review your order details and choose your payment method.</p>
+      </div>
+
+      <div className="card p-6 sm:p-7 shadow-sm rounded-[24px]">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-5">
+          <div className="space-y-0.5">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Item Description</span>
+            <p className="font-bold text-lg text-ink">{order.product.title}</p>
+          </div>
+          <div className="text-right">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted block">Total Payable</span>
+            <p className="text-3xl font-black text-ink tracking-tight"><Money paise={order.totalPaise} /></p>
+            <span className="text-[10px] text-muted block">Includes 18% GST</span>
+          </div>
+        </div>
+
         {failed && (
-          <p role="alert" className="mt-4 rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm font-medium text-bad">
-            The last payment attempt failed. No money was taken. You can try again.
+          <p role="alert" className="mt-4 rounded-xl bg-bad-soft px-3.5 py-2.5 text-xs font-semibold text-bad">
+            The previous payment attempt was declined or cancelled. No funds were debited. You can try again below.
           </p>
         )}
 

@@ -36,35 +36,65 @@ function GatewayFields() {
   const [picked, setPicked] = useState<string | null>(null);
   const gateway = picked ?? submitted?.preferredGateway ?? "razorpay";
   return (
-    <fieldset>
-      <legend className="label">Preferred gateway for demo</legend>
-      <p className="text-xs text-muted mb-2">Simulate checkout as your buyers will see it.</p>
-      <div className="grid grid-cols-2 gap-2">
-        {([
-          ["razorpay", "Razorpay", "In-page modal: UPI, cards & netbanking"],
-          ["easebuzz", "Easebuzz", "Hosted checkout with 15-min countdown timer"],
-        ] as const).map(([v, l, desc]) => (
-          <label
-            key={v}
-            className={`cursor-pointer rounded-xl border p-3 text-left transition has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-brand ${
-              gateway === v ? "border-brand bg-brand-soft text-brand ring-1 ring-brand" : "border-line hover:bg-surface-2"
-            }`}
-          >
-            <input
-              type="radio"
-              name="preferredGateway"
-              value={v}
-              defaultChecked={gateway === v}
-              onChange={() => setPicked(v)}
-              className="sr-only"
-            />
-            <div className="font-semibold text-sm flex items-center justify-between">
-              <span>{l}</span>
-              {gateway === v && <span className="text-xs font-bold text-brand">✓</span>}
-            </div>
-            <div className="text-xs text-muted mt-1 leading-snug">{desc}</div>
-          </label>
-        ))}
+    <fieldset className="space-y-1.5">
+      <legend className="label font-bold text-xs uppercase tracking-wider text-muted">
+        Select Gateway for Checkout Demo
+      </legend>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        {[
+          {
+            id: "razorpay",
+            name: "Razorpay",
+            type: "Popup Modal",
+            desc: "In-page modal checkout with instant UPI, Cards, Netbanking & Wallets",
+          },
+          {
+            id: "easebuzz",
+            name: "Easebuzz",
+            type: "Hosted Page",
+            desc: "Full-page hosted gateway with live 15-minute countdown clock & 303 return",
+          },
+        ].map((gw) => {
+          const isSelected = gateway === gw.id;
+          return (
+            <label
+              key={gw.id}
+              className={`cursor-pointer rounded-2xl border p-4 text-left transition flex flex-col justify-between has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-brand ${
+                isSelected
+                  ? "border-brand bg-brand-soft/70 ring-2 ring-brand shadow-xs"
+                  : "border-line bg-surface hover:bg-surface-2"
+              }`}
+            >
+              <input
+                type="radio"
+                name="preferredGateway"
+                value={gw.id}
+                defaultChecked={isSelected}
+                onChange={() => setPicked(gw.id)}
+                className="sr-only"
+              />
+              <div>
+                <div className="flex items-center justify-between font-bold text-sm text-ink">
+                  <span>{gw.name}</span>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                      isSelected ? "bg-brand text-brand-ink" : "bg-surface-2 text-muted"
+                    }`}
+                  >
+                    {gw.type}
+                  </span>
+                </div>
+                <p className="text-xs text-muted mt-1 leading-snug">{gw.desc}</p>
+              </div>
+              <div className="mt-3 pt-2.5 border-t border-line/60 flex items-center justify-between text-[11px] text-muted">
+                <span>{gw.id === "razorpay" ? "⚡ On-site overlay" : "🛡️ 15-min timer"}</span>
+                <span className={`font-bold ${isSelected ? "text-brand" : "text-muted"}`}>
+                  {isSelected ? "● Selected" : "○ Select"}
+                </span>
+              </div>
+            </label>
+          );
+        })}
       </div>
     </fieldset>
   );
