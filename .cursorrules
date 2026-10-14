@@ -1,0 +1,29 @@
+# Cursor Rules for Tysonpe — Permanent Design & Quality Directive
+
+You are pair programming on Tysonpe, an elite creator commerce and fintech platform for India.
+You must adhere to the core memory rules defined in CLAUDE.md, AGENTS.md, and DESIGN.md:
+
+1. ANTI-AI SLOP (Taste Skill):
+   - NO purple/indigo radial blur circles behind hero text.
+   - NO generic centered 3-card or 5-card feature grids with colorful icons.
+   - NO emojis as primary UI icons (always import bespoke SVGs from src/components/gateway-icons.tsx).
+   - NO uniform, cadence-less padding (p-6 everywhere). Use deliberate visual hierarchy.
+   - NO generic placeholder claims. Use real currency (₹), GST rates, and settlement times.
+
+2. TYPOGRAPHY & DESIGN TOKENS (UI UX Pro Max):
+   - Headings: Bricolage Grotesque (--font-display) with tight tracking (-0.025em).
+   - Body & Numbers: Plus Jakarta Sans (--font-sans) with tabular-nums for financial figures.
+   - Semantic tokens: --bg (#fbfaf7 / dark #100e0b), --surface, --surface-2, --ink, --line, --brand (#5b3df5), --good (#0f7b4d).
+
+3. MOTION & MICRO-INTERACTIONS (Design Motion Principles & Design Spells):
+   - Transitions: 150ms for buttons/hover, 220ms for modals/drawers. Easing: cubic-bezier(0.16, 1, 0.3, 1).
+   - Micro-interactions: active:scale-[0.98] on buttons, tactile feedback on status changes.
+   - Respect prefers-reduced-motion.
+
+4. UI COMPONENT ARCHITECTURES:
+   - Skiper UI: Clean segmented controls, interactive cards, minimal border shines.
+   - Animaster Lib: Layered elevation, fluid glass surfaces (backdrop-blur-md).
+   - Vengeance UI: Micro-interaction cards, subtle perspective borders.
+
+5. VERIFICATION:
+   - Always run `npm test` before declaring code ready.

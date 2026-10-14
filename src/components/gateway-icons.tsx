@@ -213,3 +213,10 @@ export function ClockIcon({ className = "w-4 h-4" }: { className?: string }) {
     </svg>
   );
 }
+
+// Aliases for intuitive semantic naming
+export const GooglePayIcon = GPayIcon;
+export const BhimUpiIcon = UpiIcon;
+export const ShieldCheckBadge = ShieldCheckIcon;
+export const LockBadge = LockIcon;
+

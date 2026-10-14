@@ -10,9 +10,18 @@ export async function SiteNav() {
       <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6" aria-label="Main">
         <Link href="/" aria-label="Tysonpe home"><Logo /></Link>
         <div className="flex items-center gap-1.5 sm:gap-2">
+          <Link
+            href="/demo"
+            className="btn btn-ghost btn-sm text-brand font-semibold inline-flex items-center gap-1.5"
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-brand" />
+            </span>
+            <span>Gateway Demo</span>
+          </Link>
           {user ? (
             <>
-              <Link href="/demo" className="btn btn-ghost btn-sm text-brand font-semibold">⚡ Demo</Link>
               <Link href="/library" className="btn btn-ghost btn-sm">My library</Link>
               <Link href={user.creator ? "/dashboard" : "/dashboard/onboarding"} className="btn btn-secondary btn-sm">
                 {user.creator ? "Dashboard" : "Start selling"}

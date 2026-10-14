@@ -1,112 +1,386 @@
 import Link from "next/link";
+import { HomeInteractiveDemo } from "@/components/HomeInteractiveDemo";
+import {
+  GooglePayIcon,
+  PhonePeIcon,
+  PaytmIcon,
+  BhimUpiIcon,
+  VisaIcon,
+  MastercardIcon,
+  RupayIcon,
+  ShieldCheckBadge,
+} from "@/components/gateway-icons";
 
 const sellables = [
-  { t: "Courses", d: "Video, PDF and text lessons your learners open from their library." },
-  { t: "Memberships", d: "Recurring access for your community, with a free-trial-ready price model." },
-  { t: "Live webinars", d: "Sell seats to workshops and sessions with your own join link." },
-  { t: "Digital downloads", d: "Templates, notebooks, presets: paid file delivery after checkout." },
-  { t: "1:1 consultations", d: "Sell your time with a booking link delivered at purchase." },
+  {
+    title: "Video & Text Courses",
+    desc: "Lessons with quiz gates, file attachments, and drip scheduling delivered directly to learner libraries.",
+    metric: "Instant Access",
+  },
+  {
+    title: "Recurring Memberships",
+    desc: "Subscription access for private communities with automated renewals and zero manual payment chasing.",
+    metric: "Auto-renew",
+  },
+  {
+    title: "Live Workshops",
+    desc: "Sell paid seats to webinars and cohorts. Protected join links revealed only after confirmed webhook payment.",
+    metric: "Capacity Cap",
+  },
+  {
+    title: "Digital Downloads",
+    desc: "Deliver Figma files, code templates, or PDFs with signed download links and rate-limited tokens.",
+    metric: "Anti-leak",
+  },
 ];
 
-const features = [
-  { t: "Your own storefront", d: "A clean public page at /c/your-handle listing every product you publish." },
-  { t: "UPI, cards & netbanking", d: "Razorpay-powered checkout. Payments verified server-side, never trusted from the browser." },
-  { t: "GST-ready invoices", d: "Every paid order gets a numbered invoice with the GST component broken out." },
-  { t: "Coupons that convert", d: "Percent or flat discounts with expiry dates and redemption caps." },
-  { t: "Instant learner library", d: "Buyers get access the second payment clears. Refund and access is revoked." },
-  { t: "Clear payout ledger", d: "See gross, platform fee, gateway fee and net on every single order." },
+const bentoFeatures = [
+  {
+    badge: "Dual Gateway Engine",
+    title: "Razorpay Modal & Easebuzz Hosted Checkout",
+    desc: "Switch between Razorpay Standard Checkout popup or Easebuzz redirect at will. Payments are verified server-side using cryptographic signatures (HMAC SHA256 & SHA512) — client tampering is impossible.",
+    highlight: "Zero Trust Architecture",
+  },
+  {
+    badge: "Compliance",
+    title: "Automated GST Invoices & B2B Tax Splits",
+    desc: "Every successful payment generates a compliant, downloadable PDF invoice with your GSTIN, state code, and SAC code 999293 broken down into CGST + SGST.",
+    highlight: "SAC 999293",
+  },
+  {
+    badge: "Learning Platform",
+    title: "Integrated LMS with Quiz Gates & Progress",
+    desc: "Keep learners inside your ecosystem. Video lessons, progress tracking, quiz pass requirements, and verifiable completion certificates.",
+    highlight: "Built-in LMS",
+  },
+  {
+    badge: "Transparent Finance",
+    title: "Granular Payout Ledger & Settlement Tickers",
+    desc: "See gross sales, platform fee, gateway MDR, and net bank deposit on every single transaction with zero hidden deductions.",
+    highlight: "T+1 Settlement",
+  },
 ];
 
 const plans = [
-  { name: "Basic", price: "Free", fee: "10%", note: "Zero fixed fee", live: true },
-  { name: "Pro", price: "₹5,000/mo", fee: "5.5%", note: "Unlimited learners", live: false },
-  { name: "Advanced", price: "₹15,000/mo", fee: "3.5%", note: "Community & affiliates", live: false },
-  { name: "Ultimate", price: "₹30,000/mo", fee: "0%", note: "1.5% gateway only", live: false },
+  {
+    name: "Basic",
+    price: "₹0",
+    cadence: "Free forever",
+    fee: "10%",
+    note: "Zero fixed fee. Pay only when you sell.",
+    features: ["Storefront at /c/your-handle", "Standard UPI & Cards", "GST-compliant invoices", "Learner library access"],
+    cta: "Start selling free",
+    live: true,
+  },
+  {
+    name: "Pro",
+    price: "₹5,000",
+    cadence: "/ month",
+    fee: "5.5%",
+    note: "Lower fee as your volume scales.",
+    features: ["Everything in Basic", "Quiz gating & certificates", "Custom domain mapping", "Priority webhook retries"],
+    cta: "Join Pro waitlist",
+    live: false,
+  },
+  {
+    name: "Advanced",
+    price: "₹15,000",
+    cadence: "/ month",
+    fee: "3.5%",
+    note: "For established creators & academies.",
+    features: ["Everything in Pro", "Affiliate referral funnels", "Drip lesson scheduler", "Dedicated Slack support"],
+    cta: "Contact sales",
+    live: false,
+  },
+  {
+    name: "Ultimate",
+    price: "₹30,000",
+    cadence: "/ month",
+    fee: "0%",
+    note: "1.5% gateway cost only. Pure volume.",
+    features: ["Zero platform fee", "Multi-seat creator team", "Custom invoice templates", "Same-day settlement option"],
+    cta: "Custom setup",
+    live: false,
+  },
 ];
-
-const next = ["Course builder with drip & quizzes", "Community feed & gamification", "Affiliates & funnels", "Live sessions via Zoom", "Branded mobile apps"];
 
 export default function Home() {
   return (
     <>
-      <section className="relative overflow-hidden">
-        <div aria-hidden className="pointer-events-none absolute -top-32 left-1/2 h-[480px] w-[900px] -translate-x-1/2 rounded-full bg-brand/10 blur-3xl" />
-        <div className="relative mx-auto max-w-6xl px-4 pb-20 pt-16 sm:px-6 sm:pt-24">
-          <p className="badge badge-brand">Built for creators in India</p>
-          <h1 className="mt-5 max-w-3xl text-4xl font-extrabold leading-[1.05] sm:text-6xl">
-            Turn what you know into a business that pays you.
-          </h1>
-          <p className="mt-5 max-w-xl text-lg text-muted">
-            Sell courses, memberships, webinars and downloads from one storefront. Get paid by UPI and cards, with GST invoices and a payout ledger built in.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/signup?role=creator" className="btn btn-primary btn-lg">Start selling free</Link>
-            <Link href="/c/asha-rao" className="btn btn-secondary btn-lg">See a live storefront</Link>
-          </div>
-          <p className="mt-4 text-sm text-muted">No setup fee on Basic. You pay only when you earn.</p>
-        </div>
-      </section>
-
-      <section className="border-y border-line bg-surface-2/60">
-        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-          <h2 className="text-2xl font-bold sm:text-3xl">Sell it all, from one place</h2>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            {sellables.map((s) => (
-              <div key={s.t} className="card p-5">
-                <h3 className="font-semibold">{s.t}</h3>
-                <p className="mt-2 text-sm text-muted">{s.d}</p>
+      {/* 1. Asymmetric Editorial Hero with Live Interactive Playground */}
+      <section className="relative border-b border-line bg-surface/40">
+        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-20">
+          <div className="grid items-center gap-10 lg:grid-cols-12 lg:gap-12">
+            {/* Left Column: Editorial Value Proposition */}
+            <div className="lg:col-span-6">
+              <div className="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand-soft/60 px-3 py-1 text-xs font-semibold text-brand">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-brand" />
+                </span>
+                Creator Commerce & Payments Infrastructure
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-        <h2 className="text-2xl font-bold sm:text-3xl">Everything between “buy” and “paid”</h2>
-        <div className="mt-8 grid gap-x-8 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
-          {features.map((f) => (
-            <div key={f.t}>
-              <h3 className="font-semibold">{f.t}</h3>
-              <p className="mt-1.5 text-sm text-muted">{f.d}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+              <h1 className="mt-5 text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl text-ink leading-[1.08]">
+                Monetize your knowledge with zero checkout friction.
+              </h1>
 
-      <section id="pricing" className="border-y border-line bg-surface-2/60">
-        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-          <h2 className="text-2xl font-bold sm:text-3xl">Pricing that grows with you</h2>
-          <p className="mt-2 text-sm text-muted">Platform fee on each sale. Higher plans lower the fee.</p>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {plans.map((p) => (
-              <div key={p.name} className={`card p-6 ${p.live ? "ring-2 ring-brand" : ""}`}>
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">{p.name}</h3>
-                  {!p.live && <span className="badge badge-muted">Soon</span>}
+              <p className="mt-5 text-base sm:text-lg text-muted leading-relaxed">
+                Deploy your branded storefront in 5 minutes. Accept payments via UPI, Google Pay, PhonePe, and cards with automated GST invoices, LMS library delivery, and T+1 bank payouts.
+              </p>
+
+              {/* Action Buttons */}
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                <Link
+                  href="/signup?role=creator"
+                  className="btn btn-primary btn-lg shadow-sm hover:brightness-105 active:scale-[0.98]"
+                >
+                  Start selling free
+                </Link>
+                <Link
+                  href="/demo"
+                  className="btn btn-secondary btn-lg shadow-xs hover:border-brand/40 active:scale-[0.98]"
+                >
+                  Open Gateway Demo
+                </Link>
+              </div>
+
+              {/* Trust Badges Bar */}
+              <div className="mt-8 border-t border-line/70 pt-6">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+                  Seamlessly Compatible With
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-4 text-muted">
+                  <div className="flex items-center gap-1.5 grayscale hover:grayscale-0 transition opacity-80 hover:opacity-100">
+                    <GooglePayIcon className="h-4 w-7" />
+                    <span className="text-xs font-medium">GPay</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 grayscale hover:grayscale-0 transition opacity-80 hover:opacity-100">
+                    <PhonePeIcon className="h-4 w-7" />
+                    <span className="text-xs font-medium">PhonePe</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 grayscale hover:grayscale-0 transition opacity-80 hover:opacity-100">
+                    <PaytmIcon className="h-4 w-7" />
+                    <span className="text-xs font-medium">Paytm</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 grayscale hover:grayscale-0 transition opacity-80 hover:opacity-100">
+                    <BhimUpiIcon className="h-4 w-7" />
+                    <span className="text-xs font-medium">BHIM</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 grayscale hover:grayscale-0 transition opacity-80 hover:opacity-100">
+                    <VisaIcon className="h-3.5 w-6" />
+                    <MastercardIcon className="h-3.5 w-6" />
+                    <RupayIcon className="h-3.5 w-6" />
+                  </div>
                 </div>
-                <p className="mt-3 text-2xl font-bold">{p.price}</p>
-                <p className="mt-4 text-3xl font-extrabold text-brand">{p.fee}</p>
-                <p className="text-sm text-muted">platform fee · {p.note}</p>
               </div>
-            ))}
+            </div>
+
+            {/* Right Column: Live Interactive Sandbox Simulator */}
+            <div className="lg:col-span-6">
+              <HomeInteractiveDemo />
+            </div>
           </div>
-          <p className="mt-4 text-xs text-muted">Plan upgrades and billing ship with the platform release. Every account starts on Basic.</p>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-        <h2 className="text-2xl font-bold sm:text-3xl">On the roadmap</h2>
-        <ul className="mt-6 flex flex-wrap gap-2">
-          {next.map((n) => (
-            <li key={n} className="badge badge-muted !px-4 !py-2 !text-sm">{n}</li>
-          ))}
-        </ul>
-        <div className="card mt-14 flex flex-col items-start justify-between gap-5 bg-ink p-8 text-bg sm:flex-row sm:items-center">
-          <div>
-            <h2 className="text-2xl font-bold">Open your store in five minutes.</h2>
-            <p className="mt-1 text-sm opacity-70">Pick a handle, add a product, share the link.</p>
+      {/* 2. What You Can Sell — Editorial Cards (Skiper UI style) */}
+      <section className="border-b border-line bg-surface-2/40 py-16 sm:py-20">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+                Product Architecture
+              </p>
+              <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl text-ink">
+                Built for every format creators produce.
+              </h2>
+            </div>
+            <Link
+              href="/c/asha-rao"
+              className="text-xs font-semibold text-brand hover:underline inline-flex items-center gap-1 active:scale-[0.98]"
+            >
+              Browse Live Creator Storefront →
+            </Link>
           </div>
-          <Link href="/signup?role=creator" className="btn btn-lg bg-bg text-ink hover:opacity-90">Start selling free</Link>
+
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {sellables.map((item) => (
+              <div
+                key={item.title}
+                className="card card-hover flex flex-col justify-between p-5"
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="badge badge-brand !text-[11px]">{item.metric}</span>
+                  </div>
+                  <h3 className="mt-3 text-base font-bold text-ink">{item.title}</h3>
+                  <p className="mt-2 text-xs leading-relaxed text-muted">{item.desc}</p>
+                </div>
+                <div className="mt-5 border-t border-line/60 pt-3 text-[11px] font-semibold text-brand">
+                  Ready to publish in 2 clicks
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 3. The Bento Grid: Fintech-Grade Infrastructure */}
+      <section className="border-b border-line bg-surface py-16 sm:py-24">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-wider text-brand">
+              End-to-End Infrastructure
+            </p>
+            <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl text-ink">
+              Everything between the click and your bank account.
+            </h2>
+            <p className="mt-3 text-sm text-muted">
+              Engineered with zero third-party lock-in. Run with Razorpay, Easebuzz, or both simultaneously.
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-5 sm:grid-cols-2">
+            {bentoFeatures.map((f) => (
+              <div
+                key={f.title}
+                className="card card-hover flex flex-col justify-between p-6 sm:p-7"
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="badge badge-muted !text-xs">{f.badge}</span>
+                    <span className="font-mono text-xs font-bold text-brand">{f.highlight}</span>
+                  </div>
+                  <h3 className="mt-4 text-lg font-bold text-ink">{f.title}</h3>
+                  <p className="mt-2.5 text-xs sm:text-sm leading-relaxed text-muted">{f.desc}</p>
+                </div>
+
+                <div className="mt-6 flex items-center gap-2 text-xs font-semibold text-good">
+                  <ShieldCheckBadge className="h-4 w-4" />
+                  <span>Production-tested on Indian payment rails</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 4. Pricing Matrix — High-Clarity Table (UI UX Pro Max Standard) */}
+      <section id="pricing" className="border-b border-line bg-surface-2/30 py-16 sm:py-24">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="text-center">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+              Transparent Economics
+            </p>
+            <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl text-ink">
+              Pricing that aligns with your revenue.
+            </h2>
+            <p className="mt-3 text-sm text-muted">
+              Start on Basic with zero upfront cost. Upgrade only when lower platform fees save you money.
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {plans.map((p) => (
+              <div
+                key={p.name}
+                className={`card flex flex-col justify-between p-6 transition-all duration-200 ${
+                  p.live ? "border-brand shadow-md ring-1 ring-brand/30" : "opacity-90"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-base text-ink">{p.name}</h3>
+                    {p.live ? (
+                      <span className="badge badge-good !text-[10px]">Active</span>
+                    ) : (
+                      <span className="badge badge-muted !text-[10px]">Coming Soon</span>
+                    )}
+                  </div>
+
+                  <div className="mt-4">
+                    <div className="flex items-baseline gap-1">
+                      <span className="font-mono text-3xl font-extrabold text-ink">{p.price}</span>
+                      <span className="text-xs text-muted">{p.cadence}</span>
+                    </div>
+                    <div className="mt-3 rounded-lg bg-surface-2 p-2 text-center">
+                      <p className="font-mono text-2xl font-black text-brand">{p.fee}</p>
+                      <p className="text-[11px] text-muted">{p.note}</p>
+                    </div>
+                  </div>
+
+                  <ul className="mt-6 space-y-2.5 text-xs text-muted">
+                    {p.features.map((feat) => (
+                      <li key={feat} className="flex items-center gap-2">
+                        <span className="text-good font-bold">✓</span>
+                        <span>{feat}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="mt-8 border-t border-line/80 pt-4">
+                  {p.live ? (
+                    <Link
+                      href="/signup?role=creator"
+                      className="btn btn-primary w-full text-xs font-semibold shadow-xs active:scale-[0.98]"
+                    >
+                      {p.cta}
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      className="btn btn-secondary w-full text-xs font-semibold opacity-60 cursor-not-allowed"
+                    >
+                      {p.cta}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 text-center text-xs text-muted">
+            All plans include SSL encryption, GST calculations, webhook dispatch, and automated email receipts.
+          </div>
+        </div>
+      </section>
+
+      {/* 5. Pre-footer Call to Action (High-Contrast Editorial Banner) */}
+      <section className="bg-surface py-16 sm:py-20">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="relative overflow-hidden rounded-3xl border border-line bg-[#16130f] p-8 sm:p-12 text-[#f5f1e8] shadow-2xl">
+            <div className="relative z-10 flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-center">
+              <div className="max-w-xl">
+                <span className="badge !border-white/20 !bg-white/10 !text-white text-xs font-semibold">
+                  Zero Technical Overhead
+                </span>
+                <h2 className="mt-3 text-2xl font-extrabold tracking-tight sm:text-4xl text-white">
+                  Open your creator store in five minutes.
+                </h2>
+                <p className="mt-2 text-sm text-slate-300">
+                  Pick your handle, connect your preferred gateway demo, upload your first module, and start taking UPI payments today.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Link
+                  href="/signup?role=creator"
+                  className="btn btn-lg bg-brand text-white hover:brightness-110 active:scale-[0.98] font-bold"
+                >
+                  Start selling free
+                </Link>
+                <Link
+                  href="/demo"
+                  className="btn btn-lg border border-white/20 bg-white/10 text-white hover:bg-white/20 active:scale-[0.98] font-bold"
+                >
+                  Test Demo First
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </>
