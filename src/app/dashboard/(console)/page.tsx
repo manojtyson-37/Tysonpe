@@ -4,6 +4,7 @@ import { CopyLink } from "@/components/CopyLink";
 import { Money, PageHeader, Stat, StatusBadge, dateFmt } from "@/components/ui";
 import { requireCreator } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { nowMs } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -11,7 +12,7 @@ const istDay = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/K
 
 export default async function Overview() {
   const { creator } = await requireCreator();
-  const since = new Date(Date.now() - 13 * 864e5);
+  const since = new Date(nowMs() - 13 * 864e5);
 
   const [paid, ledger, learners, productCount, publishedCount, couponCount, recent, last14] = await Promise.all([
     db.order.aggregate({ where: { creatorId: creator.id, status: "paid" }, _sum: { totalPaise: true }, _count: true }),
@@ -27,7 +28,7 @@ export default async function Overview() {
     db.order.findMany({ where: { creatorId: creator.id, status: "paid", paidAt: { gte: since } }, select: { paidAt: true, totalPaise: true } }),
   ]);
 
-  const days = Array.from({ length: 14 }, (_, i) => istDay(new Date(Date.now() - (13 - i) * 864e5)));
+  const days = Array.from({ length: 14 }, (_, i) => istDay(new Date(nowMs() - (13 - i) * 864e5)));
   const byDay = new Map(days.map((d) => [d, 0]));
   for (const o of last14) if (o.paidAt) byDay.set(istDay(o.paidAt), (byDay.get(istDay(o.paidAt)) ?? 0) + o.totalPaise);
   const series = days.map((d) => ({ d, v: byDay.get(d) ?? 0 }));

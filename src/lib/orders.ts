@@ -7,14 +7,10 @@ import { getProvider } from "./payments";
 
 type Tx = Prisma.TransactionClient;
 
-export class AppError extends Error {
-  constructor(
-    public code: string,
-    message?: string,
-  ) {
-    super(message ?? code);
-  }
-}
+import { AppError } from "./errors";
+import { maybeIssueCertificate, revokeIfNoAccess } from "./learning/certificates";
+
+export { AppError };
 
 const MIN_CHARGE_PAISE = 100; // gateway minimum: ₹1
 /** A pending order holds its coupon redemption (and is reused on re-checkout) for this long. */
@@ -253,6 +249,8 @@ export async function markOrderPaid(input: {
       await tx.enrollment.create({
         data: { userId: order.userId, productId: order.productId, orderId: order.id },
       });
+      // A repurchase revives an earned certificate, but only if certificates are still on and the course is still complete.
+      await maybeIssueCertificate(tx, order.userId, order.productId);
     }
 
     if (order.totalPaise > 0) {
@@ -381,6 +379,7 @@ export async function refundOrder(input: { creatorId: string; orderId: string })
     });
     if (gate.count === 0) throw new AppError("invalid_state", "Only paid orders can be refunded.");
 
+    const removed = await tx.enrollment.findUnique({ where: { orderId: order.id } });
     await tx.enrollment.deleteMany({ where: { orderId: order.id } });
     await releaseReservation(tx, order.id);
 
@@ -389,9 +388,13 @@ export async function refundOrder(input: { creatorId: string; orderId: string })
       where: { userId: order.userId, productId: order.productId, status: "paid", NOT: { id: order.id } },
       orderBy: { paidAt: "asc" },
     });
-    if (other) {
-      await tx.enrollment.create({ data: { userId: other.userId, productId: other.productId, orderId: other.id } });
+    if (removed && other) { // only relink if this order actually held the enrolment
+      // Keep the original enrolment date so drip schedules don't restart.
+      await tx.enrollment.create({
+        data: { userId: other.userId, productId: other.productId, orderId: other.id, ...(removed ? { createdAt: removed.createdAt } : {}) },
+      });
     }
+    await revokeIfNoAccess(tx, order.userId, order.productId);
     return tx.order.findUniqueOrThrow({ where: { id: order.id } });
   });
 }

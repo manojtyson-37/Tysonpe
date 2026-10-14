@@ -2,16 +2,17 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import type { Metadata } from "next";
 import { createCoupon, deleteCoupon, setCouponActive, updateCoupon } from "@/app/actions/creator";
 import { CouponForm } from "@/components/CouponForm";
-import { Money, PageHeader, StatusBadge, dateFmt } from "@/components/ui";
+import { Money, PageHeader, dateFmt } from "@/components/ui";
 import { requireCreator } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { nowMs } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Coupons" };
 
 export default async function CouponsPage() {
   const { creator } = await requireCreator();
   const coupons = await db.coupon.findMany({ where: { creatorId: creator.id }, orderBy: { createdAt: "desc" } });
-  const now = Date.now();
+  const now = nowMs();
   return (
     <>
       <PageHeader title="Coupons" sub="Discount codes buyers enter at checkout." />

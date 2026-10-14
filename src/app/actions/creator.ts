@@ -8,10 +8,8 @@ import { db } from "@/lib/db";
 import { slugify } from "@/lib/handles";
 import { AppError, refundOrder } from "@/lib/orders";
 import {
-  CONTENT_KINDS,
   GST_RATES,
   PRODUCT_TYPES,
-  httpUrl,
   rupeesToPaise,
 } from "@/lib/validation";
 import type { FormState } from "./auth";
@@ -67,11 +65,10 @@ export async function updateProduct(id: string, _prev: FormState, fd: FormData):
   return { error: undefined, fields: { saved: "1" } };
 }
 
-export async function setProductStatus(id: string, status: "draft" | "published") {
+/** Unpublish only. Publishing must go through publishProduct (curriculum.ts), which validates quizzes. */
+export async function unpublishProduct(id: string) {
   const { creator } = await requireCreator();
-  // TypeScript types vanish on the wire: validate what a crafted request could send.
-  const safe = z.enum(["draft", "published"]).parse(status);
-  await db.product.updateMany({ where: { id, creatorId: creator.id }, data: { status: safe } });
+  await db.product.updateMany({ where: { id, creatorId: creator.id }, data: { status: "draft" } });
   revalidatePath("/dashboard/products");
   revalidatePath(`/dashboard/products/${id}`);
 }
@@ -90,73 +87,6 @@ export async function deleteProduct(id: string) {
     await db.product.delete({ where: { id } });
   }
   redirect("/dashboard/products");
-}
-
-/* ---------- Content items ---------- */
-
-const itemSchema = z
-  .object({
-    title: z.string().trim().min(1, "Title is required").max(160),
-    kind: z.enum(CONTENT_KINDS),
-    url: httpUrl.default(""),
-    body: z.string().max(20000).default(""),
-  })
-  .refine((v) => v.kind === "text" || v.url !== "", { path: ["url"], message: "A link is required" })
-  .refine((v) => v.kind !== "text" || v.body.trim() !== "", { path: ["body"], message: "Write some text" });
-
-async function ownedProduct(productId: string, creatorId: string) {
-  return db.product.findFirst({ where: { id: productId, creatorId }, select: { id: true } });
-}
-
-export async function addContentItem(productId: string, _prev: FormState, fd: FormData): Promise<FormState> {
-  const { creator } = await requireCreator();
-  if (!(await ownedProduct(productId, creator.id))) return { error: "Product not found." };
-  const p = itemSchema.safeParse(Object.fromEntries(fd));
-  if (!p.success) return fail(p.error);
-  const last = await db.contentItem.findFirst({ where: { productId }, orderBy: { position: "desc" } });
-  await db.contentItem.create({ data: { ...p.data, productId, position: (last?.position ?? -1) + 1 } });
-  revalidatePath(`/dashboard/products/${productId}`);
-  return undefined;
-}
-
-export async function updateContentItem(itemId: string, _prev: FormState, fd: FormData): Promise<FormState> {
-  const { creator } = await requireCreator();
-  const p = itemSchema.safeParse(Object.fromEntries(fd));
-  if (!p.success) return fail(p.error);
-  const res = await db.contentItem.updateMany({
-    where: { id: itemId, product: { creatorId: creator.id } },
-    data: p.data,
-  });
-  if (res.count === 0) return { error: "Item not found." };
-  revalidatePath("/dashboard/products");
-  return { fields: { saved: "1" } };
-}
-
-export async function deleteContentItem(itemId: string) {
-  const { creator } = await requireCreator();
-  await db.contentItem.deleteMany({ where: { id: itemId, product: { creatorId: creator.id } } });
-  revalidatePath("/dashboard/products");
-}
-
-export async function moveContentItem(itemId: string, dir: "up" | "down") {
-  const { creator } = await requireCreator();
-  dir = z.enum(["up", "down"]).parse(dir);
-  const item = await db.contentItem.findFirst({
-    where: { id: itemId, product: { creatorId: creator.id } },
-  });
-  if (!item) return;
-  const siblings = await db.contentItem.findMany({
-    where: { productId: item.productId },
-    orderBy: { position: "asc" },
-  });
-  const i = siblings.findIndex((s) => s.id === itemId);
-  const j = dir === "up" ? i - 1 : i + 1;
-  if (j < 0 || j >= siblings.length) return;
-  [siblings[i], siblings[j]] = [siblings[j], siblings[i]];
-  await db.$transaction(
-    siblings.map((s, pos) => db.contentItem.update({ where: { id: s.id }, data: { position: pos } })),
-  );
-  revalidatePath(`/dashboard/products/${item.productId}`);
 }
 
 /* ---------- Coupons ---------- */

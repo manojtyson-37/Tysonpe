@@ -63,6 +63,42 @@ async function main() {
     }
   }
 
+  // Demo curriculum for the flagship course: sections, a drip lesson, a quiz, certificates on.
+  const course = await db.product.findUniqueOrThrow({ where: { creatorId_slug: { creatorId: creator.id, slug: "personal-finance-masterclass" } } });
+  if ((await db.section.count({ where: { productId: course.id } })) === 0) {
+    await db.product.update({ where: { id: course.id }, data: { certificateEnabled: true } });
+    const [s1, s2] = await Promise.all(
+      ["Foundations", "Putting it into practice"].map((title, position) => db.section.create({ data: { productId: course.id, title, position } })),
+    );
+    const items = await db.contentItem.findMany({ where: { productId: course.id }, orderBy: { position: "asc" } });
+    for (const [i, it] of items.entries()) await db.contentItem.update({ where: { id: it.id }, data: { sectionId: i < 2 ? s1.id : s2.id, position: i < 2 ? i : 0 } });
+    await db.contentItem.create({
+      data: {
+        productId: course.id, sectionId: s2.id, title: "Week 2 reading: automating your savings", kind: "text", position: 1,
+        body: "Set up a standing instruction on salary day so saving happens before spending.", dripType: "days_after_enroll", dripDays: 7,
+      },
+    });
+    const quizItem = await db.contentItem.create({
+      data: {
+        productId: course.id, sectionId: s2.id, title: "Check your understanding", kind: "quiz", position: 2, dripType: "after_previous",
+        quiz: {
+          create: {
+            passPct: 70, maxAttempts: 3, shuffle: true,
+            questions: {
+              create: [
+                { position: 0, prompt: "In the 50-30-20 rule, what share goes to savings and investing?", kind: "single", explanation: "20% is reserved for savings and investing.",
+                  options: { create: [{ position: 0, text: "10%", correct: false }, { position: 1, text: "20%", correct: true }, { position: 2, text: "50%", correct: false }] } },
+                { position: 1, prompt: "Which are good habits? (pick all)", kind: "multi", explanation: "Track spending and automate savings.",
+                  options: { create: [{ position: 0, text: "Track spending", correct: true }, { position: 1, text: "Automate savings", correct: true }, { position: 2, text: "Skip budgeting", correct: false }] } },
+              ],
+            },
+          },
+        },
+      },
+    });
+    void quizItem;
+  }
+
   await db.coupon.upsert({
     where: { creatorId_code: { creatorId: creator.id, code: "WELCOME20" } },
     update: {},

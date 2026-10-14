@@ -25,6 +25,8 @@ export const httpUrl = z
 export const PRODUCT_TYPES = ["course", "membership", "webinar", "download", "consultation"] as const;
 export const GST_RATES = [0, 5, 12, 18, 28] as const;
 export const CONTENT_KINDS = ["video", "pdf", "text", "link"] as const;
+export const LESSON_KINDS = [...CONTENT_KINDS, "quiz"] as const;
+export const DRIP_TYPES = ["none", "days_after_enroll", "on_date", "after_previous"] as const;
 
 /** YouTube/Vimeo watch URL -> embeddable URL, else null. IDs are charset-checked before reaching an iframe src. */
 export function toEmbedUrl(url: string): string | null {

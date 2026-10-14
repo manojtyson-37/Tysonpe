@@ -2,7 +2,7 @@
 
 Creator-commerce platform for India, modelled on the Tagmango product suite. Creators open a storefront and sell courses, memberships, webinars, downloads and consultations; learners pay by UPI/cards and get instant access. Own brand and code; nothing is copied from Tagmango.
 
-**Status: sub-project 1 of 7 (core commerce).** See `docs/superpowers/specs/` for the design and the full suite decomposition.
+**Status: sub-projects 1 (core commerce) and 2 (content) of 7.** See `docs/superpowers/specs/` for the design and the full suite decomposition.
 
 ## What works today
 
@@ -13,7 +13,8 @@ Creator-commerce platform for India, modelled on the Tagmango product suite. Cre
 | Products | 5 types, draft/publish, GST-inclusive INR pricing, lesson list (video, PDF, text, link) with reorder and edit |
 | Checkout | Coupons (percent/flat, expiry, usage cap), GST breakdown, free and 100%-off orders |
 | Payments | Razorpay (test mode) or a built-in mock gateway; signature-verified callback and idempotent webhook |
-| Learner | Library, YouTube/Vimeo playback, printable GST invoice |
+| Course builder | Sections and lessons, drip (days after joining, fixed date, after previous lesson), optional lessons, quizzes (single/multi, pass mark, retake cap, shuffle), publish gate, per-lesson completion stats |
+| Learner | Course player with progress, locked-lesson hints, quizzes, auto-issued certificates with a public verify page, learner-email video watermark, printable GST invoice |
 | Creator | Overview + 14-day revenue, orders (with refund marking), learners, coupons CRUD, payout ledger, store settings |
 
 ## Run it
@@ -56,8 +57,8 @@ prisma/schema.prisma      SQLite for dev; string statuses + integer paise keep i
 
 ## Moving to Postgres
 
-Change the datasource provider in `prisma/schema.prisma`, swap `@prisma/adapter-better-sqlite3` for `@prisma/adapter-pg` in `src/lib/db.ts`, regenerate migrations, and point `DATABASE_URL` at your database. The login limiter is per-process; use a shared store (Redis) when running more than one instance.
+Change the datasource provider in `prisma/schema.prisma`, swap `@prisma/adapter-better-sqlite3` for `@prisma/adapter-pg` in `src/lib/db.ts`, regenerate migrations, and point `DATABASE_URL` at your database. The login limiter is per-process; use a shared store (Redis) when running more than one instance. Quiz attempt caps, lesson progress and certificates are enforced by unique indexes and upserts (not by SQLite's single-writer behaviour), so they hold on Postgres; the earlier SQLite-specific migration SQL still needs regenerating. `backfillCertificates` runs one transaction per learner and should move to a background job for very large courses.
 
 ## Roadmap
 
-Course builder with drip and quizzes, community and gamification, affiliates and funnels, email/WhatsApp automations, live sessions via Zoom, site builder and custom domains, plan billing, AI assistant, native apps.
+Assignments, DRM video hosting and file uploads, community and gamification, affiliates and funnels, email/WhatsApp automations, live sessions via Zoom, site builder and custom domains, plan billing, AI assistant, native apps.

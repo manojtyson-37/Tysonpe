@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: PageProps<"/c/[handle]/[slug]
   return p && p.status === "published" ? { title: p.title, description: p.tagline || undefined } : {};
 }
 
-const kindLabel: Record<string, string> = { video: "Video", pdf: "PDF", text: "Reading", link: "Link" };
+const kindLabel: Record<string, string> = { video: "Video", pdf: "PDF", text: "Reading", link: "Link", quiz: "Quiz" };
 
 export default async function ProductPage({ params }: PageProps<"/c/[handle]/[slug]">) {
   const { handle, slug } = await params;

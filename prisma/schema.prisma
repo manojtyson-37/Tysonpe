@@ -21,6 +21,9 @@ model User {
   creator     Creator?
   orders      Order[]
   enrollments Enrollment[]
+  progress     LessonProgress[]
+  quizAttempts QuizAttempt[]
+  certificates Certificate[]
 }
 
 model Creator {
@@ -52,11 +55,15 @@ model Product {
   gstRatePct  Int      @default(18)
   billing     String   @default("one_time") // one_time | monthly (label only in v1)
   status      String   @default("draft") // draft | published
+  certificateEnabled Boolean @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   creator     Creator       @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   items       ContentItem[]
+  sections    Section[]
+  progress    LessonProgress[]
+  certificates Certificate[]
   orders      Order[]
   enrollments Enrollment[]
 
@@ -64,18 +71,126 @@ model Product {
   @@index([creatorId])
 }
 
-model ContentItem {
+model Section {
   id        String @id @default(cuid())
   productId String
   title     String
-  kind      String // video | pdf | text | link
-  url       String @default("")
-  body      String @default("")
   position  Int    @default(0)
 
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  items   ContentItem[]
 
   @@index([productId, position])
+}
+
+model ContentItem {
+  id        String  @id @default(cuid())
+  productId String
+  sectionId String?
+  title     String
+  kind      String // video | pdf | text | link | quiz
+  url       String  @default("")
+  body      String  @default("")
+  position  Int     @default(0)
+
+  dripType              String    @default("none") // none | days_after_enroll | on_date | after_previous
+  dripDays              Int?
+  dripAt                DateTime?
+  requiredForCompletion Boolean   @default(true)
+
+  product  Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  section  Section?         @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  quiz     Quiz?
+  progress LessonProgress[]
+
+  @@index([productId, position])
+}
+
+model Quiz {
+  id          String  @id @default(cuid())
+  itemId      String  @unique
+  passPct     Int     @default(70)
+  maxAttempts Int?
+  shuffle     Boolean @default(false)
+
+  item      ContentItem    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  questions QuizQuestion[]
+  attempts  QuizAttempt[]
+}
+
+model QuizQuestion {
+  id          String @id @default(cuid())
+  quizId      String
+  position    Int    @default(0)
+  prompt      String
+  kind        String @default("single") // single | multi
+  explanation String @default("")
+
+  quiz    Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  options QuizOption[]
+
+  @@index([quizId, position])
+}
+
+model QuizOption {
+  id         String  @id @default(cuid())
+  questionId String
+  position   Int     @default(0)
+  text       String
+  correct    Boolean @default(false)
+
+  question QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId, position])
+}
+
+model LessonProgress {
+  id          String   @id @default(cuid())
+  userId      String
+  itemId      String
+  productId   String
+  completedAt DateTime @default(now())
+
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item    ContentItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  product Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemId])
+  @@index([productId, userId])
+}
+
+model QuizAttempt {
+  id        String   @id @default(cuid())
+  userId    String
+  quizId    String
+  attemptNo Int      @default(0) // 1,2,3… per learner and quiz; the unique index makes the attempt cap a DB guarantee
+  scorePct  Int
+  passed    Boolean
+  answers   String // JSON: { [questionId]: string[] of option ids }
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@unique([quizId, userId, attemptNo])
+  @@index([quizId, userId])
+}
+
+model Certificate {
+  id          String    @id @default(cuid())
+  publicId    String    @unique
+  userId      String
+  productId   String
+  learnerName String
+  courseTitle String
+  creatorName String
+  issuedAt    DateTime  @default(now())
+  revokedAt   DateTime?
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
 }
 
 model Coupon {
