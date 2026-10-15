@@ -1,6 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { useEffect, useRef } from "react";
+import { MotionConfig, motion } from "framer-motion";
 import {
   GooglePayIcon,
   PhonePeIcon,
@@ -10,24 +11,46 @@ import {
 } from "./gateway-icons";
 
 export function AuroraHero() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Autoplaying looped motion must not run for users who asked for reduced motion.
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => {
+      const v = videoRef.current;
+      if (!v) return;
+      if (mq.matches) v.pause();
+      else void v.play().catch(() => {});
+    };
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
   const scrollToDemo = (e: React.MouseEvent) => {
     e.preventDefault();
     const el = document.getElementById("sandbox-demo");
     if (el) {
-      el.scrollIntoView({ behavior: "smooth" });
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      el.scrollIntoView({ behavior: reduce ? "auto" : "smooth" });
     }
   };
 
   return (
-    <section className="relative w-full h-[100vh] min-h-[680px] max-h-[960px] overflow-hidden bg-black text-white">
+    <MotionConfig reducedMotion="user">
+    <section className="relative w-full h-svh min-h-[680px] max-h-[960px] overflow-hidden bg-black text-white">
       {/* Background Hero Video */}
       <video
+        ref={videoRef}
         className="absolute inset-0 h-full w-full object-cover"
         src="/hero.mp4"
+        aria-hidden="true"
         autoPlay
         muted
         loop
         playsInline
+        preload="metadata"
+        disablePictureInPicture
       />
 
       {/* Layered Cinematic Overlays matching Aurora specifications */}
@@ -172,5 +195,6 @@ export function AuroraHero() {
         </div>
       </div>
     </section>
+    </MotionConfig>
   );
 }

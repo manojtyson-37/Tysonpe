@@ -45,7 +45,7 @@ export function DemoPayPageClient({
   return (
     <div className="space-y-6">
       {/* Sandbox Indicator Strip */}
-      <div className="rounded-2xl bg-amber-500/10 border border-amber-500/25 p-4 text-xs text-amber-900 dark:text-amber-200">
+      <div className="rounded-2xl bg-amber-500/10 border border-amber-500/25 p-4 text-xs text-amber-900">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold">
             <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
