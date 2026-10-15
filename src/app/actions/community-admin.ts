@@ -79,9 +79,9 @@ export async function moveChannelAction(channelId: string, dir: "up" | "down") {
 }
 
 export async function banMemberAction(userId: string) {
+  const { user, creator } = await requireCreator();
   const parsed = idSchema.safeParse(userId);
   if (!parsed.success) return;
-  const { user, creator } = await requireCreator();
   try {
     await banMember(user.id, creator.id, parsed.data);
   } catch (e) {

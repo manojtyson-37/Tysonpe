@@ -21,7 +21,7 @@ function Fields({ channel, products }: { channel?: Channel; products: ProductOpt
     return () => form.removeEventListener("reset", onReset);
   }, []);
   return (
-    <div ref={ref} className="contents">
+    <div ref={ref} className="space-y-3">
       <Field name="name" label="Channel name" defaultValue={channel?.name} placeholder="Masterclass Q&A" required />
       <Field name="description" label="Description" defaultValue={channel?.description} hint="One line, shown above the feed." />
       <div className="grid gap-3 sm:grid-cols-2">
