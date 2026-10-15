@@ -50,17 +50,17 @@ export default async function LeaderboardPage({
         <Empty title="No points yet" body="Complete a lesson or start a conversation to get on the board." />
       ) : (
         <ol className="card divide-y divide-line">
-          {lb.top.map((r) => (
-            <li key={r.userId} className={`flex items-center gap-4 px-5 py-3 ${r.userId === user.id ? "bg-brand-soft/60" : ""}`}>
+          {lb.top.map((r, i) => (
+            <li key={i} className={`flex items-center gap-4 px-5 py-3 ${r.isMe ? "bg-brand-soft/60" : ""}`}>
               <span className="w-7 text-right text-sm font-bold tabular-nums text-muted">{r.rank}</span>
-              <span className="min-w-0 flex-1 truncate font-semibold">{r.name}{r.userId === user.id && <span className="ml-2 text-xs font-medium text-muted">you</span>}</span>
+              <span className="min-w-0 flex-1 truncate font-semibold">{r.name}{r.isMe && <span className="ml-2 text-xs font-medium text-muted">you</span>}</span>
               <span className="badge badge-muted tabular-nums">Level {r.level}</span>
               <span className="w-16 text-right font-bold tabular-nums">{r.points}</span>
             </li>
           ))}
         </ol>
       )}
-      {lb.me && !lb.top.some((r) => r.userId === user.id) && (
+      {lb.me && !lb.top.some((r) => r.isMe) && (
         <p className="card px-5 py-3 text-sm">You&apos;re ranked <span className="font-bold tabular-nums">#{lb.me.rank}</span> with <span className="font-bold tabular-nums">{lb.me.points}</span> points.</p>
       )}
     </div>

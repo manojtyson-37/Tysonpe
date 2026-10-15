@@ -105,34 +105,56 @@ export async function getProfile(userId: string, creatorId: string, now = new Da
   };
 }
 
+const LEADERBOARD_SIZE = 20;
+
+/**
+ * Top 20 by points (week or all-time) plus the viewer's rank. Ranking is done in the database. Rows never carry user
+ * ids: `isMe` marks the viewer's own row. Ties share a rank (1, 2, 2, 4).
+ */
 export async function getLeaderboard(creatorId: string, period: "week" | "all", viewerId: string | null, now = new Date()) {
   const creator = await db.creator.findUniqueOrThrow({ where: { id: creatorId }, select: { userId: true } });
-  const banned = await db.communityBan.findMany({ where: { creatorId }, select: { userId: true } });
-  const excluded = [creator.userId, ...banned.map((b) => b.userId)];
+  const where = {
+    creatorId,
+    userId: { not: creator.userId },
+    user: {
+      enrollments: { some: { product: { creatorId } } }, // a refunded member (no enrolment left) leaves the board
+      bans: { none: { creatorId } },
+    },
+    ...(period === "week" ? { createdAt: { gte: istWeekStart(now) } } : {}),
+  };
   const groups = await db.pointEvent.groupBy({
     by: ["userId"],
-    where: {
-      creatorId,
-      userId: { notIn: excluded },
-      user: { enrollments: { some: { product: { creatorId } } } }, // a refunded member (no enrolment left) leaves the board
-      ...(period === "week" ? { createdAt: { gte: istWeekStart(now) } } : {}),
-    },
+    where,
     _sum: { points: true },
+    having: { points: { _sum: { gt: 0 } } },
+    orderBy: [{ _sum: { points: "desc" } }, { userId: "asc" }],
+    take: LEADERBOARD_SIZE,
   });
-  const earners = groups.filter((g) => (g._sum.points ?? 0) > 0);
-  const users = await db.user.findMany({ where: { id: { in: earners.map((g) => g.userId) } }, select: { id: true, name: true } });
+  const ids = groups.map((g) => g.userId);
+  const [users, totals] = await Promise.all([
+    db.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+    // Levels use all-time points regardless of the board's period.
+    db.pointEvent.groupBy({ by: ["userId"], where: { creatorId, userId: { in: ids } }, _sum: { points: true } }),
+  ]);
   const nameOf = new Map(users.map((u) => [u.id, u.name]));
-  const ranked = rankRows(earners.map((g) => ({ userId: g.userId, name: nameOf.get(g.userId) ?? "", points: g._sum.points ?? 0 })));
-
-  // Levels use all-time points regardless of the board's period.
-  const top = ranked.slice(0, 20);
-  const totals = await db.pointEvent.groupBy({ by: ["userId"], where: { creatorId, userId: { in: top.map((r) => r.userId) } }, _sum: { points: true } });
   const totalOf = new Map(totals.map((t) => [t.userId, t._sum.points ?? 0]));
-  const mine = viewerId ? ranked.find((r) => r.userId === viewerId) : undefined;
-  return {
-    top: top.map((r) => ({ rank: r.rank, userId: r.userId, name: shortName(r.name), points: r.points, level: levelFor(totalOf.get(r.userId) ?? r.points).level })),
-    me: mine ? { rank: mine.rank, points: mine.points } : null,
-  };
+  const ranked = rankRows(groups.map((g) => ({ userId: g.userId, name: nameOf.get(g.userId) ?? "", points: g._sum.points ?? 0 })));
+  const top = ranked.map((r) => ({
+    rank: r.rank, name: shortName(r.name), points: r.points, level: levelFor(totalOf.get(r.userId) ?? r.points).level, isMe: r.userId === viewerId,
+  }));
+
+  let me: { rank: number; points: number } | null = null;
+  const inTop = ranked.find((r) => r.userId === viewerId);
+  if (inTop) me = { rank: inTop.rank, points: inTop.points };
+  else if (viewerId) {
+    // Same filters as the board (so a banned/refunded viewer has no standing), then count earners strictly above.
+    const mine = (await db.pointEvent.aggregate({ where: { AND: [where, { userId: viewerId }] }, _sum: { points: true } }))._sum.points ?? 0;
+    if (mine > 0) {
+      const higher = await db.pointEvent.groupBy({ by: ["userId"], where, having: { points: { _sum: { gt: mine } } } });
+      me = { rank: higher.length + 1, points: mine };
+    }
+  }
+  return { top, me };
 }
 
 /** Replay existing progress through the idempotent award path (turning gamification on later, or a missed award). */
