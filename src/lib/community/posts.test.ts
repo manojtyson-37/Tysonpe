@@ -234,6 +234,71 @@ describe("comments", () => {
   });
 });
 
+describe("thread comment pagination", () => {
+  async function seedComments(postId: string, n: number, authorId = ctx.member2.id) {
+    const base = Date.now() - n * 1000;
+    // Identical timestamps in pairs exercise the (createdAt, id) tiebreak.
+    await db.comment.createMany({
+      data: Array.from({ length: n }, (_, i) => ({ id: `c${postId.slice(-6)}${String(i).padStart(3, "0")}`, postId, authorId, body: `c${i}`, createdAt: new Date(base + Math.floor(i / 2) * 1000) })),
+    });
+  }
+
+  it("small threads are unchanged: all comments, no cursor", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "q" });
+    await seedComments(id, 3);
+    const t = await getThread(ctx.member.id, id);
+    expect(t.comments.map((c) => c.body)).toEqual(["c0", "c1", "c2"]);
+    expect(t.nextCommentCursor).toBeNull();
+  });
+
+  it("returns the first 50 oldest-first plus a cursor, then the rest on the next call", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "q" });
+    await seedComments(id, 55);
+    const first = await getThread(ctx.member.id, id);
+    expect(first.comments).toHaveLength(50);
+    expect(first.comments[0].body).toBe("c0");
+    expect(first.comments[49].body).toBe("c49");
+    expect(first.nextCommentCursor).toBe(first.comments[49].id);
+    const second = await getThread(ctx.member.id, id, { after: first.nextCommentCursor! });
+    expect(second.comments.map((c) => c.body)).toEqual(["c50", "c51", "c52", "c53", "c54"]);
+    expect(second.nextCommentCursor).toBeNull();
+    expect(new Set([...first.comments, ...second.comments].map((c) => c.id)).size).toBe(55);
+  });
+
+  it("exactly 50 comments has no next page", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "q" });
+    await seedComments(id, 50);
+    const t = await getThread(ctx.member.id, id);
+    expect(t.comments).toHaveLength(50);
+    expect(t.nextCommentCursor).toBeNull();
+  });
+
+  it("a cursor belonging to another post (or nothing) is ignored", async () => {
+    const a = await createPost(ctx.member.id, ctx.channel.id, { body: "a" });
+    const b = await createPost(ctx.member.id, ctx.channel.id, { body: "b" });
+    await seedComments(a.id, 3);
+    await seedComments(b.id, 60);
+    const foreign = (await db.comment.findFirstOrThrow({ where: { postId: b.id }, orderBy: { id: "desc" } })).id;
+    const t = await getThread(ctx.member.id, a.id, { after: foreign });
+    expect(t.comments.map((c) => c.body)).toEqual(["c0", "c1", "c2"]);
+    const u = await getThread(ctx.member.id, b.id, { after: "nope" });
+    expect(u.comments[0].body).toBe("c0");
+    expect(u.nextCommentCursor).not.toBeNull();
+  });
+
+  it("like counts and likedByMe are correct on a later page", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "q" });
+    await seedComments(id, 52);
+    const late = await db.comment.findFirstOrThrow({ where: { postId: id, body: "c51" } });
+    await toggleLike(ctx.member.id, { commentId: late.id });
+    const first = await getThread(ctx.member.id, id);
+    const page2 = await getThread(ctx.member.id, id, { after: first.nextCommentCursor! });
+    const view = page2.comments.find((c) => c.id === late.id)!;
+    expect(view.likeCount).toBe(1);
+    expect(view.likedByMe).toBe(true);
+  });
+});
+
 describe("editing comments", () => {
   it("only the author edits; edit sets editedAt and the thread exposes it", async () => {
     const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "q" });

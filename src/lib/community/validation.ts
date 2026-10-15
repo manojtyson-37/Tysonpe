@@ -8,6 +8,7 @@ export const LIMITS = {
   channelDescription: 200,
   maxPinned: 3,
   pageSize: 20,
+  commentPageSize: 50,
 } as const;
 
 /** Channel slugs that would collide with fixed routes under /c/[handle]/community/. */

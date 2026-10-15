@@ -97,18 +97,28 @@ export async function listPosts(a: { creatorId: string; channelId: string; userI
   return { posts, nextCursor: hasMore ? page[page.length - 1].id : null };
 }
 
-export async function getThread(userId: string | null, postId: string) {
+/**
+ * One thread page: the post plus up to LIMITS.commentPageSize comments oldest-first (createdAt, id).
+ * `nextCommentCursor` is the id of the last returned comment when more follow (pass it as `after`), else null.
+ */
+export async function getThread(userId: string | null, postId: string, opts: { after?: string } = {}) {
   const { post, ch, viewer } = await gatePost(userId, postId);
   const creator = await db.creator.findUniqueOrThrow({ where: { id: ch.creatorId }, select: { userId: true, displayName: true } });
   const row = await db.post.findUnique({ where: { id: post.id }, select: postSelect });
   if (!row) throw notFound(); // deleted between the gate and this read
   const [postView] = await toPostViews([row], viewer, userId, creator);
-  const rows = await db.comment.findMany({
+  // The cursor must be a comment of THIS post; anything else is ignored (no probing other posts' ids).
+  const after = opts.after && (await db.comment.count({ where: { id: opts.after, postId } })) > 0 ? opts.after : undefined;
+  const fetched = await db.comment.findMany({
     where: { postId },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    take: LIMITS.commentPageSize + 1,
+    ...(after ? { cursor: { id: after }, skip: 1 } : {}),
     select: { id: true, body: true, createdAt: true, editedAt: true, authorId: true, author: { select: { id: true, name: true } } },
   });
-  const ids = rows.map((r) => r.id);
+  const hasMore = fetched.length > LIMITS.commentPageSize;
+  const rows = hasMore ? fetched.slice(0, LIMITS.commentPageSize) : fetched;
+  const ids = rows.map((r) => r.id); // likes are aggregated for the returned page only
   const [likes, mine] = await Promise.all([
     db.like.groupBy({ by: ["commentId"], where: { commentId: { in: ids } }, _count: { _all: true } }),
     userId && ids.length ? db.like.findMany({ where: { userId, commentId: { in: ids } }, select: { commentId: true } }) : Promise.resolve([]),
@@ -120,7 +130,7 @@ export async function getThread(userId: string | null, postId: string) {
     author: authorView(r.author, creator),
     likeCount: lc.get(r.id) ?? 0, likedByMe: liked.has(r.id), canDelete: r.authorId === userId || canModerate(viewer),
   }));
-  return { post: postView, channel: { id: ch.id, slug: ch.slug, name: ch.name, creatorId: ch.creatorId }, comments };
+  return { post: postView, channel: { id: ch.id, slug: ch.slug, name: ch.name, creatorId: ch.creatorId }, comments, nextCommentCursor: hasMore ? rows[rows.length - 1].id : null };
 }
 
 /* ---------- posts ---------- */
