@@ -74,6 +74,14 @@ const PLANS: Record<string, { platformBps: number; gatewayBps: number }> = {
   ultimate: { platformBps: 0, gatewayBps: 150 },
 };
 
+/** Draft monthly plan fees in paise. Billing is not live; UI that compares plans must net these off. */
+export const PLAN_MONTHLY_PAISE: Record<string, number> = {
+  basic: 0,
+  pro: 500000,
+  advanced: 1500000,
+  ultimate: 3000000,
+};
+
 /** Human-readable fee rates for a plan, for UI copy that must never drift from the ledger maths. */
 export function planRates(planKey: string) {
   const plan = PLANS[planKey] ?? PLANS.basic;

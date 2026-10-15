@@ -21,27 +21,27 @@ Every AI agent working on this codebase must adhere strictly to these anti-slop 
 
 ## 2. Color Palette & Semantic Tokens
 
-| Token | Value (light only) | Dark | Purpose |
-| :--- | :--- | :--- | :--- |
-| `--bg` | `#ffffff` | n/a | Canvas background |
-| `--surface` | `#ffffff` | n/a | Base card & modal surface |
-| `--surface-2` | `#f8fafc` | n/a | Hover fills, secondary cards |
-| `--ink` | `#0f172a` | n/a | Primary high-contrast text |
-| `--muted` | `#64748b` | n/a | Secondary labels, descriptions |
-| `--line` | `#e2e8f0` | n/a | Crisp 1px structural dividers |
-| `--brand` | `#4f46e5` | n/a | Key CTAs, brand highlights |
-| `--brand-soft` | `#eef2ff` | n/a | Active badges, soft pills |
-| `--accent` | `#f59e0b` | n/a | Highlights, notices, stars |
-| `--good` | `#10b981` | n/a | Paid status, positive ledger |
-| `--good-soft` | `#ecfdf5` | n/a | Success chips, paid badges |
-| `--bad` | `#ef4444` | n/a | Errors, failed payments |
-| `--bad-soft` | `#fef2f2` | n/a | Error badges, alert panels |
+| Token | Value (light only) | Purpose |
+| :--- | :--- | :--- |
+| `--bg` | `#fbfaf7` | Warm paper canvas |
+| `--surface` | `#ffffff` | Cards, modals |
+| `--surface-2` | `#f3f0e9` | Hover fills, secondary bands |
+| `--ink` | `#16130f` | Text |
+| `--muted` | `#6b665c` | Secondary text |
+| `--line` | `#e4dfd3` | 1px dividers |
+| `--brand` | `#16130f` | Primary buttons (ink, not indigo) |
+| `--brand-soft` | `#ece8dd` | Active nav, soft fills |
+| `--accent` | `#f59e0b` | Logo dot, notices |
+| `--good` | `#0f7b4d` | Money, paid, success, logo mark |
+| `--good-soft` | `#e3f1ea` | Success chips |
+| `--bad` | `#b42318` | Errors, failed payments |
+| `--bad-soft` | `#fbeae8` | Error badges |
 
 ---
 
 ## 3. Typography Hierarchy (UI UX Pro Max Standard)
 
-- **Display Headings**: `Plus Jakarta Sans` (`--font-display` aliases `--font-sans`)
+- **Display Headings**: `Bricolage Grotesque` (`--font-display`); numbers/ledgers in `JetBrains Mono`
   - Tracking: `-0.025em` to `-0.035em`
   - Weight: SemiBold (600) to ExtraBold (800)
   - Scale:

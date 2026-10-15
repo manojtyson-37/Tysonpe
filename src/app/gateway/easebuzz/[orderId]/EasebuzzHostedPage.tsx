@@ -407,7 +407,7 @@ export function EasebuzzHostedPage({
                       {[
                         { name: "Paytm Wallet", icon: <PaytmIcon className="w-6 h-3" /> },
                         { name: "PhonePe Wallet", icon: <PhonePeIcon className="w-5 h-5" /> },
-                        { name: "Mobikwik", icon: <WalletIcon className="w-5 h-5 text-indigo-600" /> },
+                        { name: "Mobikwik", icon: <WalletIcon className="w-5 h-5 text-ink" /> },
                       ].map((w, idx) => (
                         <label
                           key={w.name}

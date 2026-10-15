@@ -481,7 +481,7 @@ export function RazorpayDemoModal({
                   {[
                     { name: "PhonePe Wallet", icon: <PhonePeIcon className="w-5 h-5" /> },
                     { name: "Paytm Balance", icon: <PaytmIcon className="w-7 h-3.5" /> },
-                    { name: "Mobikwik", icon: <WalletIcon className="w-5 h-5 text-indigo-600" /> },
+                    { name: "Mobikwik", icon: <WalletIcon className="w-5 h-5 text-ink" /> },
                   ].map((w, idx) => (
                     <label
                       key={w.name}

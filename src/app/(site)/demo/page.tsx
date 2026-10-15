@@ -54,9 +54,7 @@ export default async function DemoPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 space-y-10">
       {/* Hero Section */}
-      <div className="relative overflow-hidden rounded-[28px] border border-line bg-gradient-to-b from-surface to-surface-2 p-8 sm:p-10 shadow-sm">
-        <div className="absolute -top-24 -right-24 w-72 h-72 bg-brand/10 rounded-full blur-3xl pointer-events-none" />
-
+      <div className="relative overflow-hidden rounded-[28px] border border-line bg-surface p-8 sm:p-10 shadow-sm">
         <div className="relative z-10 max-w-2xl space-y-4">
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-3 py-1 text-xs font-bold text-brand">

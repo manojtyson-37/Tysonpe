@@ -4,61 +4,39 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { DEMO_HANDLE } from "@/lib/demo";
 import { Logo } from "./Logo";
 
+const navLink =
+  "min-h-10 items-center whitespace-nowrap rounded px-2 text-[13px] font-medium text-muted transition-colors duration-150 hover:text-ink";
+
 export async function SiteNav() {
   const user = await getCurrentUser();
   const storefrontHandle = user?.creator?.handle ?? DEMO_HANDLE;
-  // h-16 here is paired with -mt-16 on the home hero wrapper so the hero video runs under the bar.
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-[#08090d]/90 backdrop-blur-md transition-all">
-      <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6" aria-label="Main">
-        <Link href="/" aria-label="Tysonpe home"><Logo className="text-white" /></Link>
-        <div className="flex items-center gap-2 sm:gap-4">
-          <Link
-            href="/#sandbox-demo"
-            className="hidden sm:inline-flex items-center gap-1.5 rounded px-2 py-2 text-xs font-medium text-white/80 hover:text-white transition-colors"
-          >
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-            </span>
-            <span>Gateway Sandbox</span>
-          </Link>
-          <Link
-            href="/#pricing"
-            className="hidden sm:inline-block rounded px-2 py-2 text-xs font-medium text-white/80 hover:text-white transition-colors"
-          >
-            Pricing
-          </Link>
+    <header className="sticky top-0 z-50 border-b border-line bg-bg/90 backdrop-blur-md">
+      <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6" aria-label="Main">
+        <Link href="/" aria-label="Tysonpe home"><Logo className="text-ink" /></Link>
+        <div className="flex items-center gap-1 sm:gap-3">
+          <Link href="/#sandbox-demo" className={`hidden sm:inline-flex ${navLink}`}>Checkout demo</Link>
+          <Link href="/#pricing" className={`hidden sm:inline-flex ${navLink}`}>Fees</Link>
           {storefrontHandle && (
-            <Link
-              href={`/c/${storefrontHandle}`}
-              className="hidden md:inline-block rounded px-2 py-2 text-xs font-medium text-white/80 hover:text-white transition-colors"
-            >
-              Storefront
-            </Link>
+            <Link href={`/c/${storefrontHandle}`} className={`hidden md:inline-flex ${navLink}`}>Sample storefront</Link>
           )}
           {user ? (
             <>
-              <Link href="/library" className="rounded px-2 py-2 text-xs font-medium text-white/85 hover:text-white">My library</Link>
+              <Link href="/library" className={`inline-flex ${navLink}`}>My library</Link>
               <Link
                 href={user.creator ? "/dashboard" : "/dashboard/onboarding"}
-                className="rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-black shadow-xs hover:bg-white/90 active:scale-[0.97] transition-all"
+                className="btn btn-primary btn-sm"
               >
                 {user.creator ? "Dashboard" : "Start selling"}
               </Link>
               <form action={logout}>
-                <button className="rounded px-2 py-2 text-xs font-medium text-white/60 hover:text-white" type="submit">Log out</button>
+                <button className={`inline-flex ${navLink}`} type="submit">Log out</button>
               </form>
             </>
           ) : (
             <>
-              <Link href="/login" className="rounded px-2 py-2 text-xs font-medium text-white/85 hover:text-white">Log in</Link>
-              <Link
-                href="/signup?role=creator"
-                className="rounded-full bg-white px-5 py-2 text-xs font-semibold text-black shadow-md hover:bg-white/90 active:scale-[0.97] transition-all"
-              >
-                Start selling
-              </Link>
+              <Link href="/login" className={`inline-flex ${navLink}`}>Log in</Link>
+              <Link href="/signup?role=creator" className="btn btn-primary btn-sm">Start selling</Link>
             </>
           )}
         </div>
@@ -69,10 +47,10 @@ export async function SiteNav() {
 
 export function SiteFooter() {
   return (
-    <footer className="mt-auto border-t border-white/10 bg-[#06070a] py-10 text-sm text-slate-400">
+    <footer className="mt-auto border-t border-line bg-surface-2/60 py-8 text-[13px] text-muted">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 sm:px-6">
-        <Logo className="!text-base text-white" />
-        <p>© {new Date().getFullYear()} Tysonpe. Payments run in test mode.</p>
+        <Logo className="!text-base text-ink" />
+        <p>© {new Date().getFullYear()} Tysonpe. Payments run in test mode; no real money moves.</p>
       </div>
     </footer>
   );

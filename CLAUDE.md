@@ -29,10 +29,10 @@ Every page, component, and interaction must look like bespoke, human-crafted fin
 
 ### ✅ What to Enforce (UI UX Pro Max Standards)
 - **High Contrast Editorial Hierarchy**:
-  - One family: `Plus Jakarta Sans` (variable). `--font-display` is an alias of `--font-sans` (headings only differ by weight and `-0.025em` tracking). Commanding scale (56px hero, 32px sections, 20px cards).
+  - Display: `Bricolage Grotesque` (`--font-display`) for h1-h3, tracking `-0.025em`. Body: `Plus Jakarta Sans` (`--font-sans`). Figures and ledgers: `JetBrains Mono` (`font-mono`). Scale: ~58px hero, 32px sections, 20px cards.
   - Numbers: `tabular-nums` for all currency amounts and countdown clocks.
   - Micro-labels: `text-xs font-semibold uppercase tracking-wider text-muted`.
-- **Palette** (light only, no dark mode): white canvas (`#ffffff`), slate ink (`#0f172a`), indigo brand (`#4f46e5`), hairline borders (`#e2e8f0`), emerald success (`#10b981`). The landing page and site nav/footer use an obsidian `#08090d` surface with emerald accents; the logo mark uses `--logo-mark`.
+- **Palette** (light only, no dark mode): warm paper canvas (`#fbfaf7`), warm ink (`#16130f`, also the primary button `--brand`), hairline borders (`#e4dfd3`), emerald (`#0f7b4d`) reserved for money, success and the logo mark. No indigo/violet anywhere. Landing page is product-first on paper: one real computed sale in the hero, tables not card grids, no video or generated imagery.
 - **Copy honesty**: no invented customers, testimonials, uptime or success-rate figures, certifications, or named-competitor numbers. State what is built (Live) and what is not (Planned). Payments are test mode until launch.
 - **Surface Elevation**: Multi-layer borders (`border border-line/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_6px_16px_rgba(0,0,0,0.02)]`).
 

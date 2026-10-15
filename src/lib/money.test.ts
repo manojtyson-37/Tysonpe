@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  PLAN_MONTHLY_PAISE,
   applyCoupon,
   feeBreakdown,
   formatINR,
@@ -113,4 +114,19 @@ describe("formatINR", () => {
   it("formats whole rupees", () => expect(formatINR(49900)).toBe("₹499"));
   it("keeps paise when present", () => expect(formatINR(49950)).toBe("₹499.50"));
   it("groups Indian style", () => expect(formatINR(12345600)).toBe("₹1,23,456"));
+});
+
+describe("PLAN_MONTHLY_PAISE (plan comparison must net off the monthly fee)", () => {
+  const takeHome = (plan: string, monthlySalesPaise: number) =>
+    feeBreakdown(monthlySalesPaise, plan).netPaise - PLAN_MONTHLY_PAISE[plan];
+
+  it("lists a monthly fee for every plan, zero on basic", () => {
+    expect(PLAN_MONTHLY_PAISE.basic).toBe(0);
+    for (const p of ["pro", "advanced", "ultimate"]) expect(PLAN_MONTHLY_PAISE[p]).toBeGreaterThan(0);
+  });
+
+  it("ultimate loses to basic at ₹50,000/month and wins at ₹10,00,000/month", () => {
+    expect(takeHome("ultimate", 5_000_000)).toBeLessThan(takeHome("basic", 5_000_000));
+    expect(takeHome("ultimate", 100_000_000)).toBeGreaterThan(takeHome("basic", 100_000_000));
+  });
 });

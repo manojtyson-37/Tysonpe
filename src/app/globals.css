@@ -1,24 +1,25 @@
 @import "tailwindcss";
 
-/* Tysonpe design tokens. Luminous clean canvas, rich slate ink, vibrant electric indigo brand. */
+/* Tysonpe design tokens. Warm paper canvas, ink-black actions, emerald reserved for money and success. */
 :root {
-  --bg: #ffffff;
+  --bg: #fbfaf7;
   --surface: #ffffff;
-  --surface-2: #f8fafc;
-  --ink: #0f172a;
-  --muted: #64748b;
-  --line: #e2e8f0;
-  --brand: #4f46e5;
-  --brand-ink: #ffffff;
-  --logo-mark: #10b981;
+  --surface-2: #f3f0e9;
+  --ink: #16130f;
+  --muted: #6b665c;
+  --line: #e4dfd3;
+  --line-strong: #c9c2b2;
+  --brand: #16130f;
+  --brand-ink: #fbfaf7;
+  --logo-mark: #0f7b4d;
   --logo-mark-ink: #ffffff;
-  --brand-soft: #eef2ff;
+  --brand-soft: #ece8dd;
   --accent: #f59e0b;
-  --good: #10b981;
-  --good-soft: #ecfdf5;
-  --bad: #ef4444;
-  --bad-soft: #fef2f2;
-  --warn-soft: #fffbeb;
+  --good: #0f7b4d;
+  --good-soft: #e3f1ea;
+  --bad: #b42318;
+  --bad-soft: #fbeae8;
+  --warn-soft: #fdf3dc;
 }
 
 @theme inline {
@@ -28,6 +29,7 @@
   --color-ink: var(--ink);
   --color-muted: var(--muted);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-brand: var(--brand);
   --color-brand-ink: var(--brand-ink);
   --color-brand-soft: var(--brand-soft);
@@ -38,7 +40,8 @@
   --color-bad-soft: var(--bad-soft);
   --color-warn-soft: var(--warn-soft);
   --font-sans: var(--font-sans-var), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-display: var(--font-sans-var), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-display-var), var(--font-sans-var), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-mono-var), ui-monospace, "SF Mono", Menlo, monospace;
 }
 
 :root {
@@ -64,7 +67,7 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 ease-out
       active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100;
   }
-  .btn-primary { @apply bg-brand text-brand-ink hover:brightness-110 active:brightness-95 shadow-xs; }
+  .btn-primary { @apply bg-brand text-brand-ink hover:bg-brand/85 shadow-xs; }
   .btn-secondary { @apply border border-line bg-surface text-ink hover:bg-surface-2 hover:border-line/80 shadow-xs; }
   .btn-ghost { @apply text-ink hover:bg-surface-2; }
   .btn-danger { @apply border border-line bg-surface text-bad hover:bg-bad-soft; }
@@ -72,7 +75,7 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
   .btn-lg { @apply px-6 py-3.5 text-base; }
 
   .input {
-    @apply w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/70
+    @apply w-full rounded-xl border border-line-strong bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/70
       transition duration-150 focus:border-brand focus:outline-2 focus:outline-brand/25;
   }
   .label { @apply mb-1.5 block text-sm font-medium; }
@@ -80,7 +83,7 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
   .err { @apply mt-1 text-xs font-medium text-bad; }
 
   .card {
-    @apply rounded-2xl border border-line/80 bg-surface;
+    @apply rounded-xl border border-line/80 bg-surface;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 4px 12px rgba(0, 0, 0, 0.02);
   }
   .card-hover {
@@ -103,17 +106,6 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
   .table th { @apply border-b border-line px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted; }
   .table td { @apply border-b border-line px-4 py-3 align-middle; }
   .table tr:last-child td { @apply border-b-0; }
-}
-
-@layer utilities {
-  .bg-grid {
-    background-size: 24px 24px;
-    background-image: radial-gradient(circle, var(--line) 1px, transparent 1px);
-  }
-
-  .glow-brand {
-    box-shadow: 0 0 50px -10px rgba(99, 102, 241, 0.25);
-  }
 }
 
 @keyframes qr-scan {
