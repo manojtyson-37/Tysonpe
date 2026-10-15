@@ -1,41 +1,22 @@
 @import "tailwindcss";
 
-/* Tysonpe design tokens. Warm paper surfaces, ink text, electric-indigo brand, amber accent. */
+/* Tysonpe design tokens. Luminous clean canvas, rich slate ink, vibrant electric indigo brand. */
 :root {
-  --bg: #fbfaf7;
+  --bg: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f4f1ea;
-  --ink: #16130f;
-  --muted: #6a645b;
-  --line: #e7e2d8;
-  --brand: #5b3df5;
+  --surface-2: #f8fafc;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --brand: #4f46e5;
   --brand-ink: #ffffff;
-  --brand-soft: #eeeaff;
-  --accent: #ffb020;
-  --good: #0f7b4d;
-  --good-soft: #e1f5ea;
-  --bad: #b42318;
-  --bad-soft: #fde8e6;
-  --warn-soft: #fff1d6;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #090a0f;
-    --surface: #11131a;
-    --surface-2: #181c26;
-    --ink: #f3f4f8;
-    --muted: #8b92a5;
-    --line: #222736;
-    --brand: #6366f1;
-    --brand-ink: #ffffff;
-    --brand-soft: #1e1b4b;
-    --good: #10b981;
-    --good-soft: #064e3b;
-    --bad: #f43f5e;
-    --bad-soft: #4c0519;
-    --warn-soft: #451a03;
-  }
+  --brand-soft: #eef2ff;
+  --accent: #f59e0b;
+  --good: #10b981;
+  --good-soft: #ecfdf5;
+  --bad: #ef4444;
+  --bad-soft: #fef2f2;
+  --warn-soft: #fffbeb;
 }
 
 @theme inline {
@@ -54,8 +35,8 @@
   --color-bad: var(--bad);
   --color-bad-soft: var(--bad-soft);
   --color-warn-soft: var(--warn-soft);
-  --font-sans: var(--font-sans-var), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-display-var), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-sans-var), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-sans-var), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 :root {

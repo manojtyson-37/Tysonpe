@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
-import { Bricolage_Grotesque, Plus_Jakarta_Sans } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
-const sans = Plus_Jakarta_Sans({ variable: "--font-sans-var", subsets: ["latin"] });
-const display = Bricolage_Grotesque({ variable: "--font-display-var", subsets: ["latin"] });
+const sans = Plus_Jakarta_Sans({
+  variable: "--font-sans-var",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+});
 
 export const metadata: Metadata = {
   title: { default: "Tysonpe — sell courses, memberships & live sessions", template: "%s · Tysonpe" },
@@ -13,8 +16,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${sans.variable} ${display.variable} h-full`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" className={`${sans.variable} h-full`}>
+      <body className="min-h-full flex flex-col font-sans antialiased">{children}</body>
     </html>
   );
 }
