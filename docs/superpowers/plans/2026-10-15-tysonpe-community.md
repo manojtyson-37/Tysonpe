@@ -25,6 +25,7 @@
 - Limits: post body 1–2,000 chars, title ≤120; comment 1–1,000; channel name ≤60, description ≤200; max 3 pinned per channel; feed page size 20; leaderboard top 20.
 - Rate limits (per user id, `createLimiter`): posts 5/min, comments 20/min, likes 60/min.
 - Design: follow `CLAUDE.md` in the repo (no emojis as UI icons, no purple blur blobs, no uniform `p-6` everywhere, 150ms interactions, `active:scale-[0.98]` on buttons, respect `prefers-reduced-motion`). Reuse existing classes: `card`, `badge`, `badge-good|muted|brand|warn|bad`, `btn btn-primary|secondary|danger|ghost btn-sm`, `input`, `label`, `err`, `hint`.
+- **Copy honesty** (`CLAUDE.md`): no invented customers, member counts, testimonials or figures in UI copy; state what exists. The palette is light-only (no dark-mode variants). Single font family.
 - Standard gate before the final commit: `npm test`, `npm run typecheck`, `npm run lint`, `npm run build`, migration drift check, real-browser walkthrough.
 - Commit trailer on every commit: `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
 
@@ -1420,7 +1421,6 @@ export async function getLeaderboard(creatorId: string, period: "week" | "all", 
     me: mine ? { rank: mine.rank, points: mine.points } : null,
   };
 }
-// BACKFILL_MARKER
 
 /** Replay existing progress through the idempotent award path (turning gamification on later, or a missed award). */
 export async function backfillPoints(creatorId: string): Promise<{ awarded: number }> {
@@ -2567,4 +2567,1365 @@ git commit -m "feat(community): posts, comments, likes, pinning, bans with serve
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>" -- src/lib/community/posts.ts src/lib/community/posts.test.ts
 ```
 
-<!-- PART B -->
+---
+
+## Task 9: Member server actions
+
+**Files:**
+- Create: `src/app/actions/community.ts`
+
+**Interfaces:**
+- Consumes: `createPost`, `editPost`, `deletePost`, `addComment`, `deleteComment`, `toggleLike`, `setPinned` (`@/lib/community/posts`), `checkRate`, `requireUser`, `FormState` (`./auth`).
+- Produces (used by Tasks 10–11 UI):
+  - `createPostAction(channelId: string, prev: FormState, fd: FormData): Promise<FormState>` — fields `title`, `body`; returns `undefined` on success (so React resets the form).
+  - `editPostAction(postId: string, prev: FormState, fd: FormData): Promise<FormState>` — fields `title`, `body`; returns `{ fields: { saved: "1" } }` on success.
+  - `addCommentAction(postId: string, prev: FormState, fd: FormData): Promise<FormState>` — field `body`; `undefined` on success.
+  - `deletePostAction(postId: string, goToChannel: boolean): Promise<void>`
+  - `deleteCommentAction(commentId: string): Promise<void>`
+  - `toggleLikeAction(kind: "post" | "comment", targetId: string): Promise<void>`
+  - `setPinnedAction(postId: string, pinned: boolean): Promise<void>`
+
+These are thin wrappers: validation, access and permission rules live in the service (Tasks 7–8) and are already tested. They get exercised end to end in Task 14's browser run.
+
+- [ ] **Step 1: Write the actions**
+
+Create `src/app/actions/community.ts`:
+
+```ts
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { z } from "zod";
+import { requireUser } from "@/lib/auth/session";
+import { checkRate } from "@/lib/community/limits";
+import { addComment, createPost, deleteComment, deletePost, editPost, setPinned, toggleLike } from "@/lib/community/posts";
+import { db } from "@/lib/db";
+import { AppError } from "@/lib/errors";
+import type { FormState } from "./auth";
+
+const idSchema = z.string().min(1).max(64);
+const TOO_FAST = "You're going too fast. Wait a minute and try again.";
+
+const str = (fd: FormData, key: string) => {
+  const v = fd.get(key);
+  return typeof v === "string" ? v : "";
+};
+
+/** Dynamic-route patterns: revalidates every cached community page without looking up handle/slug. */
+function refreshCommunity() {
+  revalidatePath("/c/[handle]/community/[channel]", "page");
+  revalidatePath("/c/[handle]/community/[channel]/p/[postId]", "page");
+  revalidatePath("/c/[handle]/community/leaderboard", "page");
+}
+
+function failState(e: unknown): FormState {
+  if (e instanceof AppError) return { error: e.code === "not_found" ? "That's no longer available." : e.message };
+  throw e;
+}
+
+export async function createPostAction(channelId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const id = idSchema.safeParse(channelId);
+  if (!id.success) return { error: "Channel not found." };
+  if (!checkRate("post", user.id)) return { error: TOO_FAST };
+  try {
+    await createPost(user.id, id.data, { title: str(fd, "title"), body: str(fd, "body") });
+  } catch (e) {
+    return failState(e);
+  }
+  refreshCommunity();
+  return undefined;
+}
+
+export async function editPostAction(postId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const id = idSchema.safeParse(postId);
+  if (!id.success) return { error: "Post not found." };
+  try {
+    await editPost(user.id, id.data, { title: str(fd, "title"), body: str(fd, "body") });
+  } catch (e) {
+    return failState(e);
+  }
+  refreshCommunity();
+  return { fields: { saved: "1" } };
+}
+
+export async function addCommentAction(postId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const id = idSchema.safeParse(postId);
+  if (!id.success) return { error: "Post not found." };
+  if (!checkRate("comment", user.id)) return { error: TOO_FAST };
+  try {
+    await addComment(user.id, id.data, { body: str(fd, "body") });
+  } catch (e) {
+    return failState(e);
+  }
+  refreshCommunity();
+  return undefined;
+}
+
+export async function deletePostAction(postId: string, goToChannel: boolean) {
+  const user = await requireUser();
+  const id = idSchema.parse(postId);
+  // Resolve the channel URL from the database BEFORE deleting; never from user input.
+  const where = await db.post.findUnique({
+    where: { id },
+    select: { channel: { select: { slug: true, creator: { select: { handle: true } } } } },
+  });
+  try {
+    await deletePost(user.id, id);
+  } catch (e) {
+    if (!(e instanceof AppError)) throw e; // not allowed / already gone: the refreshed page shows the truth
+  }
+  refreshCommunity();
+  if (goToChannel && where) redirect(`/c/${where.channel.creator.handle}/community/${where.channel.slug}`);
+}
+
+export async function deleteCommentAction(commentId: string) {
+  const user = await requireUser();
+  const id = idSchema.parse(commentId);
+  try {
+    await deleteComment(user.id, id);
+  } catch (e) {
+    if (!(e instanceof AppError)) throw e;
+  }
+  refreshCommunity();
+}
+
+export async function toggleLikeAction(kind: "post" | "comment", targetId: string) {
+  const user = await requireUser();
+  const k = z.enum(["post", "comment"]).parse(kind);
+  const id = idSchema.parse(targetId);
+  if (!checkRate("like", user.id)) return; // silently ignore a flood of clicks
+  try {
+    await toggleLike(user.id, k === "post" ? { postId: id } : { commentId: id });
+  } catch (e) {
+    if (!(e instanceof AppError)) throw e;
+  }
+  refreshCommunity();
+}
+
+export async function setPinnedAction(postId: string, pinned: boolean) {
+  const user = await requireUser();
+  const id = idSchema.parse(postId);
+  try {
+    await setPinned(user.id, id, z.boolean().parse(pinned));
+  } catch (e) {
+    if (!(e instanceof AppError)) throw e; // e.g. the 3-pin limit: the post simply stays unpinned
+  }
+  refreshCommunity();
+}
+```
+
+- [ ] **Step 2: Typecheck**
+
+Run: `npm run typecheck`
+Expected: no errors.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/app/actions/community.ts
+git commit -m "feat(community): member server actions
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>" -- src/app/actions/community.ts
+```
+
+---
+
+## Task 10: Member UI: layout, channel feed, thread
+
+**Files:**
+- Create: `src/components/community/format.ts`, `src/components/community/ChannelNav.tsx`, `src/components/community/LikeButton.tsx`, `src/components/community/PostCard.tsx`, `src/components/community/PostComposer.tsx`, `src/components/community/CommentForm.tsx`, `src/components/community/EditPostForm.tsx`
+- Create: `src/app/(site)/c/[handle]/community/layout.tsx`, `.../community/page.tsx`, `.../community/[channel]/page.tsx`, `.../community/[channel]/p/[postId]/page.tsx`
+
+**Interfaces:**
+- Consumes: Task 4 `canPost`; Task 7 `resolveCommunity`, `listChannelsFor`, `getChannelFor`, `ensureDefaultChannel`; Task 8 `listPosts`, `getThread`, `PostView`, `CommentView`; Task 9 actions; `banMemberAction(userId: string): Promise<void>` from Task 12 (create the file now with only that export if you build tasks in order; see Step 5).
+- Produces: routes `/c/[handle]/community`, `/c/[handle]/community/[channel]`, `/c/[handle]/community/[channel]/p/[postId]`.
+
+Page props are typed inline (not with generated `PageProps<...>`) so typecheck doesn't depend on `.next/types` being regenerated for new routes.
+
+- [ ] **Step 1: Shared small components**
+
+Create `src/components/community/format.ts`:
+
+```ts
+const fmt = new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+export const stamp = (d: Date) => fmt.format(d);
+```
+
+Create `src/components/community/LikeButton.tsx`:
+
+```tsx
+import { toggleLikeAction } from "@/app/actions/community";
+
+export function LikeButton({ kind, id, count, liked }: { kind: "post" | "comment"; id: string; count: number; liked: boolean }) {
+  return (
+    <form action={toggleLikeAction.bind(null, kind, id)}>
+      <button
+        type="submit"
+        aria-pressed={liked}
+        aria-label={liked ? `Remove like (${count})` : `Like (${count})`}
+        className={`btn btn-sm transition-all duration-150 active:scale-[0.98] ${liked ? "btn-primary" : "btn-secondary"}`}
+      >
+        <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden fill={liked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.6">
+          <path d="M10 16.5s-6-3.6-6-8.1A3.4 3.4 0 0 1 10 6.3a3.4 3.4 0 0 1 6 2.1c0 4.5-6 8.1-6 8.1Z" strokeLinejoin="round" />
+        </svg>
+        <span className="tabular-nums">{count}</span>
+      </button>
+    </form>
+  );
+}
+```
+
+Create `src/components/community/ChannelNav.tsx`:
+
+```tsx
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+type Item = { slug: string; name: string; kind: string; access: string };
+
+export function ChannelNav({ handle, channels, showLeaderboard }: { handle: string; channels: Item[]; showLeaderboard: boolean }) {
+  const path = usePathname();
+  const base = `/c/${handle}/community`;
+  const link = (href: string, label: string, hint?: string) => {
+    const active = path === href || path.startsWith(`${href}/`);
+    return (
+      <Link
+        key={href}
+        href={href}
+        aria-current={active ? "page" : undefined}
+        className={`flex items-baseline justify-between gap-2 whitespace-nowrap rounded-xl px-3.5 py-2 text-sm font-medium transition-colors duration-150 ${active ? "bg-brand-soft text-brand" : "text-muted hover:bg-surface-2 hover:text-ink"}`}
+      >
+        <span className="truncate">{label}</span>
+        {hint && <span className="text-[10px] font-semibold uppercase tracking-wider opacity-70">{hint}</span>}
+      </Link>
+    );
+  };
+  return (
+    <nav aria-label="Community channels" className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
+      {channels.map((c) => link(`${base}/${c.slug}`, c.name, c.kind === "announcement" ? "News" : c.access === "product_gated" ? "Gated" : undefined))}
+      {showLeaderboard && link(`${base}/leaderboard`, "Leaderboard")}
+    </nav>
+  );
+}
+```
+
+Create `src/components/community/PostComposer.tsx`:
+
+```tsx
+"use client";
+
+import { createPostAction } from "@/app/actions/community";
+import { ActionForm, Field, FormError, SubmitButton } from "@/components/form";
+
+export function PostComposer({ channelId }: { channelId: string }) {
+  return (
+    <ActionForm action={createPostAction.bind(null, channelId)} className="card space-y-3 px-5 pb-4 pt-5">
+      <Field name="title" label="Title (optional)" />
+      <Field name="body" label="Start a conversation" as="textarea" rows={4} required hint="Plain text, up to 2,000 characters." />
+      <FormError />
+      <div className="flex justify-end">
+        <SubmitButton pendingText="Posting…">Post</SubmitButton>
+      </div>
+    </ActionForm>
+  );
+}
+```
+
+Create `src/components/community/CommentForm.tsx`:
+
+```tsx
+"use client";
+
+import { addCommentAction } from "@/app/actions/community";
+import { ActionForm, Field, FormError, SubmitButton } from "@/components/form";
+
+export function CommentForm({ postId }: { postId: string }) {
+  return (
+    <ActionForm action={addCommentAction.bind(null, postId)} className="space-y-3">
+      <Field name="body" label="Add a comment" as="textarea" rows={3} required hint="Plain text, up to 1,000 characters." />
+      <FormError />
+      <SubmitButton className="btn btn-primary btn-sm" pendingText="Posting…">Comment</SubmitButton>
+    </ActionForm>
+  );
+}
+```
+
+Create `src/components/community/EditPostForm.tsx`:
+
+```tsx
+"use client";
+
+import { editPostAction } from "@/app/actions/community";
+import { ActionForm, Field, FormError, SavedNote, SubmitButton } from "@/components/form";
+
+export function EditPostForm({ postId, title, body }: { postId: string; title: string; body: string }) {
+  return (
+    <ActionForm action={editPostAction.bind(null, postId)} className="space-y-3">
+      <Field name="title" label="Title (optional)" defaultValue={title} />
+      <Field name="body" label="Post" as="textarea" rows={5} defaultValue={body} required />
+      <FormError />
+      <div className="flex items-center gap-3">
+        <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…">Save changes</SubmitButton>
+        <SavedNote />
+      </div>
+    </ActionForm>
+  );
+}
+```
+
+- [ ] **Step 2: `PostCard`**
+
+Create `src/components/community/PostCard.tsx` (server component):
+
+```tsx
+import Link from "next/link";
+import { deletePostAction, setPinnedAction } from "@/app/actions/community";
+import { banMemberAction } from "@/app/actions/community-admin";
+import { ConfirmButton } from "@/components/ConfirmButton";
+import type { PostView } from "@/lib/community/posts";
+import { stamp } from "./format";
+import { LikeButton } from "./LikeButton";
+
+export function PostCard({ post, href, viewerIsCreator, thread = false }: { post: PostView; href: string; viewerIsCreator: boolean; thread?: boolean }) {
+  return (
+    <article className={`card ${post.pinned ? "border-brand/40" : ""}`}>
+      <div className="px-5 pb-3 pt-4">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+          <span className="text-sm font-semibold text-ink">{post.author.name}</span>
+          {post.author.isCreator && <span className="badge badge-brand">Creator</span>}
+          {post.pinned && <span className="badge badge-warn">Pinned</span>}
+          <time dateTime={post.createdAt.toISOString()}>{stamp(post.createdAt)}</time>
+          {post.editedAt && <span>edited</span>}
+        </div>
+        {post.title && (
+          <h3 className="mt-2 text-lg font-bold leading-snug">
+            {thread ? post.title : <Link href={href} className="transition-colors duration-150 hover:text-brand">{post.title}</Link>}
+          </h3>
+        )}
+        <p className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-relaxed">{post.body}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2.5">
+        <LikeButton kind="post" id={post.id} count={post.likeCount} liked={post.likedByMe} />
+        {!thread && (
+          <Link href={href} className="btn btn-ghost btn-sm">
+            {post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}
+          </Link>
+        )}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {viewerIsCreator && (
+            <form action={setPinnedAction.bind(null, post.id, !post.pinned)}>
+              <button className="btn btn-secondary btn-sm active:scale-[0.98]">{post.pinned ? "Unpin" : "Pin"}</button>
+            </form>
+          )}
+          {viewerIsCreator && !post.author.isCreator && (
+            <form action={banMemberAction.bind(null, post.author.id)}>
+              <ConfirmButton className="btn btn-danger btn-sm" message={`Remove ${post.author.name} from this community? They lose access to every channel until you unban them.`}>
+                Ban author
+              </ConfirmButton>
+            </form>
+          )}
+          {post.canDelete && (
+            <form action={deletePostAction.bind(null, post.id, thread)}>
+              <ConfirmButton className="btn btn-danger btn-sm" message="Delete this post and its comments? Points earned from it are removed too.">Delete</ConfirmButton>
+            </form>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+```
+
+- [ ] **Step 3: Layout and channel redirect page**
+
+Create `src/app/(site)/c/[handle]/community/layout.tsx`:
+
+```tsx
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { BrandScope } from "@/components/Brand";
+import { ChannelNav } from "@/components/community/ChannelNav";
+import { requireUser } from "@/lib/auth/session";
+import { ensureDefaultChannel, listChannelsFor } from "@/lib/community/channels";
+import { resolveCommunity } from "@/lib/community/viewer";
+
+export default async function CommunityLayout({ children, params }: { children: React.ReactNode; params: Promise<{ handle: string }> }) {
+  const { handle } = await params;
+  const user = await requireUser(`/c/${handle}/community`);
+  const ctx = await resolveCommunity(handle, user.id);
+  if (!ctx) notFound();
+  const { creator, viewer } = ctx;
+  if (viewer.isCreator) await ensureDefaultChannel(creator.id);
+  const channels = await listChannelsFor(creator.id, viewer);
+
+  return (
+    <BrandScope color={creator.brandColor}>
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted">Community</p>
+        <h1 className="text-2xl font-extrabold sm:text-3xl">
+          <Link href={`/c/${creator.handle}`} className="transition-colors duration-150 hover:text-brand">{creator.displayName}</Link>
+        </h1>
+
+        {channels.length === 0 ? (
+          <div className="card mt-6 max-w-xl px-6 py-8">
+            <p className="text-lg font-semibold">{viewer.banned ? "You've been removed from this community" : "This community is for people who've bought from this creator"}</p>
+            <p className="mt-1 text-sm text-muted">
+              {viewer.banned
+                ? "The creator has removed your access. Contact them if you think this is a mistake."
+                : "Buy any of their products and the community opens up here straight away."}
+            </p>
+            {!viewer.banned && <Link href={`/c/${creator.handle}`} className="btn btn-primary mt-5">See what {creator.displayName} offers</Link>}
+          </div>
+        ) : (
+          <div className="mt-6 grid gap-6 lg:grid-cols-[200px_minmax(0,1fr)]">
+            <aside className="lg:sticky lg:top-24 lg:self-start">
+              <ChannelNav
+                handle={creator.handle}
+                channels={channels.map((c) => ({ slug: c.slug, name: c.name, kind: c.kind, access: c.access }))}
+                showLeaderboard={creator.gamificationEnabled}
+              />
+            </aside>
+            <div className="min-w-0">{children}</div>
+          </div>
+        )}
+      </div>
+    </BrandScope>
+  );
+}
+```
+
+Create `src/app/(site)/c/[handle]/community/page.tsx`:
+
+```tsx
+import { redirect } from "next/navigation";
+import { requireUser } from "@/lib/auth/session";
+import { listChannelsFor } from "@/lib/community/channels";
+import { resolveCommunity } from "@/lib/community/viewer";
+
+export const metadata = { title: "Community" };
+
+export default async function CommunityIndex({ params }: { params: Promise<{ handle: string }> }) {
+  const { handle } = await params;
+  const user = await requireUser(`/c/${handle}/community`);
+  const ctx = await resolveCommunity(handle, user.id);
+  if (!ctx) return null; // layout already rendered notFound
+  const channels = await listChannelsFor(ctx.creator.id, ctx.viewer);
+  if (channels.length > 0) redirect(`/c/${ctx.creator.handle}/community/${channels[0].slug}`);
+  return null; // layout shows the "no access" panel
+}
+```
+
+- [ ] **Step 4: Channel feed page**
+
+Create `src/app/(site)/c/[handle]/community/[channel]/page.tsx`:
+
+```tsx
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { PostCard } from "@/components/community/PostCard";
+import { PostComposer } from "@/components/community/PostComposer";
+import { Empty } from "@/components/ui";
+import { requireUser } from "@/lib/auth/session";
+import { canPost } from "@/lib/community/access";
+import { getChannelFor } from "@/lib/community/channels";
+import { listPosts } from "@/lib/community/posts";
+import { resolveCommunity } from "@/lib/community/viewer";
+
+export const metadata: Metadata = { title: "Community" };
+
+export default async function ChannelPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ handle: string; channel: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const { handle, channel: slug } = await params;
+  const sp = await searchParams;
+  const user = await requireUser(`/c/${handle}/community/${slug}`);
+  const ctx = await resolveCommunity(handle, user.id);
+  if (!ctx) notFound();
+  const { creator, viewer } = ctx;
+  const channel = await getChannelFor(creator.id, slug, viewer);
+  if (!channel) notFound(); // missing OR no access: same answer
+  const cursor = typeof sp.cursor === "string" ? sp.cursor.slice(0, 64) : undefined;
+  const { posts, nextCursor } = await listPosts({ creatorId: creator.id, channelId: channel.id, userId: user.id, cursor });
+  const base = `/c/${creator.handle}/community/${channel.slug}`;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h2 className="text-xl font-extrabold">{channel.name}</h2>
+          {channel.description && <p className="text-sm text-muted">{channel.description}</p>}
+        </div>
+        <div className="flex gap-2">
+          <span className="badge badge-muted">{channel.kind === "announcement" ? "Announcements" : "Discussion"}</span>
+          <span className="badge badge-muted">{channel.access === "open" ? "All customers" : "Selected products"}</span>
+        </div>
+      </div>
+
+      {canPost(channel, viewer) ? (
+        <PostComposer channelId={channel.id} />
+      ) : (
+        <p className="card px-5 py-4 text-sm text-muted">Only {creator.displayName} posts here. You can still comment and like.</p>
+      )}
+
+      {posts.length === 0 ? (
+        <Empty title="No posts yet" body={canPost(channel, viewer) ? "Be the first to post." : "Check back soon."} />
+      ) : (
+        <ul className="space-y-3">
+          {posts.map((p) => (
+            <li key={p.id}>
+              <PostCard post={p} href={`${base}/p/${p.id}`} viewerIsCreator={viewer.isCreator} />
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {nextCursor && (
+        <Link href={`${base}?cursor=${encodeURIComponent(nextCursor)}`} className="btn btn-secondary">Older posts</Link>
+      )}
+    </div>
+  );
+}
+```
+
+- [ ] **Step 5: Thread page, and the one admin action PostCard imports**
+
+`PostCard` imports `banMemberAction` from `@/app/actions/community-admin`. Task 12 owns that file; to keep this task's typecheck green, create the file now with just this export (Task 12 extends it, keeping this function unchanged):
+
+```ts
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { requireCreator } from "@/lib/auth/session";
+import { banMember } from "@/lib/community/posts";
+import { AppError } from "@/lib/errors";
+
+export async function banMemberAction(userId: string) {
+  const { user, creator } = await requireCreator();
+  try {
+    await banMember(user.id, creator.id, userId);
+  } catch (e) {
+    if (!(e instanceof AppError)) throw e;
+  }
+  revalidatePath("/dashboard/community");
+  revalidatePath("/c/[handle]/community/[channel]", "page");
+  revalidatePath("/c/[handle]/community/[channel]/p/[postId]", "page");
+}
+```
+
+Create `src/app/(site)/c/[handle]/community/[channel]/p/[postId]/page.tsx`:
+
+```tsx
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { deleteCommentAction } from "@/app/actions/community";
+import { ConfirmButton } from "@/components/ConfirmButton";
+import { CommentForm } from "@/components/community/CommentForm";
+import { EditPostForm } from "@/components/community/EditPostForm";
+import { stamp } from "@/components/community/format";
+import { LikeButton } from "@/components/community/LikeButton";
+import { PostCard } from "@/components/community/PostCard";
+import { requireUser } from "@/lib/auth/session";
+import { getThread } from "@/lib/community/posts";
+import { resolveCommunity } from "@/lib/community/viewer";
+import { AppError } from "@/lib/errors";
+
+export const metadata: Metadata = { title: "Community post" };
+
+export default async function ThreadPage({ params }: { params: Promise<{ handle: string; channel: string; postId: string }> }) {
+  const { handle, channel: slug, postId } = await params;
+  const user = await requireUser(`/c/${handle}/community/${slug}/p/${postId}`);
+  const ctx = await resolveCommunity(handle, user.id);
+  if (!ctx) notFound();
+  let thread: Awaited<ReturnType<typeof getThread>>;
+  try {
+    thread = await getThread(user.id, postId);
+  } catch (e) {
+    if (e instanceof AppError) notFound();
+    throw e;
+  }
+  // The URL must describe the post's real creator and channel; otherwise it's someone else's link.
+  if (thread.channel.creatorId !== ctx.creator.id || thread.channel.slug !== slug) notFound();
+  const { post, comments } = thread;
+  const back = `/c/${ctx.creator.handle}/community/${slug}`;
+
+  return (
+    <div className="space-y-4">
+      <Link href={back} className="text-sm font-medium text-muted transition-colors duration-150 hover:text-ink">← {thread.channel.name}</Link>
+      <PostCard post={post} href="" viewerIsCreator={ctx.viewer.isCreator} thread />
+
+      {post.canEdit && (
+        <details className="card px-5 py-3">
+          <summary className="cursor-pointer text-sm font-semibold">Edit your post</summary>
+          <div className="mt-3"><EditPostForm postId={post.id} title={post.title} body={post.body} /></div>
+        </details>
+      )}
+
+      <section aria-label="Comments" className="space-y-3">
+        <h3 className="text-sm font-bold uppercase tracking-wider text-muted">{comments.length} {comments.length === 1 ? "comment" : "comments"}</h3>
+        {comments.map((c) => (
+          <div key={c.id} className="card px-5 py-3.5">
+            <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
+              <span className="text-sm font-semibold text-ink">{c.author.name}</span>
+              {c.author.isCreator && <span className="badge badge-brand">Creator</span>}
+              <time dateTime={c.createdAt.toISOString()}>{stamp(c.createdAt)}</time>
+            </div>
+            <p className="mt-1.5 whitespace-pre-wrap break-words text-[15px] leading-relaxed">{c.body}</p>
+            <div className="mt-2.5 flex items-center gap-2">
+              <LikeButton kind="comment" id={c.id} count={c.likeCount} liked={c.likedByMe} />
+              {c.canDelete && (
+                <form action={deleteCommentAction.bind(null, c.id)} className="ml-auto">
+                  <ConfirmButton className="btn btn-danger btn-sm" message="Delete this comment?">Delete</ConfirmButton>
+                </form>
+              )}
+            </div>
+          </div>
+        ))}
+        <div className="card px-5 pb-4 pt-5"><CommentForm postId={post.id} /></div>
+      </section>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 6: Typecheck and lint**
+
+Run: `npm run typecheck && npx eslint "src/app/(site)/c/[handle]/community" src/components/community src/app/actions/community.ts src/app/actions/community-admin.ts`
+Expected: no errors. (If ESLint flags the `<a>`/`Link` or unused `href` prop on the thread `PostCard`, keep `href` required and pass `""`; it is unused when `thread` is true.)
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/components/community "src/app/(site)/c/[handle]/community" src/app/actions/community-admin.ts
+git commit -m "feat(community): member pages: channels, feed, threads, comments, likes
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>" -- src/components/community "src/app/(site)/c/[handle]/community" src/app/actions/community-admin.ts
+```
+
+---
+
+## Task 11: Gamification UI + entry points
+
+**Files:**
+- Create: `src/components/community/MemberCard.tsx`, `src/app/(site)/c/[handle]/community/leaderboard/page.tsx`
+- Modify: `src/app/(site)/c/[handle]/community/layout.tsx`, `src/app/(site)/c/[handle]/page.tsx` (storefront link), `src/app/(site)/library/[productId]/page.tsx` (community link)
+
+**Interfaces:**
+- Consumes: Task 5 `getProfile`, `getLeaderboard`; Task 3 `BADGES`.
+- Produces: the `MemberCard` (level, points, streak, badges) beside every channel for members; `/c/[handle]/community/leaderboard` with `?period=week|all`.
+
+- [ ] **Step 1: `MemberCard`**
+
+Create `src/components/community/MemberCard.tsx`:
+
+```tsx
+import Link from "next/link";
+import { BADGES } from "@/lib/gamification/badges";
+import type { getProfile } from "@/lib/gamification/service";
+
+type Profile = Awaited<ReturnType<typeof getProfile>>;
+
+export function MemberCard({ profile, leaderboardHref }: { profile: Profile; leaderboardHref: string }) {
+  const { level, points, streak, badges } = profile;
+  const pct = Math.min(100, Math.round((level.into / level.span) * 100));
+  const earned = new Set(badges.map((b) => b.key));
+  return (
+    <section aria-label="Your progress" className="card px-5 pb-5 pt-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted">Your level</p>
+      <p className="mt-1 text-3xl font-extrabold tabular-nums">{level.level}</p>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`Progress to level ${level.level + 1}`}>
+        <div className="h-full rounded-full bg-brand transition-[width] duration-150" style={{ width: `${pct}%` }} />
+      </div>
+      <p className="mt-2 text-xs text-muted tabular-nums">{points} points · {level.next - points} to level {level.level + 1}</p>
+
+      <p className="mt-4 text-sm font-semibold tabular-nums">{streak > 0 ? `${streak}-day streak` : "No active streak"}</p>
+      <p className="text-xs text-muted">Complete a lesson today to {streak > 0 ? "keep it going" : "start one"}.</p>
+
+      <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wider text-muted">Badges</p>
+      <ul className="flex flex-wrap gap-1.5">
+        {BADGES.map((b) => (
+          <li key={b.key} title={b.description} className={`badge ${earned.has(b.key) ? "badge-brand" : "badge-muted opacity-60"}`}>
+            {b.label}
+          </li>
+        ))}
+      </ul>
+      <Link href={leaderboardHref} className="mt-4 inline-block text-sm font-semibold text-brand hover:underline">View leaderboard</Link>
+    </section>
+  );
+}
+```
+
+- [ ] **Step 2: Show it in the layout**
+
+In `src/app/(site)/c/[handle]/community/layout.tsx`:
+
+Add imports:
+
+```tsx
+import { MemberCard } from "@/components/community/MemberCard";
+import { getProfile } from "@/lib/gamification/service";
+```
+
+After `const channels = ...` add:
+
+```tsx
+  const profile = creator.gamificationEnabled && !viewer.isCreator && channels.length > 0 ? await getProfile(user.id, creator.id) : null;
+```
+
+Replace the grid wrapper and aside with:
+
+```tsx
+          <div className={`mt-6 grid gap-6 ${profile ? "lg:grid-cols-[200px_minmax(0,1fr)_240px]" : "lg:grid-cols-[200px_minmax(0,1fr)]"}`}>
+            <aside className="lg:sticky lg:top-24 lg:self-start">
+              <ChannelNav
+                handle={creator.handle}
+                channels={channels.map((c) => ({ slug: c.slug, name: c.name, kind: c.kind, access: c.access }))}
+                showLeaderboard={creator.gamificationEnabled}
+              />
+            </aside>
+            <div className="min-w-0">{children}</div>
+            {profile && (
+              <aside className="lg:sticky lg:top-24 lg:self-start">
+                <MemberCard profile={profile} leaderboardHref={`/c/${creator.handle}/community/leaderboard`} />
+              </aside>
+            )}
+          </div>
+```
+
+- [ ] **Step 3: Leaderboard page**
+
+Create `src/app/(site)/c/[handle]/community/leaderboard/page.tsx`:
+
+```tsx
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { Empty } from "@/components/ui";
+import { requireUser } from "@/lib/auth/session";
+import { listChannelsFor } from "@/lib/community/channels";
+import { resolveCommunity } from "@/lib/community/viewer";
+import { getLeaderboard } from "@/lib/gamification/service";
+
+export const metadata: Metadata = { title: "Leaderboard" };
+
+export default async function LeaderboardPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ handle: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const { handle } = await params;
+  const sp = await searchParams;
+  const user = await requireUser(`/c/${handle}/community/leaderboard`);
+  const ctx = await resolveCommunity(handle, user.id);
+  if (!ctx || !ctx.creator.gamificationEnabled) notFound();
+  if ((await listChannelsFor(ctx.creator.id, ctx.viewer)).length === 0) notFound(); // members only
+  const period = sp.period === "all" ? "all" : "week";
+  const lb = await getLeaderboard(ctx.creator.id, period, user.id);
+  const base = `/c/${ctx.creator.handle}/community/leaderboard`;
+  const tab = (p: "week" | "all", label: string) => (
+    <Link
+      href={`${base}?period=${p}`}
+      aria-current={period === p ? "page" : undefined}
+      className={`rounded-xl px-3.5 py-2 text-sm font-medium transition-colors duration-150 ${period === p ? "bg-brand-soft text-brand" : "text-muted hover:bg-surface-2 hover:text-ink"}`}
+    >
+      {label}
+    </Link>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-extrabold">Leaderboard</h2>
+          <p className="text-sm text-muted">Points from lessons, quizzes, courses and community activity. Weeks start Monday, IST.</p>
+        </div>
+        <div className="flex gap-1">{tab("week", "This week")}{tab("all", "All time")}</div>
+      </div>
+
+      {lb.top.length === 0 ? (
+        <Empty title="No points yet" body="Complete a lesson or start a conversation to get on the board." />
+      ) : (
+        <ol className="card divide-y divide-line">
+          {lb.top.map((r) => (
+            <li key={r.userId} className={`flex items-center gap-4 px-5 py-3 ${r.userId === user.id ? "bg-brand-soft/60" : ""}`}>
+              <span className="w-7 text-right text-sm font-bold tabular-nums text-muted">{r.rank}</span>
+              <span className="min-w-0 flex-1 truncate font-semibold">{r.name}{r.userId === user.id && <span className="ml-2 text-xs font-medium text-muted">you</span>}</span>
+              <span className="badge badge-muted tabular-nums">Level {r.level}</span>
+              <span className="w-16 text-right font-bold tabular-nums">{r.points}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {lb.me && !lb.top.some((r) => r.userId === user.id) && (
+        <p className="card px-5 py-3 text-sm">You&apos;re ranked <span className="font-bold tabular-nums">#{lb.me.rank}</span> with <span className="font-bold tabular-nums">{lb.me.points}</span> points.</p>
+      )}
+    </div>
+  );
+}
+```
+
+- [ ] **Step 4: Entry points**
+
+In `src/app/(site)/c/[handle]/page.tsx`: extend `getCreator`'s `include` with `_count: { select: { channels: true } }`, and inside the header `div` that holds the bio line, after the product-count `<p>` add:
+
+```tsx
+            {creator._count.channels > 0 && (
+              <Link href={`/c/${creator.handle}/community`} className="btn btn-secondary btn-sm mt-3">Community</Link>
+            )}
+```
+
+In `src/app/(site)/library/[productId]/page.tsx`: in the header flex row (the one with the `Invoice` link) replace `{order && <Link ...>Invoice</Link>}` with:
+
+```tsx
+        <div className="flex items-center gap-4">
+          <Link className="text-sm font-semibold text-brand hover:underline" href={`/c/${course.product.creator.handle}/community`}>Community</Link>
+          {order && <Link className="text-sm font-semibold text-brand hover:underline" href={`/orders/${order.orderId}/invoice`}>Invoice</Link>}
+        </div>
+```
+
+- [ ] **Step 5: Typecheck, lint, run all tests**
+
+Run: `npm run typecheck && npm run lint && npm test`
+Expected: clean types, lint passes, all tests pass (357 baseline + new).
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/components/community/MemberCard.tsx "src/app/(site)/c/[handle]/community" "src/app/(site)/c/[handle]/page.tsx" "src/app/(site)/library/[productId]/page.tsx"
+git commit -m "feat(gamification): member card, leaderboard page, community entry points
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>" -- src/components/community/MemberCard.tsx "src/app/(site)/c/[handle]/community" "src/app/(site)/c/[handle]/page.tsx" "src/app/(site)/library/[productId]/page.tsx"
+```
+
+---
+
+## Task 12: Creator console (channels, gating, bans, gamification toggle)
+
+**Files:**
+- Modify: `src/app/actions/community-admin.ts` (keep `banMemberAction` exactly as created in Task 10; add the rest)
+- Create: `src/components/community/ChannelForm.tsx`, `src/app/dashboard/(console)/community/page.tsx`
+- Modify: `src/components/DashNav.tsx`
+
+**Interfaces:**
+- Consumes: Task 7 `createChannel`, `updateChannel`, `deleteChannel`, `setChannelProducts`, `moveChannel`, `listChannelsAdmin`; Task 8 `unbanMember`, `listBans`; Task 5 `backfillPoints`.
+- Produces (all `requireCreator()`-scoped): `createChannelAction`, `updateChannelAction(channelId, prev, fd)`, `deleteChannelAction(channelId)`, `moveChannelAction(channelId, dir)`, `unbanMemberAction(userId)`, `setGamificationAction(enabled)`, `recalculatePointsAction()`.
+
+- [ ] **Step 1: Extend the admin actions**
+
+Replace the contents of `src/app/actions/community-admin.ts` with:
+
+```ts
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { requireCreator } from "@/lib/auth/session";
+import { createChannel, deleteChannel, moveChannel, setChannelProducts, updateChannel } from "@/lib/community/channels";
+import { banMember, unbanMember } from "@/lib/community/posts";
+import { db } from "@/lib/db";
+import { AppError } from "@/lib/errors";
+import { backfillPoints } from "@/lib/gamification/service";
+import type { FormState } from "./auth";
+
+const idSchema = z.string().min(1).max(64);
+const str = (fd: FormData, k: string) => {
+  const v = fd.get(k);
+  return typeof v === "string" ? v : "";
+};
+const productIds = (fd: FormData) => fd.getAll("productIds").filter((v): v is string => typeof v === "string" && v.length > 0 && v.length <= 64);
+const channelInput = (fd: FormData) => ({ name: str(fd, "name"), description: str(fd, "description"), kind: str(fd, "kind"), access: str(fd, "access") });
+
+function refresh() {
+  revalidatePath("/dashboard/community");
+  revalidatePath("/c/[handle]/community", "layout");
+}
+function failState(e: unknown): FormState {
+  if (e instanceof AppError) return { error: e.code === "not_found" ? "That channel or product no longer exists." : e.message };
+  throw e;
+}
+
+export async function createChannelAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const { creator } = await requireCreator();
+  try {
+    const ch = await createChannel(creator.id, channelInput(fd));
+    if (ch.access === "product_gated") await setChannelProducts(creator.id, ch.id, productIds(fd));
+  } catch (e) {
+    return failState(e);
+  }
+  refresh();
+  return undefined;
+}
+
+export async function updateChannelAction(channelId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  const { creator } = await requireCreator();
+  const id = idSchema.safeParse(channelId);
+  if (!id.success) return { error: "Channel not found." };
+  try {
+    const ch = await updateChannel(creator.id, id.data, channelInput(fd));
+    await setChannelProducts(creator.id, ch.id, ch.access === "product_gated" ? productIds(fd) : []);
+  } catch (e) {
+    return failState(e);
+  }
+  refresh();
+  return { fields: { saved: "1" } };
+}
+
+export async function deleteChannelAction(channelId: string) {
+  const { creator } = await requireCreator();
+  try {
+    await deleteChannel(creator.id, idSchema.parse(channelId));
+  } catch (e) {
+    if (!(e instanceof AppError)) throw e;
+  }
+  refresh();
+}
+
+export async function moveChannelAction(channelId: string, dir: "up" | "down") {
+  const { creator } = await requireCreator();
+  try {
+    await moveChannel(creator.id, idSchema.parse(channelId), z.enum(["up", "down"]).parse(dir));
+  } catch (e) {
+    if (!(e instanceof AppError)) throw e;
+  }
+  refresh();
+}
+
+export async function banMemberAction(userId: string) {
+  const { user, creator } = await requireCreator();
+  try {
+    await banMember(user.id, creator.id, idSchema.parse(userId));
+  } catch (e) {
+    if (!(e instanceof AppError)) throw e;
+  }
+  refresh();
+  revalidatePath("/c/[handle]/community/[channel]", "page");
+  revalidatePath("/c/[handle]/community/[channel]/p/[postId]", "page");
+}
+
+export async function unbanMemberAction(userId: string) {
+  const { creator } = await requireCreator();
+  await unbanMember(creator.id, idSchema.parse(userId));
+  refresh();
+}
+
+/** Turning it on also replays existing progress so learners who already finished things aren't left at zero. */
+export async function setGamificationAction(enabled: boolean) {
+  const { creator } = await requireCreator();
+  const on = z.boolean().parse(enabled);
+  await db.creator.update({ where: { id: creator.id }, data: { gamificationEnabled: on } });
+  if (on) await backfillPoints(creator.id);
+  refresh();
+}
+
+export async function recalculatePointsAction() {
+  const { creator } = await requireCreator();
+  if (creator.gamificationEnabled) await backfillPoints(creator.id);
+  refresh();
+}
+```
+
+- [ ] **Step 2: `ChannelForm`**
+
+Create `src/components/community/ChannelForm.tsx`:
+
+```tsx
+"use client";
+
+import { useState } from "react";
+import type { FormState } from "@/app/actions/auth";
+import { ActionForm, Field, FormError, SavedNote, SubmitButton, useFormValues } from "@/components/form";
+
+type Channel = { name: string; description: string; kind: string; access: string; productIds: string[] };
+type ProductOption = { id: string; title: string };
+
+function Fields({ channel, products }: { channel?: Channel; products: ProductOption[] }) {
+  const submitted = useFormValues();
+  const [picked, setPicked] = useState<string | null>(null);
+  const access = picked ?? submitted?.access ?? channel?.access ?? "open";
+  return (
+    <>
+      <Field name="name" label="Channel name" defaultValue={channel?.name} placeholder="Masterclass Q&A" required />
+      <Field name="description" label="Description" defaultValue={channel?.description} hint="One line, shown above the feed." />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field name="kind" label="Type" as="select" defaultValue={channel?.kind ?? "discussion"}>
+          <option value="discussion">Discussion: everyone can post</option>
+          <option value="announcement">Announcements: only you post</option>
+        </Field>
+        <Field name="access" label="Who can join" as="select" defaultValue={access} onChange={setPicked}>
+          <option value="open">Everyone who has bought from me</option>
+          <option value="product_gated">Buyers of selected products</option>
+        </Field>
+      </div>
+      {access === "product_gated" && (
+        <fieldset className="rounded-xl border border-line px-4 py-3">
+          <legend className="px-1 text-sm font-semibold">Products that unlock this channel</legend>
+          {products.length === 0 ? (
+            <p className="text-sm text-muted">Create a product first.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {products.map((p) => (
+                <li key={p.id}>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="productIds" value={p.id} defaultChecked={channel?.productIds.includes(p.id)} />
+                    {p.title}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="hint mt-2">With none ticked, only you can see this channel.</p>
+        </fieldset>
+      )}
+    </>
+  );
+}
+
+export function ChannelForm({ action, channel, products, submitLabel }: {
+  action: (prev: FormState, fd: FormData) => Promise<FormState>;
+  channel?: Channel;
+  products: ProductOption[];
+  submitLabel: string;
+}) {
+  return (
+    <ActionForm action={action} className="space-y-3">
+      <Fields channel={channel} products={products} />
+      <FormError />
+      <div className="flex items-center gap-3">
+        <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…">{submitLabel}</SubmitButton>
+        <SavedNote />
+      </div>
+    </ActionForm>
+  );
+}
+```
+
+- [ ] **Step 3: Console page and nav link**
+
+Create `src/app/dashboard/(console)/community/page.tsx`:
+
+```tsx
+import type { Metadata } from "next";
+import Link from "next/link";
+import {
+  createChannelAction, deleteChannelAction, moveChannelAction, recalculatePointsAction, setGamificationAction,
+  unbanMemberAction, updateChannelAction,
+} from "@/app/actions/community-admin";
+import { ConfirmButton } from "@/components/ConfirmButton";
+import { ChannelForm } from "@/components/community/ChannelForm";
+import { PageHeader, dateFmt } from "@/components/ui";
+import { requireCreator } from "@/lib/auth/session";
+import { ensureDefaultChannel, listChannelsAdmin } from "@/lib/community/channels";
+import { listBans } from "@/lib/community/posts";
+import { db } from "@/lib/db";
+
+export const metadata: Metadata = { title: "Community" };
+
+export default async function CommunityConsole() {
+  const { creator } = await requireCreator();
+  await ensureDefaultChannel(creator.id);
+  const [channels, products, bans] = await Promise.all([
+    listChannelsAdmin(creator.id),
+    db.product.findMany({ where: { creatorId: creator.id }, select: { id: true, title: true }, orderBy: { createdAt: "asc" } }),
+    listBans(creator.id),
+  ]);
+  return (
+    <>
+      <PageHeader
+        title="Community"
+        sub="Channels your customers talk in. Open to every buyer, or limited to buyers of chosen products."
+        action={<Link href={`/c/${creator.handle}/community`} className="btn btn-secondary btn-sm">Open community ↗</Link>}
+      />
+      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
+        <div className="space-y-6">
+          <section className="space-y-3" aria-label="Channels">
+            {channels.map((c, i) => (
+              <div key={c.id} className="card">
+                <details>
+                  <summary className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-5 py-4">
+                    <span className="font-semibold">{c.name}</span>
+                    <span className="badge badge-muted">{c.kind === "announcement" ? "Announcements" : "Discussion"}</span>
+                    <span className="badge badge-muted">{c.access === "open" ? "All buyers" : `${c.productIds.length} product${c.productIds.length === 1 ? "" : "s"}`}</span>
+                    <span className="ml-auto text-xs text-muted tabular-nums">{c.postCount} {c.postCount === 1 ? "post" : "posts"}</span>
+                  </summary>
+                  <div className="space-y-4 border-t border-line px-5 pb-5 pt-4">
+                    <ChannelForm action={updateChannelAction.bind(null, c.id)} channel={c} products={products} submitLabel="Save channel" />
+                    <div className="flex flex-wrap gap-2 border-t border-line pt-3">
+                      <form action={moveChannelAction.bind(null, c.id, "up")}><button className="btn btn-secondary btn-sm" disabled={i === 0}>Move up</button></form>
+                      <form action={moveChannelAction.bind(null, c.id, "down")}><button className="btn btn-secondary btn-sm" disabled={i === channels.length - 1}>Move down</button></form>
+                      <form action={deleteChannelAction.bind(null, c.id)} className="ml-auto">
+                        <ConfirmButton className="btn btn-danger btn-sm" message={`Delete "${c.name}" and all ${c.postCount} of its posts? This can't be undone.`}>Delete</ConfirmButton>
+                      </form>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            ))}
+          </section>
+
+          <section className="card px-5 pb-5 pt-4" aria-label="Banned members">
+            <h2 className="font-semibold">Banned members</h2>
+            <p className="text-sm text-muted">Banned people can't see any channel. Ban someone from their post.</p>
+            {bans.length === 0 ? (
+              <p className="mt-3 text-sm text-muted">Nobody is banned.</p>
+            ) : (
+              <ul className="mt-3 divide-y divide-line">
+                {bans.map((b) => (
+                  <li key={b.userId} className="flex items-center gap-3 py-2.5">
+                    <span className="font-medium">{b.name}</span>
+                    <span className="text-xs text-muted">since {dateFmt(b.createdAt)}</span>
+                    <form action={unbanMemberAction.bind(null, b.userId)} className="ml-auto"><button className="btn btn-secondary btn-sm">Unban</button></form>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+
+        <div className="space-y-6 xl:sticky xl:top-24 xl:self-start">
+          <section className="card px-5 pb-5 pt-4">
+            <h2 className="mb-3 font-semibold">New channel</h2>
+            <ChannelForm action={createChannelAction} products={products} submitLabel="Create channel" />
+          </section>
+
+          <section className="card px-5 pb-5 pt-4" aria-label="Gamification">
+            <h2 className="font-semibold">Points, levels and badges</h2>
+            <p className="mt-1 text-sm text-muted">
+              Learners earn points for lessons, quizzes, finishing a course and taking part in the community. {creator.gamificationEnabled ? "It's on." : "It's off: nothing is awarded and the leaderboard is hidden."}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <form action={setGamificationAction.bind(null, !creator.gamificationEnabled)}>
+                <button className="btn btn-secondary btn-sm">{creator.gamificationEnabled ? "Turn off" : "Turn on"}</button>
+              </form>
+              {creator.gamificationEnabled && (
+                <form action={recalculatePointsAction}>
+                  <button className="btn btn-secondary btn-sm" title="Replays existing lesson and quiz progress. Safe to repeat: nothing is awarded twice.">Recalculate from progress</button>
+                </form>
+              )}
+            </div>
+          </section>
+        </div>
+      </div>
+    </>
+  );
+}
+```
+
+In `src/components/DashNav.tsx` add this entry to `links` right after the `Learners` entry:
+
+```tsx
+  { href: "/dashboard/community", label: "Community" },
+```
+
+- [ ] **Step 4: Typecheck, lint**
+
+Run: `npm run typecheck && npm run lint`
+Expected: clean. (If ESLint complains about the unescaped apostrophe in `can't`, use `&apos;`.)
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/app/actions/community-admin.ts src/components/community/ChannelForm.tsx "src/app/dashboard/(console)/community/page.tsx" src/components/DashNav.tsx
+git commit -m "feat(community): creator console for channels, gating, bans and gamification
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>" -- src/app/actions/community-admin.ts src/components/community/ChannelForm.tsx "src/app/dashboard/(console)/community/page.tsx" src/components/DashNav.tsx
+```
+
+---
+
+## Task 13: Seed data and spec build notes
+
+**Files:**
+- Modify: `prisma/seed.ts`
+- Modify: `docs/superpowers/specs/2026-10-15-tysonpe-community-design.md`
+
+- [ ] **Step 1: Seed a demo community**
+
+In `prisma/seed.ts`, immediately before the first `console.log("Seeded. ...")` line add:
+
+```ts
+  // Demo community: open #general, a creator-only announcements channel, and a channel gated to the flagship course.
+  if ((await db.channel.count({ where: { creatorId: creator.id } })) === 0) {
+    const general = await db.channel.create({
+      data: { creatorId: creator.id, name: "General", slug: "general", description: "Say hello and ask anything.", position: 0 },
+    });
+    const news = await db.channel.create({
+      data: { creatorId: creator.id, name: "Announcements", slug: "announcements", description: "Updates from Asha.", kind: "announcement", position: 1 },
+    });
+    const qa = await db.channel.create({
+      data: {
+        creatorId: creator.id, name: "Masterclass Q&A", slug: "masterclass-q-a", description: "Questions about the Personal Finance Masterclass.",
+        access: "product_gated", position: 2, products: { create: [{ productId: course.id }] },
+      },
+    });
+    await db.post.createMany({
+      data: [
+        { channelId: news.id, authorId: asha.id, title: "Welcome to the community", body: "This is where we talk money and answer questions. Be kind, stay curious.", pinned: true },
+        { channelId: general.id, authorId: learner.id, body: "Finished week 1. The 50-30-20 worksheet made my budget click." },
+        { channelId: qa.id, authorId: learner.id, title: "SIP date vs salary date?", body: "Should my SIP date match my salary date, or a few days later?" },
+      ],
+    });
+  }
+```
+
+- [ ] **Step 2: Record build notes in the spec**
+
+Append to `docs/superpowers/specs/2026-10-15-tysonpe-community-design.md` (after the "Success criteria" section) a new section:
+
+```markdown
+
+## Build notes
+
+- The creator earns no points and is excluded from leaderboards (they are not a member of their own community). Banned members are excluded from the leaderboard too.
+- Points are awarded after the learning transaction commits, best-effort (`lib/gamification/hooks.ts`). A failure is logged and never fails the learner's action; `backfillPoints` (Recalculate in the creator console) repairs gaps.
+- `like_received` uses `refId = "{likerId}:{targetId}"`: unlike then re-like never awards twice, and a self-like awards nothing.
+- Deleting a post removes `PointEvent` rows whose `sourceId` is the post, its comments, or the likes it received.
+- Product slug `community` and channel slugs `leaderboard`/`new` are reserved so fixed routes can't be shadowed.
+- The leaderboard computes ranks in memory over all earners in the period (one grouped query); fine for thousands of members, revisit with SQL window functions on Postgres.
+- Community posts have no uploads, mentions or notifications; see limits above.
+```
+
+- [ ] **Step 3: Run the seed against a throwaway copy, then commit**
+
+Run:
+
+```bash
+cd "/Users/manojaaa/Tysonpe- Sandbox/tysonpe" && npx tsc --noEmit -p . 2>&1 | head -5; echo "typecheck done"
+```
+
+Expected: no errors from `prisma/seed.ts`. (Do **not** run the seed against `prisma/dev.db` yet: Task 14 applies the migration to the dev DB first.)
+
+```bash
+git add prisma/seed.ts docs/superpowers/specs/2026-10-15-tysonpe-community-design.md
+git commit -m "feat(community): seed demo channels and spec build notes
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>" -- prisma/seed.ts docs/superpowers/specs/2026-10-15-tysonpe-community-design.md
+```
+
+---
+
+## Task 14: Full verification (tests, types, lint, build, drift, real browser)
+
+**Files:** none (verification only; fix anything found in the files that own it, with a failing test first where the bug is in logic).
+
+- [ ] **Step 1: Automated gate**
+
+Run each and read the real output:
+
+```bash
+cd "/Users/manojaaa/Tysonpe- Sandbox/tysonpe"
+npm test 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | grep -E "Test Files|Tests "
+npm run typecheck
+npm run lint
+npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code
+npm run build 2>&1 | tail -30
+```
+
+Expected: all tests pass (357 baseline + new community/gamification tests); typecheck and lint clean; `No difference detected.`; build succeeds and lists the new routes (`/c/[handle]/community`, `/c/[handle]/community/[channel]`, `.../p/[postId]`, `.../leaderboard`, `/dashboard/community`). If the build fails because another worker's uncommitted landing-page files are broken, confirm with `git stash`-free evidence (`git diff --stat` on their files vs. your errors) and report it; do not fix or commit their files.
+
+- [ ] **Step 2: Mutation check: prove the access tests can fail**
+
+Temporarily change `canAccessChannel` in `src/lib/community/access.ts` so the gated branch returns `true` (`return true;` as its last line). Run `npx vitest run src/lib/community`. Expected: several tests FAIL (access matrix, gated secrecy, posts access). Revert the change (`git checkout -- src/lib/community/access.ts`) and re-run to confirm green again.
+
+Likewise temporarily remove the daily-cap `if (today >= rule.dailyCap) return none;` line in `src/lib/gamification/service.ts`; `npx vitest run src/lib/gamification/service.test.ts` must FAIL on the cap test. Revert (`git checkout -- src/lib/gamification/service.ts`).
+
+- [ ] **Step 3: Apply the migration to the dev database and seed**
+
+```bash
+cd "/Users/manojaaa/Tysonpe- Sandbox/tysonpe" && npx prisma migrate deploy && npm run db:seed
+```
+
+Expected: `Applying migration 20261015120000_community`, then the seed prints its "Seeded." lines. Seeding is idempotent; the community block only runs when the creator has no channels.
+
+- [ ] **Step 4: Make sure the dev server runs the new code**
+
+The app serves on port 3100 (port 3000 is the CSO dashboard). Another worker may have a `next dev` already running; the regenerated Prisma client requires a restart to be seen. Check: `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3100/`. If the dev server is up, tell the user it needs a restart for the new Prisma client and ask before restarting it. If it is down, start it with `npm run dev` in the background.
+
+- [ ] **Step 5: Browser walkthrough (Claude Browser pane, `http://localhost:3100`)**
+
+Use the login page's one-click demo buttons (local dev accounts from `prisma/seed.ts`). Verify each with `read_page` / `get_page_text`, not screenshots alone; take a screenshot for each of 5, 9 and 12.
+
+1. **Creator console.** Log in as the creator → `/dashboard/community`. Expect 3 seeded channels (General, Announcements, Masterclass Q&A with "1 product"). Create a channel "VIP" with access "Buyers of selected products" and tick the course → appears in the list. Edit its description → "Saved". Move it up/down → order changes. Open the form on an existing channel and switch it to "Everyone who has bought from me" → saves, product ticks gone.
+2. **Member feed.** Log out, log in as the learner (Ravi) → `/library` → open the course → "Community" link → lands on `/c/asha-rao/community/general`. Left nav shows General, Announcements, Masterclass Q&A (gated seeded to his course), VIP if linked. Right column shows level 1 and 0 points.
+3. **Post, comment, like.** Post a message → it appears at the top, the composer clears, points show 5. Open the post → add a comment → count 1, points 7. Like another member's post (seeded Asha announcement from the Announcements channel) → button shows pressed.
+4. **Plain text.** Post `<b>hi</b><script>alert(1)</script>` → it renders literally as text, no bold, no dialog.
+5. **Announcements.** In Announcements the composer is replaced by "Only Asha Rao posts here"; commenting still works. Screenshot.
+6. **Stranger.** Sign up a fresh local test user (a throwaway local account on localhost is allowed here), visit `/c/asha-rao/community` → "This community is for people who've bought from this creator" and no channel names. Visit `/c/asha-rao/community/masterclass-q-a` directly → 404 page. Visit the post URL of a gated post → 404.
+7. **Moderation.** As the creator: in General pin the learner's post (it moves to the top with a "Pinned" badge); try pinning a 4th post (it stays unpinned); delete a comment; "Ban author" on the learner's post → confirm. As the learner reload → "You've been removed from this community". As the creator → `/dashboard/community` lists the ban → Unban → learner has access again.
+8. **Refund removes access.** As the creator open `/dashboard/orders`, refund the learner's course order. As the learner, `/c/asha-rao/community` → no-access panel. (Re-enrol by re-running `npm run db:seed` only if later steps need the learner.)
+9. **Gamification.** As the learner (re-enrolled), complete a lesson in the course → community card shows +10 and the "First lesson" badge lit; `/c/asha-rao/community/leaderboard` lists the learner as "Ravi K." (never the email), tabs "This week" and "All time" both work. Screenshot.
+10. **Toggle off.** As the creator, `/dashboard/community` → "Turn off" gamification → the learner's community page has no member card and no Leaderboard link; the leaderboard URL 404s. Turn it back on.
+11. **Responsive.** Resize to mobile (375px) on the feed: channel nav scrolls horizontally, no horizontal page scroll, buttons wrap. Reset to desktop afterwards.
+12. **Console and network.** `read_console_messages` and `read_network_requests`: no errors, no 500s.
+
+- [ ] **Step 6: Record results**
+
+Write the actual outcomes (test counts, build output summary, each walkthrough step pass/fail) into the task report. Fix any failures: a logic bug gets a failing test first.
+
+---
+
+## Task 15: Review gate and wrap-up
+
+**Files:** none new.
+
+- [ ] **Step 1: Code review (real agent, opus)**
+
+Dispatch the `code-reviewer` agent with: "Review the community + gamification work (commits from `feat(community): schema…` through `feat(community): seed demo channels`) in `/Users/manojaaa/Tysonpe- Sandbox/tysonpe` against `docs/superpowers/specs/2026-10-15-tysonpe-community-design.md`. Focus: server-side access enforcement on every read/write, secrecy of gated channels, point idempotency and caps, XSS (plain text only), rate limits, migration vs schema, anything in the diff that touches another worker's files." Read-only. Fix every blocker/major finding (test first for logic bugs); re-run the reviewer until verdict APPROVE. Typical rounds in this repo: 2–3.
+
+- [ ] **Step 2: Security pass**
+
+Run `/security-review` on the branch diff (auth/permissions touched: access control, bans, server actions). Fix findings the same way.
+
+- [ ] **Step 3: Design pass**
+
+Run `/design-review` on the live pages (`/c/asha-rao/community/general`, the thread page, `/c/asha-rao/community/leaderboard`, `/dashboard/community`) at desktop and 375px. Fix real issues only (contrast, focus, spacing, reduced motion); keep within `CLAUDE.md`'s rules.
+
+- [ ] **Step 4: Final gate and state**
+
+Re-run the full gate from Task 14 Step 1. Then:
+
+- Update `/Users/manojaaa/.claude/projects/-Users-manojaaa-Tysonpe--Sandbox/memory/project_tysonpe-status.md`: sub-project 3 done (commit hashes), remaining 4–7, known limits (no notifications, no uploads, leaderboard shows "First L." with no opt-out, points kept on refund, per-process rate limits).
+- Write the CSO checkpoint (`node "/Users/manojaaa/Agents and Skills/.cso/checkpoint/log-session.cjs" '{...}'`), run `Skill("cso-learn")`, and tell the user what shipped, what was verified, and what is still open (the other worker's uncommitted files, listed in Global Constraints, were never touched).
+
+---
+
+## Self-review (spec coverage)
+
+| Spec requirement | Task |
+|---|---|
+| Channels: name, slug, kind, access, position; announcement rule | 1, 4, 7, 10 |
+| Membership = Enrollment; refund ends access | 7 (`loadViewer`), 8 (refund test), 14.8 |
+| Access open / gated / gated-with-no-products / creator / banned | 4, 7, 8 |
+| Posts plain text, limits, edit own, creator delete/pin (max 3)/ban | 4, 8, 10, 12 |
+| Comments one level, likes toggle | 8, 10 |
+| Feed order, pinned first, cursor pagination 20 | 8, 10 |
+| Default `#general` lazily | 7, 10 (layout), 12 (console) |
+| Points ledger, rules, caps, idempotency, refId rules | 2, 5, 6, 8 |
+| Delete removes points (`sourceId`) | 8 |
+| Levels incl. above L10 | 2 |
+| Badges (5) | 3, 5 |
+| Streak (IST, live today/yesterday) | 3, 5 |
+| Leaderboard week/all, top 20 + own rank, "First L.", no email | 3, 5, 11 |
+| Creator toggle `gamificationEnabled` | 1, 5, 12 |
+| Learning hooks post-commit, best-effort, backfill | 5, 6, 12 |
+| Rate limits 5/20/60 per minute | 4, 9 |
+| Server-side access, `not_found` not `forbidden`, no email serialised | 7, 8, 10 |
+| Product slug `community` reserved / channel slugs reserved | 7 |
+| Routes + dashboard section + entry points | 10, 11, 12 |
+| Tests incl. access matrix, caps, streak edges, week bounds, secrecy, refund, backfill | 2–8 |
+| Browser walkthrough | 14 |
+| Honest limits (no real-time, uploads, notifications, DMs, challenges, refund keeps points) | spec; nothing built for them |
+
+Type/name consistency checked across tasks: `awardPoints`/`AwardInput`, `awardSafely`, `onLearningProgress`, `ChannelView.productIds`, `PostView`/`CommentView`, `loadViewer`/`resolveCommunity`, `checkRate("post"|"comment"|"like")`, `banMemberAction`/`unbanMemberAction`. Deliberate spec addition: the creator earns no points (recorded in the spec's build notes, Task 13).
