@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "../db";
 import { AppError, isUniqueViolation } from "../errors";
+import { onLearningProgress } from "../gamification/hooks";
 import { backfillCertificates, maybeIssueCertificate } from "./certificates";
 import { isUnlocked, type DripState, type DripType } from "./drip";
 import { computeProgress } from "./progress";
@@ -162,7 +163,7 @@ async function ensureProgress(tx: Tx, userId: string, productId: string, itemId:
 }
 
 export async function markComplete(userId: string, itemId: string) {
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const { item, state } = await accessFor(tx, userId, itemId);
     if (item.kind === "quiz") throw new AppError("invalid_state", "Quizzes are completed by passing them.");
     if (!state.unlocked) throw new AppError("locked", "This lesson isn't available yet.");
@@ -170,6 +171,8 @@ export async function markComplete(userId: string, itemId: string) {
     await maybeIssueCertificate(tx, userId, item.productId);
     return { ok: true as const };
   });
+  await onLearningProgress(userId, itemId); // after commit, best-effort: never fails the learner's action
+  return result;
 }
 
 /* ---------- quizzes ---------- */
@@ -186,7 +189,9 @@ export type QuizSubmission = {
 
 export async function submitQuiz(userId: string, itemId: string, answers: Record<string, string[]>): Promise<QuizSubmission> {
   try {
-    return await submitQuizTx(userId, itemId, answers);
+    const result = await submitQuizTx(userId, itemId, answers);
+    if (result.passed) await onLearningProgress(userId, itemId); // after commit, best-effort
+    return result;
   } catch (e) {
     // Two submits raced for the same attempt number: the database refused the second.
     if (isUniqueViolation(e)) throw new AppError("no_attempts", "Another submission was just processed. Reload and check your attempts.");
