@@ -1,0 +1,248 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { db } from "@/lib/db";
+import { enroll, makeChannel, makeCreatorWithProduct, makeUser } from "@/test/factories";
+import {
+  addComment, banMember, createPost, deleteComment, deletePost, editPost, getThread, listBans, listPosts,
+  setPinned, toggleLike, unbanMember,
+} from "./posts";
+
+let ctx: Awaited<ReturnType<typeof setup>>;
+async function setup() {
+  const { user: creatorUser, creator, product } = await makeCreatorWithProduct();
+  const member = await makeUser("Meera Learner");
+  const member2 = await makeUser("Ravi Kumar");
+  const stranger = await makeUser("Stranger Danger");
+  await enroll(member.id, product.id);
+  await enroll(member2.id, product.id);
+  const channel = await makeChannel(creator.id, { slug: "general" });
+  return { creatorUser, creator, product, member, member2, stranger, channel };
+}
+beforeEach(async () => {
+  ctx = await setup();
+});
+const feed = (userId: string | null, cursor?: string) =>
+  listPosts({ creatorId: ctx.creator.id, channelId: ctx.channel.id, userId, cursor });
+const points = (userId: string) => db.pointEvent.aggregate({ where: { userId }, _sum: { points: true } }).then((r) => r._sum.points ?? 0);
+
+describe("access (server-side, every operation)", () => {
+  it("a stranger cannot read, post, comment or like in an open channel", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "hello" });
+    await expect(feed(ctx.stranger.id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(feed(null)).rejects.toMatchObject({ code: "not_found" });
+    await expect(createPost(ctx.stranger.id, ctx.channel.id, { body: "x" })).rejects.toMatchObject({ code: "not_found" });
+    await expect(getThread(ctx.stranger.id, id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(addComment(ctx.stranger.id, id, { body: "x" })).rejects.toMatchObject({ code: "not_found" });
+    await expect(toggleLike(ctx.stranger.id, { postId: id })).rejects.toMatchObject({ code: "not_found" });
+  });
+
+  it("a gated channel is invisible to members of other products", async () => {
+    const vip = await makeChannel(ctx.creator.id, { slug: "vip", access: "product_gated" });
+    await db.channelProduct.create({ data: { channelId: vip.id, productId: ctx.product.id } });
+    const other = await db.product.create({ data: { creatorId: ctx.creator.id, slug: "other", type: "course", title: "Other", pricePaise: 0, status: "published" } });
+    const outsider = await makeUser();
+    await enroll(outsider.id, other.id);
+    await expect(createPost(outsider.id, vip.id, { body: "x" })).rejects.toMatchObject({ code: "not_found" });
+    await expect(listPosts({ creatorId: ctx.creator.id, channelId: vip.id, userId: outsider.id })).rejects.toMatchObject({ code: "not_found" });
+    await expect(createPost(ctx.member.id, vip.id, { body: "x" })).resolves.toBeTruthy();
+  });
+
+  it("a refund (enrolment deleted) removes access to existing posts too", async () => {
+    const e = await db.enrollment.findFirstOrThrow({ where: { userId: ctx.member.id } });
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "mine" });
+    await db.enrollment.delete({ where: { id: e.id } });
+    await expect(getThread(ctx.member.id, id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(deletePost(ctx.member.id, id)).rejects.toMatchObject({ code: "not_found" });
+  });
+
+  it("a banned member loses read and write access; unban restores it", async () => {
+    await banMember(ctx.creatorUser.id, ctx.creator.id, ctx.member.id);
+    await expect(feed(ctx.member.id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(createPost(ctx.member.id, ctx.channel.id, { body: "x" })).rejects.toMatchObject({ code: "not_found" });
+    await unbanMember(ctx.creator.id, ctx.member.id);
+    await expect(feed(ctx.member.id)).resolves.toBeTruthy();
+  });
+
+  it("only announcement-channel creators post; members cannot (forbidden) but may comment", async () => {
+    const ann = await makeChannel(ctx.creator.id, { slug: "news", kind: "announcement" });
+    await expect(createPost(ctx.member.id, ann.id, { body: "x" })).rejects.toMatchObject({ code: "forbidden" });
+    const { id } = await createPost(ctx.creatorUser.id, ann.id, { body: "Big news" });
+    await expect(addComment(ctx.member.id, id, { body: "congrats" })).resolves.toBeTruthy();
+  });
+});
+
+describe("posts", () => {
+  it("creates plain-text posts, trims input, and rejects empty/oversized bodies", async () => {
+    await expect(createPost(ctx.member.id, ctx.channel.id, { body: "   " })).rejects.toMatchObject({ code: "invalid" });
+    await expect(createPost(ctx.member.id, ctx.channel.id, { body: "x".repeat(2001) })).rejects.toMatchObject({ code: "invalid" });
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { title: " T ", body: "  <b>hi</b>  " });
+    const row = await db.post.findUniqueOrThrow({ where: { id } });
+    expect([row.title, row.body]).toEqual(["T", "<b>hi</b>"]);
+  });
+
+  it("feed returns newest first with counts, author names, never emails", async () => {
+    const a = await createPost(ctx.member.id, ctx.channel.id, { body: "first" });
+    await new Promise((r) => setTimeout(r, 5));
+    const b = await createPost(ctx.member2.id, ctx.channel.id, { body: "second" });
+    await addComment(ctx.member2.id, a.id, { body: "c" });
+    await toggleLike(ctx.member2.id, { postId: a.id });
+    const { posts } = await feed(ctx.member.id);
+    expect(posts.map((p) => p.id)).toEqual([b.id, a.id]);
+    const first = posts.find((p) => p.id === a.id)!;
+    expect([first.commentCount, first.likeCount, first.likedByMe, first.author.name]).toEqual([1, 1, false, "Meera Learner"]);
+    expect(JSON.stringify(posts)).not.toContain("@t.test");
+  });
+
+  it("pinned posts come first and appear only on page one; pagination is stable", async () => {
+    const ids: string[] = [];
+    for (let i = 0; i < 25; i++) {
+      ids.push((await createPost(ctx.creatorUser.id, ctx.channel.id, { body: `p${i}` })).id);
+    }
+    await setPinned(ctx.creatorUser.id, ids[0], true);
+    const page1 = await feed(ctx.member.id);
+    expect(page1.posts[0].id).toBe(ids[0]);
+    expect(page1.posts).toHaveLength(21); // 1 pinned + 20
+    expect(page1.nextCursor).not.toBeNull();
+    const page2 = await feed(ctx.member.id, page1.nextCursor!);
+    expect(page2.posts).toHaveLength(4);
+    expect(page2.nextCursor).toBeNull();
+    const seen = new Set([...page1.posts, ...page2.posts].map((p) => p.id));
+    expect(seen.size).toBe(25);
+  });
+
+  it("the creator's posts show the store name, never the account name or email", async () => {
+    await createPost(ctx.creatorUser.id, ctx.channel.id, { body: "from the creator" });
+    const { posts } = await feed(ctx.member.id);
+    expect(posts[0].author).toEqual({ id: ctx.creatorUser.id, name: "Creator Co", isCreator: true });
+  });
+
+  it("an out-of-channel cursor is ignored", async () => {
+    const other = await makeChannel(ctx.creator.id, { slug: "other" });
+    const foreign = await createPost(ctx.creatorUser.id, other.id, { body: "elsewhere" });
+    await createPost(ctx.member.id, ctx.channel.id, { body: "here" });
+    const normal = await feed(ctx.member.id);
+    const probed = await feed(ctx.member.id, foreign.id);
+    expect(probed.posts.map((p) => p.id)).toEqual(normal.posts.map((p) => p.id));
+  });
+
+  it("only the author edits; edit sets editedAt", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "v1" });
+    await expect(editPost(ctx.member2.id, id, { body: "hack" })).rejects.toMatchObject({ code: "forbidden" });
+    await expect(editPost(ctx.creatorUser.id, id, { body: "hack" })).rejects.toMatchObject({ code: "forbidden" });
+    await editPost(ctx.member.id, id, { body: "v2" });
+    const row = await db.post.findUniqueOrThrow({ where: { id } });
+    expect(row.body).toBe("v2");
+    expect(row.editedAt).not.toBeNull();
+  });
+
+  it("author or creator may delete; another member may not", async () => {
+    const a = await createPost(ctx.member.id, ctx.channel.id, { body: "x" });
+    await expect(deletePost(ctx.member2.id, a.id)).rejects.toMatchObject({ code: "forbidden" });
+    await deletePost(ctx.member.id, a.id);
+    const b = await createPost(ctx.member.id, ctx.channel.id, { body: "y" });
+    await deletePost(ctx.creatorUser.id, b.id);
+    expect(await db.post.count({ where: { channelId: ctx.channel.id } })).toBe(0);
+  });
+
+  it("pin is creator-only and capped at 3 per channel", async () => {
+    const ids: string[] = [];
+    for (let i = 0; i < 4; i++) ids.push((await createPost(ctx.creatorUser.id, ctx.channel.id, { body: `p${i}` })).id);
+    await expect(setPinned(ctx.member.id, ids[0], true)).rejects.toMatchObject({ code: "forbidden" });
+    for (const id of ids.slice(0, 3)) await setPinned(ctx.creatorUser.id, id, true);
+    await expect(setPinned(ctx.creatorUser.id, ids[3], true)).rejects.toMatchObject({ code: "limit" });
+    await setPinned(ctx.creatorUser.id, ids[0], false);
+    await expect(setPinned(ctx.creatorUser.id, ids[3], true)).resolves.toBeUndefined();
+  });
+});
+
+describe("comments", () => {
+  it("adds, lists oldest-first, and rejects empty bodies", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "q" });
+    await expect(addComment(ctx.member2.id, id, { body: " " })).rejects.toMatchObject({ code: "invalid" });
+    await addComment(ctx.member2.id, id, { body: "first" });
+    await new Promise((r) => setTimeout(r, 5));
+    await addComment(ctx.member.id, id, { body: "second" });
+    const t = await getThread(ctx.member.id, id);
+    expect(t.comments.map((c) => c.body)).toEqual(["first", "second"]);
+    expect(t.comments[1].canDelete).toBe(true);
+    expect(t.comments[0].canDelete).toBe(false);
+  });
+
+  it("author or creator deletes a comment; others cannot", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "q" });
+    const c = await addComment(ctx.member2.id, id, { body: "x" });
+    await expect(deleteComment(ctx.member.id, c.id)).rejects.toMatchObject({ code: "forbidden" });
+    await deleteComment(ctx.creatorUser.id, c.id);
+    expect(await db.comment.count({ where: { postId: id } })).toBe(0);
+  });
+});
+
+describe("likes", () => {
+  it("toggles on and off; counts reflect it", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "x" });
+    expect(await toggleLike(ctx.member2.id, { postId: id })).toEqual({ liked: true, likeCount: 1 });
+    expect(await toggleLike(ctx.member2.id, { postId: id })).toEqual({ liked: false, likeCount: 0 });
+  });
+  it("two simultaneous toggles never throw (double-click)", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "x" });
+    await expect(Promise.all([toggleLike(ctx.member2.id, { postId: id }), toggleLike(ctx.member2.id, { postId: id })])).resolves.toHaveLength(2);
+    expect([0, 1]).toContain(await db.like.count({ where: { postId: id } }));
+  });
+  it("likes a comment too", async () => {
+    const p = await createPost(ctx.member.id, ctx.channel.id, { body: "x" });
+    const c = await addComment(ctx.member.id, p.id, { body: "c" });
+    expect(await toggleLike(ctx.member2.id, { commentId: c.id })).toEqual({ liked: true, likeCount: 1 });
+  });
+});
+
+describe("points from community actions", () => {
+  it("post +5, comment +2, like received +1 (to the author); self-like earns nothing", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "x" });
+    expect(await points(ctx.member.id)).toBe(5);
+    await addComment(ctx.member2.id, id, { body: "hi" });
+    expect(await points(ctx.member2.id)).toBe(2);
+    await toggleLike(ctx.member2.id, { postId: id });
+    expect(await points(ctx.member.id)).toBe(6);
+    await toggleLike(ctx.member.id, { postId: id }); // self-like
+    expect(await points(ctx.member.id)).toBe(6);
+  });
+
+  it("unlike then re-like does not award again", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "x" });
+    await toggleLike(ctx.member2.id, { postId: id });
+    await toggleLike(ctx.member2.id, { postId: id });
+    await toggleLike(ctx.member2.id, { postId: id });
+    expect(await points(ctx.member.id)).toBe(6);
+  });
+
+  it("deleting a post removes the points it and its comments and likes earned", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "x" });
+    await addComment(ctx.member2.id, id, { body: "hi" });
+    await toggleLike(ctx.member2.id, { postId: id });
+    await deletePost(ctx.member.id, id);
+    expect(await points(ctx.member.id)).toBe(0);
+    expect(await points(ctx.member2.id)).toBe(0);
+  });
+
+  it("deleting a comment removes its points", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "x" });
+    const c = await addComment(ctx.member2.id, id, { body: "hi" });
+    await deleteComment(ctx.member2.id, c.id);
+    expect(await points(ctx.member2.id)).toBe(0);
+  });
+
+  it("posting still works when gamification is off (and earns nothing)", async () => {
+    await db.creator.update({ where: { id: ctx.creator.id }, data: { gamificationEnabled: false } });
+    await expect(createPost(ctx.member.id, ctx.channel.id, { body: "x" })).resolves.toBeTruthy();
+    expect(await points(ctx.member.id)).toBe(0);
+  });
+});
+
+describe("bans", () => {
+  it("only the creator can ban, never themselves; banning twice is harmless", async () => {
+    await expect(banMember(ctx.member.id, ctx.creator.id, ctx.member2.id)).rejects.toMatchObject({ code: "forbidden" });
+    await expect(banMember(ctx.creatorUser.id, ctx.creator.id, ctx.creatorUser.id)).rejects.toMatchObject({ code: "invalid" });
+    await banMember(ctx.creatorUser.id, ctx.creator.id, ctx.member.id);
+    await banMember(ctx.creatorUser.id, ctx.creator.id, ctx.member.id); // idempotent
+    expect((await listBans(ctx.creator.id)).map((b) => b.name)).toEqual(["Meera Learner"]);
+  });
+});
