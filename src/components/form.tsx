@@ -90,6 +90,7 @@ type FieldProps = {
   hint?: string;
   required?: boolean;
   rows?: number;
+  maxLength?: number;
   autoComplete?: string;
   prefix?: string;
   onChange?: (value: string) => void;
@@ -99,7 +100,7 @@ type FieldProps = {
 
 export function Field({
   name, label, type = "text", as = "input", defaultValue, placeholder, hint, required,
-  rows = 4, autoComplete, prefix, onChange, children, className,
+  rows = 4, maxLength, autoComplete, prefix, onChange, children, className,
 }: FieldProps) {
   const s = useContext(Ctx);
   const error = s?.fields?.[name];
@@ -120,11 +121,11 @@ export function Field({
       <div className={prefix ? "flex items-center gap-2" : undefined}>
         {prefix && <span className="text-sm text-muted whitespace-nowrap">{prefix}</span>}
         {as === "textarea" ? (
-          <textarea key={k} {...common} rows={rows} defaultValue={value} />
+          <textarea key={k} {...common} rows={rows} maxLength={maxLength} defaultValue={value} />
         ) : as === "select" ? (
           <select key={k} {...common} defaultValue={value}>{children}</select>
         ) : (
-          <input key={k} {...common} type={type} autoComplete={autoComplete} defaultValue={type === "password" ? undefined : value} />
+          <input key={k} {...common} type={type} maxLength={maxLength} autoComplete={autoComplete} defaultValue={type === "password" ? undefined : value} />
         )}
       </div>
       {error ? <p id={`${id}-err`} className="err">{error}</p> : hint ? <p id={`${id}-hint`} className="hint">{hint}</p> : null}
