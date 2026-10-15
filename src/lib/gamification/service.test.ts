@@ -52,8 +52,38 @@ describe("awardPoints", () => {
   });
 
   it("stores sourceId so deleting content can remove its points", async () => {
-    await award("post_created", "post1", { sourceId: "post1" });
-    expect((await db.pointEvent.findFirstOrThrow({ where: { refId: "post1" } })).sourceId).toBe("post1");
+    const ch = await makeChannel(ctx.creator.id);
+    const post = await makePost(ch.id, ctx.learner.id);
+    await award("post_created", post.id, { sourceId: post.id });
+    expect((await db.pointEvent.findFirstOrThrow({ where: { refId: post.id } })).sourceId).toBe(post.id);
+  });
+
+  it("awards for a comment source too", async () => {
+    const ch = await makeChannel(ctx.creator.id);
+    const post = await makePost(ch.id, ctx.learner.id);
+    const c = await db.comment.create({ data: { postId: post.id, authorId: ctx.learner.id, body: "hi" } });
+    expect((await award("comment_created", c.id, { sourceId: c.id })).awarded).toBe(true);
+  });
+
+  it("does not award when the source post was deleted meanwhile (award-after-delete race)", async () => {
+    const ch = await makeChannel(ctx.creator.id);
+    const post = await makePost(ch.id, ctx.learner.id);
+    await db.post.delete({ where: { id: post.id } });
+    expect(await award("post_created", post.id, { sourceId: post.id })).toEqual({ awarded: false, points: 0 });
+    expect(await db.pointEvent.count({ where: { userId: ctx.learner.id } })).toBe(0);
+  });
+
+  it("does not award when the source comment was deleted meanwhile", async () => {
+    const ch = await makeChannel(ctx.creator.id);
+    const post = await makePost(ch.id, ctx.learner.id);
+    const c = await db.comment.create({ data: { postId: post.id, authorId: ctx.learner.id, body: "hi" } });
+    await db.comment.delete({ where: { id: c.id } });
+    expect((await award("comment_created", c.id, { sourceId: c.id })).awarded).toBe(false);
+    expect(await db.pointEvent.count({ where: { userId: ctx.learner.id } })).toBe(0);
+  });
+
+  it("awards without a sourceId (lessons) are unaffected", async () => {
+    expect((await award("lesson_complete", "noSource")).awarded).toBe(true);
   });
 });
 

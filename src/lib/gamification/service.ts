@@ -24,6 +24,15 @@ async function awardGated(creator: CreatorGate, a: AwardInput): Promise<{ awarde
   const at = a.at ?? new Date();
   try {
     return await db.$transaction(async (tx) => {
+      if (a.sourceId) {
+        // The post/comment this award came from may have been deleted since the caller created it (its cleanup
+        // already ran): don't leave an orphaned PointEvent.
+        const [posts, comments] = await Promise.all([
+          tx.post.count({ where: { id: a.sourceId } }),
+          tx.comment.count({ where: { id: a.sourceId } }),
+        ]);
+        if (posts + comments === 0) return none;
+      }
       if (rule.dailyCap !== undefined) {
         // Serialise concurrent awards of one kind to one user so the cap can't be overshot (no-op on SQLite).
         await lockKey(tx, `pts:${a.userId}:${a.creatorId}:${a.kind}`);
