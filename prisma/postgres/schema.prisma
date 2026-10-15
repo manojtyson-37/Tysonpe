@@ -26,6 +26,12 @@ model User {
   progress     LessonProgress[]
   quizAttempts QuizAttempt[]
   certificates Certificate[]
+  posts        Post[]
+  comments     Comment[]
+  likes        Like[]
+  bans         CommunityBan[]
+  pointEvents  PointEvent[]
+  badges       UserBadge[]
 }
 
 model Creator {
@@ -36,6 +42,7 @@ model Creator {
   bio         String   @default("")
   brandColor  String   @default("#6d28d9")
   planKey     String   @default("basic") // basic | pro | advanced | ultimate
+  gamificationEnabled Boolean @default(true)
   createdAt   DateTime @default(now())
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -43,6 +50,10 @@ model Creator {
   coupons  Coupon[]
   orders   Order[]
   ledger   LedgerEntry[]
+  channels    Channel[]
+  bans        CommunityBan[]
+  pointEvents PointEvent[]
+  badges      UserBadge[]
 }
 
 model Product {
@@ -68,6 +79,7 @@ model Product {
   certificates Certificate[]
   orders      Order[]
   enrollments Enrollment[]
+  channelLinks ChannelProduct[]
 
   @@unique([creatorId, slug])
   @@index([creatorId])
@@ -286,4 +298,130 @@ model WebhookEvent {
 model InvoiceCounter {
   key String @id // `${creatorId}:${fiscalYear}`
   seq Int    @default(0)
+}
+
+model Channel {
+  id          String   @id @default(cuid())
+  creatorId   String
+  name        String
+  slug        String
+  description String   @default("")
+  kind        String   @default("discussion") // discussion | announcement
+  access      String   @default("open") // open | product_gated
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  creator  Creator          @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  products ChannelProduct[]
+  posts    Post[]
+
+  @@unique([creatorId, slug])
+  @@index([creatorId, position])
+}
+
+model ChannelProduct {
+  channelId String
+  productId String
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([channelId, productId])
+  @@index([productId])
+}
+
+model Post {
+  id        String    @id @default(cuid())
+  channelId String
+  authorId  String
+  title     String    @default("")
+  body      String
+  pinned    Boolean   @default(false)
+  editedAt  DateTime?
+  createdAt DateTime  @default(now())
+
+  channel  Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  author   User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments Comment[]
+  likes    Like[]
+
+  @@index([channelId, pinned, createdAt])
+  @@index([authorId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  postId    String
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  likes  Like[]
+
+  @@index([postId, createdAt])
+}
+
+/// Exactly one of postId / commentId is set (validated in code).
+model Like {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String?
+  commentId String?
+  createdAt DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post    Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@unique([userId, commentId])
+  @@index([postId])
+  @@index([commentId])
+}
+
+model CommunityBan {
+  id        String   @id @default(cuid())
+  creatorId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([creatorId, userId])
+}
+
+/// Append-only points ledger. Unique key makes every award idempotent.
+model PointEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  creatorId String
+  kind      String // lesson_complete | quiz_pass | course_complete | post_created | comment_created | like_received
+  points    Int
+  refId     String
+  sourceId  String? // the post/comment this came from, so deleting it removes its points
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, creatorId, kind, refId])
+  @@index([creatorId, createdAt])
+  @@index([creatorId, userId])
+  @@index([sourceId])
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  creatorId String
+  badgeKey  String
+  earnedAt  DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, creatorId, badgeKey])
 }

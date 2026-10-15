@@ -58,3 +58,14 @@ export async function addQuiz(productId: string, opts: { passPct?: number; maxAt
     );
   return { item, quiz, correctAnswers: answers(true), wrongAnswers: answers(false) };
 }
+
+export async function makeChannel(creatorId: string, over: Record<string, unknown> = {}) {
+  const n = uid();
+  return db.channel.create({
+    data: { creatorId, name: `Channel ${n}`, slug: `ch-${n}`, kind: "discussion", access: "open", ...over },
+  });
+}
+
+export async function makePost(channelId: string, authorId: string, over: Record<string, unknown> = {}) {
+  return db.post.create({ data: { channelId, authorId, body: "Hello community", ...over } });
+}
