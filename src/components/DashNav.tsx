@@ -8,6 +8,7 @@ const links = [
   { href: "/dashboard/products", label: "Products" },
   { href: "/dashboard/orders", label: "Orders" },
   { href: "/dashboard/learners", label: "Learners" },
+  { href: "/dashboard/community", label: "Community" },
   { href: "/dashboard/coupons", label: "Coupons" },
   { href: "/dashboard/payouts", label: "Payouts" },
   { href: "/dashboard/settings", label: "Settings" },
