@@ -163,13 +163,13 @@ async function main() {
     await db.post.createMany({
       data: [
         { channelId: news.id, authorId: asha.id, title: "Welcome to the community", body: "This is where we talk money and answer questions. Be kind, stay curious.", pinned: true },
-        { channelId: general.id, authorId: learner.id, body: "Finished week 1. The 50-30-20 worksheet made my budget click." },
+        { channelId: general.id, authorId: learner.id, body: "Finished week 1. The 50-30-20 reading made my budget click." },
         { channelId: qa.id, authorId: learner.id, title: "SIP date vs salary date?", body: "Should my SIP date match my salary date, or a few days later?" },
       ],
     });
   }
 
-  console.log("Seeded. Demo logins:asha@demo.tysonpe.test (creator), learner@demo.tysonpe.test (learner).");
+  console.log("Seeded. Demo logins: asha@demo.tysonpe.test (creator), learner@demo.tysonpe.test (learner).");
   console.log("Demo password is in prisma/seed.ts. Storefront: /c/asha-rao");
 }
 

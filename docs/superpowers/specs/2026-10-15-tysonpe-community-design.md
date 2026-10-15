@@ -143,7 +143,7 @@ A creator opens the community, creates a product-gated channel, and links a prod
 - Creating or updating a channel with product links is all-or-nothing: the channel and its product links are written in one service call, so a failure leaves nothing half-saved.
 - The leaderboard computes ranks in memory over all earners in the period (one grouped query); fine for thousands of members, revisit with SQL window functions on Postgres.
 - Community posts have no uploads, mentions or notifications; see limits above.
-- Creator-authored posts and comments show the store name (`Creator.displayName`); other authors show their account name. Refunded members (no enrolment left) drop off the leaderboard.
+- Creator-authored posts and comments show the store name (`Creator.displayName`); other authors show their account name.
 - Turning gamification on replays existing lesson, quiz and course progress (`backfillPoints`, which also evaluates badges), so earlier activity counts; nothing is awarded while it is off.
 - Files differ from the Architecture list above: services are `community/{viewer,channels,posts}.ts` and `gamification/{service,hooks}.ts`; pure helpers are `gamification/{time,rules,levels,streak,ranking,badges}.ts` and `community/{access,validation,limits}.ts`.
 - Postgres: `prisma/postgres/schema.prisma` is regenerated and has its own migration. The SQLite test suite does not exercise the Postgres path; daily caps and the pin limit use `lockKey` advisory locks there.
