@@ -1,7 +1,11 @@
 @import "tailwindcss";
 
-/* Tysonpe design tokens. Warm paper canvas, ink-black actions, emerald reserved for money and success. */
+/*
+  Tysonpe design tokens. Light only. Warm paper canvas, ink actions, emerald for money and success only.
+  Full rules live in DESIGN.md; motion tokens follow docs/design-research/B-designmd-motion.md section 5.
+*/
 :root {
+  /* palette */
   --bg: #fbfaf7;
   --surface: #ffffff;
   --surface-2: #f3f0e9;
@@ -20,6 +24,72 @@
   --bad: #b42318;
   --bad-soft: #fbeae8;
   --warn-soft: #fdf3dc;
+
+  /* radius scale: control/input 8, card 12, dialog 16, pill full. No other radii. */
+  --r-control: 8px;
+  --r-card: 12px;
+  --r-dialog: 16px;
+  --r-pill: 9999px;
+
+  /* spacing: 4px core on an 8px rhythm */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --section-marketing: clamp(80px, 64px + 4vw, 128px);
+  --section-app: clamp(32px, 24px + 1.5vw, 48px);
+
+  /* elevation: floating layers only (menus, dialogs, toasts, sticky bars). In-page cards never carry a shadow. */
+  --shadow-float: 0 1px 2px rgba(22, 19, 15, 0.06), 0 8px 24px -4px rgba(22, 19, 15, 0.12);
+
+  /* focus ring: 2px ink, offset 2px */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --focus-ring-color: var(--ink);
+  --focus-ring: var(--focus-ring-width) solid var(--focus-ring-color);
+
+  /* motion: durations */
+  --dur-instant: 80ms; /* keyboard-initiated, high frequency: effectively no motion */
+  --dur-fast: 150ms; /* hover, press, chip, toggle, icon swap */
+  --dur-base: 200ms; /* popover, tooltip, menu, tab indicator */
+  --dur-overlay: 220ms; /* modal, drawer, sheet enter */
+  --dur-exit: 160ms; /* exits are shorter and subtler than enters */
+  --dur-reveal: 320ms; /* rare: receipt success, payout confirmed */
+  --dur-sheet: 500ms; /* native-feel bottom sheet on mobile only */
+
+  /* motion: eases (ease-out family for entering; never the default ease) */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-overlay: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-in-out: cubic-bezier(0.65, 0.05, 0.36, 1); /* on-screen position moves only */
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1); /* copy tick and success moment only */
+
+  /* motion: distances and scale */
+  --move-enter: 8px;
+  --move-exit: -6px;
+  --blur-enter: 4px;
+  --scale-press: 0.97; /* small controls, chips */
+  --scale-press-lg: 0.98; /* large CTAs, cards */
+  --scale-enter-min: 0.94; /* popover and modal start; never below 0.9 */
+
+  /* motion: stagger (max one group per view, 6 items) */
+  --stagger-step: 40ms;
+  --stagger-max: 240ms;
+
+  /* motion: tooltip */
+  --tooltip-delay-first: 400ms;
+
+  /* legacy aliases from pass 1; prefer the names above */
+  --ease-snappy: var(--ease-standard);
+  --ease-out-expo: var(--ease-overlay);
+  --ease-spring: var(--ease-pop);
+  --dur-normal: var(--dur-overlay);
+  --dur-spring: var(--dur-reveal);
 }
 
 @theme inline {
@@ -44,13 +114,24 @@
   --font-mono: var(--font-mono-var), ui-monospace, "SF Mono", Menlo, monospace;
 }
 
-:root {
-  --ease-snappy: cubic-bezier(0.2, 0, 0, 1);
-  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --dur-fast: 150ms;
-  --dur-normal: 220ms;
-  --dur-spring: 320ms;
+/* Radius, elevation and spacing utilities (work with Tailwind variants, e.g. md:rounded-card). */
+@utility rounded-control {
+  border-radius: var(--r-control);
+}
+@utility rounded-card {
+  border-radius: var(--r-card);
+}
+@utility rounded-dialog {
+  border-radius: var(--r-dialog);
+}
+@utility shadow-float {
+  box-shadow: var(--shadow-float);
+}
+@utility section-marketing {
+  padding-block: var(--section-marketing);
+}
+@utility section-app {
+  padding-block: var(--section-app);
 }
 
 html { scroll-behavior: smooth; }
@@ -62,37 +143,102 @@ body {
 }
 h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
 
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
 @layer components {
-  .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 ease-out
-      active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100;
+  /* Type utilities. Marketing body is 15px minimum, app screens 14px minimum, meta 12px minimum. */
+  .t-display {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 1.3rem + 2.8vw, 3.5rem);
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
   }
-  .btn-primary { @apply bg-brand text-brand-ink hover:bg-brand/85 shadow-xs; }
-  .btn-secondary { @apply border border-line bg-surface text-ink hover:bg-surface-2 hover:border-line/80 shadow-xs; }
+  .t-heading {
+    font-family: var(--font-display);
+    font-size: clamp(1.375rem, 1.1rem + 1.1vw, 2rem);
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+  }
+  .t-body {
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+  .t-meta {
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    color: var(--muted);
+  }
+  /* App-screen micro-label (table heads, stat labels). Not for use above marketing headings. */
+  .t-label {
+    font-size: 0.75rem;
+    line-height: 1.33;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+  /* Money, counts and clocks: tabular figures of the text face, true minus. */
+  .t-num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+  /* Ledger tables and rupee figures only (documented monospace exception). */
+  .t-ledger {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* Buttons: 8px, press scale, explicit transition properties (never `transition: all`). */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-control px-4 py-2.5 text-sm font-semibold disabled:opacity-50 disabled:pointer-events-none;
+    transition-property: background-color, border-color, color, opacity, transform;
+    transition-duration: var(--dur-fast);
+    transition-timing-function: var(--ease-standard);
+  }
+  .btn:active:not(:disabled) { transform: scale(var(--scale-press-lg)); }
+  .btn-primary { @apply bg-brand text-brand-ink hover:bg-brand/85; }
+  .btn-secondary { @apply border border-line-strong bg-surface text-ink hover:bg-surface-2; }
   .btn-ghost { @apply text-ink hover:bg-surface-2; }
-  .btn-danger { @apply border border-line bg-surface text-bad hover:bg-bad-soft; }
-  .btn-sm { @apply px-3 py-1.5 text-xs rounded-lg; }
+  .btn-danger { @apply border border-line-strong bg-surface text-bad hover:bg-bad-soft; }
+  .btn-sm { @apply px-3 py-1.5 text-sm; }
+  .btn-sm:active:not(:disabled) { transform: scale(var(--scale-press)); }
   .btn-lg { @apply px-6 py-3.5 text-base; }
 
   .input {
-    @apply w-full rounded-xl border border-line-strong bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/70
-      transition duration-150 focus:border-brand focus:outline-2 focus:outline-brand/25;
+    @apply w-full rounded-control border border-line-strong bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/70 focus:border-ink;
+    transition-property: border-color, background-color;
+    transition-duration: var(--dur-fast);
+    transition-timing-function: var(--ease-standard);
+  }
+  .input:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
   }
   .label { @apply mb-1.5 block text-sm font-medium; }
   .hint { @apply mt-1 text-xs text-muted; }
   .err { @apply mt-1 text-xs font-medium text-bad; }
 
+  /* Cards: 12px, no resting shadow. Elevation is a one-step tone change (white surface on paper canvas). */
   .card {
-    @apply rounded-xl border border-line/80 bg-surface;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 4px 12px rgba(0, 0, 0, 0.02);
+    @apply rounded-card border border-line bg-surface;
   }
+  /* The single card hover recipe: border and tone shift, 150ms, no translate, no scale, no shadow. */
   .card-hover {
-    @apply transition-all duration-200 ease-out;
+    transition-property: border-color, background-color;
+    transition-duration: var(--dur-fast);
+    transition-timing-function: var(--ease-standard);
   }
   .card-hover:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05), 0 12px 28px rgba(0, 0, 0, 0.04);
-    border-color: color-mix(in srgb, var(--brand) 25%, var(--line));
+    border-color: var(--line-strong);
+    background-color: var(--surface-2);
   }
 
   .badge { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold; }
@@ -106,8 +252,61 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
   .table th { @apply border-b border-line px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted; }
   .table td { @apply border-b border-line px-4 py-3 align-middle; }
   .table tr:last-child td { @apply border-b-0; }
+
+  /* Loading placeholder: sized by the caller to match final layout. Opacity-only breathing, static under reduced motion. */
+  .skeleton {
+    background-color: var(--surface-2);
+    border-radius: var(--r-control);
+    animation: skeleton-breathe 1.4s var(--ease-in-out) infinite;
+  }
+
+  /* Live state: static dot plus a one-shot ring when status changes. Add `.status-ring-once` to replay. */
+  .status-dot {
+    position: relative;
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--r-pill);
+    background-color: var(--good);
+  }
+  .status-ring-once::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background-color: var(--good);
+    animation: status-ring 600ms var(--ease-out) 1 both;
+  }
+
+  /* Enter and exit recipes for overlays and rare reveals. Never on dashboard tables, nav, headings or KPIs. */
+  .enter { animation: enter var(--dur-overlay) var(--ease-overlay) both; }
+  .exit { animation: exit var(--dur-exit) var(--ease-standard) both; }
 }
 
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--move-enter)) scale(var(--scale-enter-min));
+    filter: blur(var(--blur-enter));
+  }
+}
+@keyframes exit {
+  to {
+    opacity: 0;
+    transform: translateY(var(--move-exit));
+    filter: blur(2px);
+  }
+}
+@keyframes skeleton-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@keyframes status-ring {
+  from { opacity: 0.45; transform: scale(1); }
+  to { opacity: 0; transform: scale(2.6); }
+}
+
+/* Pass-1 scan loop, still used by HomeInteractiveDemo; remove after Task 27. */
 @keyframes qr-scan {
   0% {
     top: 0%;
@@ -127,11 +326,26 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
   animation: qr-scan 2.4s ease-in-out infinite;
 }
 
+/* Reduced motion is mandatory: tokens collapse, every animation and transition becomes instant. */
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0.01ms;
+    --dur-base: 0.01ms;
+    --dur-overlay: 0.01ms;
+    --dur-exit: 0.01ms;
+    --dur-reveal: 0.01ms;
+    --dur-sheet: 0.01ms;
+    --move-enter: 0px;
+    --move-exit: 0px;
+    --blur-enter: 0px;
+    --stagger-step: 0ms;
+  }
   *, ::before, ::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+  .skeleton { animation: none; }
+  .status-ring-once::after { display: none; }
 }
