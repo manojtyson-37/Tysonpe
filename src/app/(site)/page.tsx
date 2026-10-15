@@ -1,105 +1,63 @@
 import Link from "next/link";
 import { AuroraHero } from "@/components/AuroraHero";
 import { HomeInteractiveDemo } from "@/components/HomeInteractiveDemo";
+import { DEMO_HANDLE } from "@/lib/demo";
+import { feeBreakdown, formatINR, gstComponent } from "@/lib/money";
 
-const competitorComparisons = [
-  {
-    feature: "Platform Take-Rate",
-    tysonpe: "0% – 10% (Zero Fixed Fee)",
-    tagmango: "15% – 25% + gateway fee",
-    graphy: "10% + ₹3,999/mo plan",
-    highlight: true,
-  },
-  {
-    feature: "Checkout Drop-off Rate",
-    tysonpe: "< 2.8% (Instant UPI QR)",
-    tagmango: "8% – 14% (Redirect flow)",
-    graphy: "12% – 18% (Multi-step form)",
-    highlight: true,
-  },
-  {
-    feature: "Payout Settlement Schedule",
-    tysonpe: "T+1 Direct Bank Deposit",
-    tagmango: "T+3 to T+7 Days",
-    graphy: "Weekly Payouts",
-    highlight: false,
-  },
-  {
-    feature: "Automated GST Invoices (SAC 999293)",
-    tysonpe: "Built-in (Zero Setup)",
-    tagmango: "Add-on required",
-    graphy: "Enterprise only",
-    highlight: false,
-  },
-  {
-    feature: "Gateway Flexibility",
-    tysonpe: "Razorpay + Easebuzz Dual Engine",
-    tagmango: "Proprietary Routing",
-    graphy: "Single Gateway",
-    highlight: false,
-  },
+const SALE_PRICE = 2999;
+const salePaise = SALE_PRICE * 100;
+const saleGst = gstComponent(salePaise, 18);
+const saleFees = feeBreakdown(salePaise, "basic");
+const SALE_ROWS = [
+  { label: "Learner pays (GST-inclusive)", value: formatINR(salePaise) },
+  { label: "  of which GST @ 18%", value: formatINR(saleGst) },
+  { label: "Platform fee (Basic, 10%)", value: `− ${formatINR(saleFees.platformFeePaise)}` },
+  { label: "Gateway fee (2%)", value: `− ${formatINR(saleFees.gatewayFeePaise)}` },
+  { label: "Creator net", value: formatINR(saleFees.netPaise), strong: true },
 ];
 
 const creatorFormats = [
   {
-    title: "Cohort Masterclasses",
-    desc: "Host live multi-week batches with Zoom link protection, attendance caps, and automated WhatsApp/email reminders.",
-    tag: "High Conversion",
-    stat: "₹4,999 Avg Ticket",
+    title: "Video courses & LMS",
+    desc: "Sections and lessons, drip schedules, quizzes with attempt limits, progress tracking and verifiable completion certificates.",
+    tag: "Live",
+    stat: "Beta",
+    live: true,
   },
   {
-    title: "Video Courses & LMS",
-    desc: "Deliver lessons with quiz checkpoints, drip schedules, anti-screen-recording DRM, and completion certificates.",
-    tag: "Passive Income",
-    stat: "Zero Video Cost",
+    title: "Storefront & checkout",
+    desc: "Branded creator page at /c/your-handle. Coupons, GST-inclusive pricing, UPI and card checkout in test mode.",
+    tag: "Live",
+    stat: "Test mode",
+    live: true,
   },
   {
-    title: "WhatsApp & Telegram VIP Passes",
-    desc: "Sell recurring or one-time access to private communities. Instant bot invite links dispatched upon payment confirmation.",
-    tag: "Instant Delivery",
-    stat: "Zero Manual Work",
+    title: "GST invoices & payout ledger",
+    desc: "A numbered tax invoice for every paid order, and a ledger that splits platform fee, gateway fee and your net payout.",
+    tag: "Live",
+    stat: "SAC 999293",
+    live: true,
   },
   {
-    title: "Digital Downloads & Templates",
-    desc: "Figma files, Notion setups, cheat sheets, and source code with cryptographic rate-limited download tokens.",
-    tag: "Anti-Piracy",
-    stat: "One-Click Checkout",
+    title: "Community & gamification",
+    desc: "Discussion spaces, points and badges for learners. Design is written; build starts after the beta demo.",
+    tag: "Planned",
+    stat: "Next",
+    live: false,
   },
   {
-    title: "1:1 Consultation Calls",
-    desc: "Monetize your advisory time with integrated booking slots, client intake questionnaires, and calendar sync.",
-    tag: "High Ticket",
-    stat: "T+1 Payouts",
+    title: "Live sessions & bookings",
+    desc: "Paid webinars and 1:1 calls with slots and reminders. Not built yet.",
+    tag: "Planned",
+    stat: "Roadmap",
+    live: false,
   },
   {
-    title: "Paid Webinars & Workshops",
-    desc: "Single-session live workshops with countdown timers, dynamic early-bird coupons, and automated replay access.",
-    tag: "Urgency Driven",
-    stat: "Instant UPI Scan",
-  },
-];
-
-const testimonials = [
-  {
-    quote: "Switching from TagMango was the best financial decision for my academy. I was losing nearly 20% on every ticket. With Tysonpe, I keep 94.5% of my revenue and get paid in 24 hours.",
-    author: "Asha Rao",
-    title: "Chartered Accountant & Wealth Coach",
-    handle: "@asha-rao",
-    earnings: "₹18.4L earned",
-  },
-  {
-    quote: "The UPI Dynamic QR checkout is magic. Learners don't bounce because they don't have to fill long forms. They scan on Google Pay and their lesson library opens instantly.",
-    author: "Vikramaditya Verma",
-    title: "Full-Stack System Architect",
-    handle: "@vikram-codes",
-    earnings: "1,240+ students",
-  },
-  {
-    quote: "As an Indian business, GST invoices used to be a nightmare with international tools. Tysonpe automatically breaks down CGST and SGST with proper SAC codes for every buyer.",
-    author: "Dr. Neha Sharma",
-    title: "Integrative Nutritionist",
-    handle: "@dr-neha",
-    earnings: "₹9.8L earned",
+    title: "Growth tools",
+    desc: "Affiliates, funnels and abandoned-cart recovery. Not built yet.",
+    tag: "Planned",
+    stat: "Roadmap",
+    live: false,
   },
 ];
 
@@ -128,8 +86,8 @@ const plans = [
     features: [
       "Everything in Basic",
       "Quiz gating & certificates",
-      "Custom domain mapping",
-      "Priority webhook retries",
+      "Drip lesson scheduler",
+      "Lower platform fee",
     ],
     cta: "Join Pro waitlist",
     live: false,
@@ -142,9 +100,8 @@ const plans = [
     note: "For established creator academies.",
     features: [
       "Everything in Pro",
-      "Affiliate referral funnels",
-      "Drip lesson scheduler",
-      "Dedicated Slack support",
+      "Lower platform fee",
+      "Affiliate funnels (planned)",
     ],
     cta: "Contact sales",
     live: false,
@@ -157,9 +114,8 @@ const plans = [
     note: "1.5% gateway cost only. Pure volume.",
     features: [
       "Zero platform fee",
-      "Multi-seat creator team",
-      "Custom invoice templates",
-      "Same-day settlement option",
+      "Gateway cost only",
+      "Multi-seat team (planned)",
     ],
     cta: "Custom setup",
     live: false,
@@ -197,86 +153,26 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 3. Direct Competitor Comparison: Tysonpe vs TagMango vs Graphy */}
-      <section className="border-b border-white/10 bg-[#0a0c12] py-20 sm:py-28">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="text-center max-w-2xl mx-auto">
-            <span className="inline-flex items-center rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3.5 py-1 text-xs font-semibold text-indigo-400">
-              Uncompromising Economics
-            </span>
-            <h2 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl text-white">
-              Why Creators Are Moving From TagMango & Graphy
-            </h2>
-            <p className="mt-3 text-sm text-slate-400">
-              Stop paying 15% to 25% commissions and steep monthly maintenance fees on your hard-earned revenue.
-            </p>
-          </div>
-
-          <div className="mt-12 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] shadow-2xl backdrop-blur-md">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-white/10 bg-white/[0.04] text-xs uppercase font-bold text-slate-400">
-                    <th className="px-5 py-4 text-left">Feature / Capability</th>
-                    <th className="px-5 py-4 text-left text-emerald-400 bg-emerald-500/[0.08]">
-                      Tysonpe (Creator First)
-                    </th>
-                    <th className="px-5 py-4 text-left">TagMango</th>
-                    <th className="px-5 py-4 text-left">Graphy</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/10">
-                  {competitorComparisons.map((row) => (
-                    <tr
-                      key={row.feature}
-                      className={row.highlight ? "bg-emerald-500/[0.04] font-medium" : "hover:bg-white/[0.02]"}
-                    >
-                      <td className="px-5 py-4 text-white font-semibold text-xs sm:text-sm">
-                        {row.feature}
-                      </td>
-                      <td className="px-5 py-4 font-bold text-emerald-400 bg-emerald-500/[0.06] text-xs sm:text-sm">
-                        ✓ {row.tysonpe}
-                      </td>
-                      <td className="px-5 py-4 text-rose-400 text-xs sm:text-sm">
-                        ✕ {row.tagmango}
-                      </td>
-                      <td className="px-5 py-4 text-rose-400 text-xs sm:text-sm">
-                        ✕ {row.graphy}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="border-t border-white/10 bg-white/[0.02] px-5 py-3.5 flex flex-col sm:flex-row justify-between items-center text-xs text-slate-400 gap-2">
-              <span>*Data benchmarked from publicly published pricing tiers as of Q4 2026.</span>
-              <a href="#sandbox-demo" className="font-bold text-emerald-400 hover:underline">
-                Test the checkout simulation yourself →
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* 4. The 6 Product Formats */}
       <section className="border-b border-white/10 bg-[#08090d] py-20 sm:py-28">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-                Monetization Formats
+                Product status
               </p>
               <h2 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl text-white">
-                Sell everything your audience asks for.
+                What is built, and what is next.
               </h2>
             </div>
-            <Link
-              href="/c/asha-rao"
-              className="text-xs font-bold text-emerald-400 hover:underline inline-flex items-center gap-1 active:scale-[0.98]"
-            >
-              Browse Asha Rao&apos;s Live Storefront →
-            </Link>
+            {DEMO_HANDLE && (
+              <Link
+                href={`/c/${DEMO_HANDLE}`}
+                className="text-xs font-bold text-emerald-400 hover:underline inline-flex items-center gap-1 active:scale-[0.98]"
+              >
+                Browse the demo storefront →
+              </Link>
+            )}
           </div>
 
           <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -287,7 +183,7 @@ export default function Home() {
               >
                 <div>
                   <div className="flex items-center justify-between">
-                    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400">
+                    <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${f.live ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-white/15 bg-white/5 text-slate-400"}`}>
                       {f.tag}
                     </span>
                     <span className="font-mono text-xs font-bold text-slate-300">{f.stat}</span>
@@ -298,8 +194,8 @@ export default function Home() {
                   <p className="mt-2 text-xs sm:text-sm leading-relaxed text-slate-400">{f.desc}</p>
                 </div>
                 <div className="mt-6 border-t border-white/10 pt-3 flex items-center justify-between text-xs font-semibold text-emerald-400">
-                  <span>Launch in 5 minutes</span>
-                  <span>→</span>
+                  <span>{f.live ? "Available in the beta" : "On the roadmap"}</span>
+                  <span aria-hidden>{f.live ? "→" : "·"}</span>
                 </div>
               </div>
             ))}
@@ -307,51 +203,24 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 5. Real Creator Social Proof & Testimonials */}
+      {/* 5. Anatomy of one sale: real figures from the money module */}
       <section className="border-b border-white/10 bg-[#0a0c12] py-20 sm:py-28">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="text-center max-w-2xl mx-auto">
-            <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-1 text-xs font-semibold text-emerald-400">
-              Real Creator Results
-            </span>
-            <h2 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl text-white">
-              Trusted by India&apos;s High-Earning Educators & Coaches
-            </h2>
-            <p className="mt-3 text-sm text-slate-400">
-              Here is what happens when creators stop leaking revenue to platform fees.
-            </p>
-          </div>
-
-          <div className="mt-12 grid gap-6 sm:grid-cols-3">
-            {testimonials.map((t) => (
-              <div
-                key={t.author}
-                className="flex flex-col justify-between rounded-2xl border border-white/10 bg-white/[0.03] p-6 shadow-sm backdrop-blur-md"
-              >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-mono font-bold text-emerald-400">
-                      {t.earnings}
-                    </span>
-                    <span className="text-xs text-slate-400 font-mono">{t.handle}</span>
-                  </div>
-                  <p className="mt-4 text-xs sm:text-sm text-slate-300 leading-relaxed italic">
-                    &ldquo;{t.quote}&rdquo;
-                  </p>
-                </div>
-
-                <div className="mt-6 border-t border-white/10 pt-4 flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/20 font-bold text-xs text-emerald-400 border border-emerald-500/30">
-                    {t.author.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-white">{t.author}</h4>
-                    <p className="text-[10px] text-slate-400">{t.title}</p>
-                  </div>
-                </div>
+        <div className="mx-auto max-w-4xl px-4 sm:px-6">
+          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-400">Where the money goes</p>
+          <h2 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl text-white">
+            One ₹{SALE_PRICE.toLocaleString("en-IN")} course sale, line by line.
+          </h2>
+          <p className="mt-3 max-w-2xl text-sm text-slate-400">
+            Prices are GST-inclusive. These are the same functions the ledger runs, shown for a Basic-plan creator.
+          </p>
+          <dl className="mt-10 divide-y divide-white/10 rounded-2xl border border-white/10 bg-white/[0.03] font-mono text-sm tabular-nums">
+            {SALE_ROWS.map((r) => (
+              <div key={r.label} className={`flex items-baseline justify-between gap-4 px-5 py-3.5 ${r.strong ? "bg-emerald-500/[0.06]" : ""}`}>
+                <dt className={r.strong ? "font-bold text-white" : "text-slate-400"}>{r.label}</dt>
+                <dd className={r.strong ? "font-extrabold text-emerald-400" : "text-slate-200"}>{r.value}</dd>
               </div>
             ))}
-          </div>
+          </dl>
         </div>
       </section>
 
@@ -366,7 +235,7 @@ export default function Home() {
               Keep more of what you earn.
             </h2>
             <p className="mt-3 text-sm text-slate-400">
-              Start on Basic with zero upfront cost. Upgrade only when volume discounts save you more money.
+              Start on Basic with no monthly fee. Plan prices shown are drafts; paid plan billing is not live yet.
             </p>
           </div>
 
@@ -438,7 +307,7 @@ export default function Home() {
           </div>
 
           <div className="mt-8 text-center text-xs text-slate-400">
-            All plans include SSL encryption, GST calculations, webhook dispatch, and automated email receipts.
+            All plans include GST calculations and numbered tax invoices. Payments run in test mode until launch.
           </div>
         </div>
       </section>
@@ -447,22 +316,16 @@ export default function Home() {
       <section className="bg-[#08090d] py-16 sm:py-24">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="relative overflow-hidden rounded-3xl border border-white/15 bg-gradient-to-br from-[#0c1017] via-[#0f1722] to-[#08090d] p-8 sm:p-14 text-white shadow-2xl">
-            <div
-              className="absolute -top-24 -right-24 h-96 w-96 rounded-full pointer-events-none"
-              style={{
-                background: "radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 70%)",
-              }}
-            />
             <div className="relative z-10 flex flex-col items-start justify-between gap-8 lg:flex-row lg:items-center">
               <div className="max-w-xl">
                 <span className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white">
-                  Zero Technical Barrier
+                  Test-mode beta
                 </span>
                 <h2 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl text-white">
-                  Start collecting UPI payments in 5 minutes.
+                  Open a storefront and run a test sale.
                 </h2>
                 <p className="mt-3 text-sm text-slate-300 leading-relaxed">
-                  Pick your handle, launch your masterclass or community pass, and let our dual-gateway engine handle checkouts and GST invoices automatically.
+                  Pick your handle, publish a course, and watch checkout, GST invoice and enrolment happen end to end. No real money moves.
                 </p>
               </div>
 

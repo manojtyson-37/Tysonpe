@@ -11,9 +11,9 @@ You must adhere to the core memory rules defined in CLAUDE.md, AGENTS.md, and DE
    - NO generic placeholder claims. Use real currency (₹), GST rates, and settlement times.
 
 2. TYPOGRAPHY & DESIGN TOKENS (UI UX Pro Max):
-   - Headings: Bricolage Grotesque (--font-display) with tight tracking (-0.025em).
+   - Headings: Plus Jakarta Sans (--font-display aliases --font-sans) with tight tracking (-0.025em).
    - Body & Numbers: Plus Jakarta Sans (--font-sans) with tabular-nums for financial figures.
-   - Semantic tokens: --bg (#fbfaf7 / dark #100e0b), --surface, --surface-2, --ink, --line, --brand (#5b3df5), --good (#0f7b4d).
+   - Semantic tokens: --bg (#ffffff), --surface, --surface-2, --ink, --line, --brand (#4f46e5), --good (#10b981).
 
 3. MOTION & MICRO-INTERACTIONS (Design Motion Principles & Design Spells):
    - Transitions: 150ms for buttons/hover, 220ms for modals/drawers. Easing: cubic-bezier(0.16, 1, 0.3, 1).

@@ -10,7 +10,7 @@ Provides systematic design intelligence so agents never guess what looks good.
 ## Core Rules
 
 ### 1. Typography Hierarchy
-- **Display Font**: `Bricolage Grotesque` (`--font-display`).
+- **Display Font**: `Plus Jakarta Sans` (`--font-display` aliases `--font-sans`).
   - Tracking: `-0.025em` for headings.
   - Line height: tight (`leading-[1.05]` on hero, `leading-[1.15]` on section headings).
 - **Body & Numeric Font**: `Plus Jakarta Sans` (`--font-sans`).
@@ -23,7 +23,7 @@ Provides systematic design intelligence so agents never guess what looks good.
 ### 2. Spacing & Rhythm
 - Spacing is based on a strict 4px grid (`4px, 8px, 12px, 16px, 24px, 32px, 48px, 64px, 96px`).
 - Do not let adjacent sections have the same vertical padding without varying surface elevation or background tone.
-- Alternate between warm paper (`--bg: #fbfaf7`), oat surface (`--surface-2: #f4f1ea`), and high-contrast dark sections (`--ink: #16130f`).
+- Alternate between white (`--bg: #ffffff`), slate surface (`--surface-2: #f8fafc`), and high-contrast dark sections (`#08090d`).
 
 ### 3. Surface & Elevation Layers
 ```css

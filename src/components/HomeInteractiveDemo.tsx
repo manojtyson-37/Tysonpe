@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { feeBreakdown } from "@/lib/money";
 import Link from "next/link";
 import {
   GooglePayIcon,
@@ -18,7 +19,7 @@ import {
   LockBadge,
 } from "./gateway-icons";
 
-type DemoTab = "razorpay-qr" | "easebuzz-hosted" | "competitor-compare";
+type DemoTab = "razorpay-qr" | "easebuzz-hosted" | "fee-calculator";
 
 export function HomeInteractiveDemo() {
   const [activeTab, setActiveTab] = useState<DemoTab>("razorpay-qr");
@@ -65,11 +66,15 @@ export function HomeInteractiveDemo() {
     setStep("checkout");
   };
 
-  // Competitor economics calculations
-  const tagmangoCut = Math.round(monthlySales * 0.18); // Avg 18% (15% platform + 3% gateway/pg)
-  const graphyCut = Math.round(monthlySales * 0.10 + 3999); // 10% + ₹3,999/mo plan
-  const tysonpeProCut = Math.round(monthlySales * 0.055 + monthlySales * 0.018); // 5.5% + 1.8% pg
-  const savedVsTagmango = Math.max(0, tagmangoCut - tysonpeProCut);
+  // Fee calculator: real plan rates from src/lib/money.ts, no competitor figures.
+  const planRows = [
+    { key: "basic", label: "Basic", rate: "10% + 2% gateway" },
+    { key: "pro", label: "Pro", rate: "5.5% + 2% gateway" },
+    { key: "advanced", label: "Advanced", rate: "3.5% + 2% gateway" },
+    { key: "ultimate", label: "Ultimate", rate: "0% + 1.5% gateway" },
+  ].map((r) => ({ ...r, ...feeBreakdown(monthlySales * 100, r.key) }));
+  const basicNet = planRows[0].netPaise / 100;
+  const ultimateNet = planRows[3].netPaise / 100;
 
   return (
     <div className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_20px_50px_rgba(0,0,0,0.06)] transition-all duration-200">
@@ -116,14 +121,14 @@ export function HomeInteractiveDemo() {
           </button>
           <button
             type="button"
-            onClick={() => { setActiveTab("competitor-compare"); handleReset(); }}
+            onClick={() => { setActiveTab("fee-calculator"); handleReset(); }}
             className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-all duration-150 active:scale-[0.98] ${
-              activeTab === "competitor-compare"
+              activeTab === "fee-calculator"
                 ? "bg-white text-indigo-600 shadow-xs"
                 : "text-slate-600 hover:text-slate-900"
             }`}
           >
-            vs TagMango
+            Fee calculator
           </button>
         </div>
       </div>
@@ -133,7 +138,7 @@ export function HomeInteractiveDemo() {
         <div className="p-4 sm:p-5">
           {/* Main Checkout Frame */}
           <div className="relative mx-auto max-w-lg overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            {/* Creator / Order Banner (Authentic Razorpay / TagMango header) */}
+            {/* Creator / Order Banner */}
             <div className="border-b border-slate-100 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-4 text-white">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
@@ -292,7 +297,7 @@ export function HomeInteractiveDemo() {
                         <BhimUpiIcon className="h-5 w-7" />
                         <div>
                           <p className="text-slate-900 text-xs font-bold">BHIM UPI</p>
-                          <p className="text-[10px] text-slate-500 font-normal">NPCI Certified</p>
+                          <p className="text-[10px] text-slate-500 font-normal">Simulated UPI</p>
                         </div>
                       </button>
                     </div>
@@ -334,7 +339,7 @@ export function HomeInteractiveDemo() {
                     <p className="mt-0.5 text-[11px] text-slate-500 font-mono">VPA: asha-rao@tysonpe</p>
                     <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200">
                       <ShieldCheckBadge className="h-3 w-3" />
-                      <span>Verified NPCI Merchant Rail</span>
+                      <span>Test mode · no real money</span>
                     </div>
                   </div>
 
@@ -463,7 +468,7 @@ export function HomeInteractiveDemo() {
                   <MastercardIcon className="h-3 w-5" />
                   <RupayIcon className="h-3 w-5" />
                 </div>
-                <span>NPCI UPI Rail · Razorpay</span>
+                <span>Simulated Razorpay checkout</span>
               </div>
             </div>
           </div>
@@ -577,31 +582,31 @@ export function HomeInteractiveDemo() {
         </div>
       )}
 
-      {/* 4. Simulator Tab: TagMango & Competitor Fee Comparison */}
-      {activeTab === "competitor-compare" && (
+      {/* 4. Fee calculator: what lands in the bank on each plan */}
+      {activeTab === "fee-calculator" && (
         <div className="p-4 sm:p-5">
           <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <span className="inline-flex items-center rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-bold text-indigo-700">
-                  Competitor Fee Calculator
+                  Fee calculator
                 </span>
                 <h4 className="mt-1 text-base font-extrabold text-slate-900">
-                  How Much Do You Save vs TagMango & Graphy?
+                  What lands in your bank on each plan
                 </h4>
               </div>
               <div className="text-right">
-                <span className="text-xs text-slate-500">Monthly Creator Revenue:</span>
-                <p className="font-mono text-xl font-black text-indigo-600">
+                <span className="text-xs text-slate-500">Monthly sales:</span>
+                <p className="font-mono text-xl font-black text-indigo-600 tabular-nums">
                   ₹{monthlySales.toLocaleString("en-IN")}
                 </p>
               </div>
             </div>
 
-            {/* Interactive Slider */}
             <div className="mt-4">
               <input
                 type="range"
+                aria-label="Monthly sales"
                 min="50000"
                 max="1000000"
                 step="25000"
@@ -616,61 +621,33 @@ export function HomeInteractiveDemo() {
               </div>
             </div>
 
-            {/* Savings Callout Banner (TagMango Comparison) */}
             <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold text-emerald-800">
-                    Estimated Monthly Take-Home Boost
-                  </p>
-                  <p className="font-mono text-2xl font-black text-emerald-700">
-                    + ₹{savedVsTagmango.toLocaleString("en-IN")} / month
-                  </p>
-                </div>
-                <div className="text-right">
-                  <span className="inline-flex items-center rounded-full bg-emerald-200/80 px-2.5 py-0.5 text-xs font-bold text-emerald-900">
-                    Keep up to 100%
-                  </span>
-                  <p className="text-[10px] text-emerald-700 mt-1">Zero Lock-In</p>
-                </div>
-              </div>
+              <p className="text-xs font-semibold text-emerald-800">Extra take-home on Ultimate vs Basic</p>
+              <p className="font-mono text-2xl font-black text-emerald-700 tabular-nums">
+                + ₹{(ultimateNet - basicNet).toLocaleString("en-IN")} / month
+              </p>
+              <p className="mt-1 text-[10px] text-emerald-700">Before GST on fees. Plan prices are drafts.</p>
             </div>
 
-            {/* Side-by-side comparison table */}
             <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50 text-slate-500 font-bold uppercase text-[10px]">
-                    <th className="px-3.5 py-2 text-left">Platform</th>
-                    <th className="px-3.5 py-2 text-center">Platform Cut</th>
-                    <th className="px-3.5 py-2 text-right">Net Payout to Bank</th>
+                    <th className="px-3.5 py-2 text-left">Plan</th>
+                    <th className="px-3.5 py-2 text-center">Fees</th>
+                    <th className="px-3.5 py-2 text-right">Net payout</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  <tr className="bg-indigo-50/30 font-bold">
-                    <td className="px-3.5 py-2.5 text-indigo-700 flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-indigo-600" />
-                      Tysonpe (Pro)
-                    </td>
-                    <td className="px-3.5 py-2.5 text-center font-mono">5.5% + 1.8% PG</td>
-                    <td className="px-3.5 py-2.5 text-right font-mono text-emerald-700 text-sm">
-                      ₹{(monthlySales - tysonpeProCut).toLocaleString("en-IN")}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-3.5 py-2.5 text-slate-600">TagMango</td>
-                    <td className="px-3.5 py-2.5 text-center font-mono text-rose-600">~18% (15% + 3% PG)</td>
-                    <td className="px-3.5 py-2.5 text-right font-mono text-slate-900">
-                      ₹{(monthlySales - tagmangoCut).toLocaleString("en-IN")}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-3.5 py-2.5 text-slate-600">Graphy</td>
-                    <td className="px-3.5 py-2.5 text-center font-mono text-rose-600">10% + ₹3,999/mo</td>
-                    <td className="px-3.5 py-2.5 text-right font-mono text-slate-900">
-                      ₹{(monthlySales - graphyCut).toLocaleString("en-IN")}
-                    </td>
-                  </tr>
+                  {planRows.map((r) => (
+                    <tr key={r.key}>
+                      <td className="px-3.5 py-2.5 font-semibold text-slate-800">{r.label}</td>
+                      <td className="px-3.5 py-2.5 text-center font-mono text-slate-600">{r.rate}</td>
+                      <td className="px-3.5 py-2.5 text-right font-mono text-slate-900 tabular-nums">
+                        ₹{(r.netPaise / 100).toLocaleString("en-IN")}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

@@ -21,6 +21,6 @@ A specialized skill designed to kill AI slop and enforce human-grade art directi
 
 ## What to Enforce Instead
 - **Asymmetric Editorial Layout**: Strong visual focal point, contrasting column widths (e.g. 7-column hero with 5-column live preview card).
-- **Scale Contrast**: Big bold display typography (`Bricolage Grotesque`) set against ultra-crisp micro-labels (`11px font-mono tracking-wider`).
+- **Scale Contrast**: Big bold display typography (`Plus Jakarta Sans`) set against ultra-crisp micro-labels (`11px font-mono tracking-wider`).
 - **Tactile Feedback**: Every clickable element reacts with micro-motion (`active:scale-[0.98] transition-all duration-150`).
 - **Layered Surfaces**: Subtle hairline borders (`border border-line/80`), gentle elevation shadows, and backdrop blurs.

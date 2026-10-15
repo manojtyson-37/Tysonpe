@@ -36,10 +36,10 @@ Every UI element produced must adhere to high-craft human fintech standards (Str
 
 ### ✅ Design Standards (UI UX Pro Max & Awesome Claude Design)
 - **Typography**:
-  - Headings: `Bricolage Grotesque` (`--font-display`), tight letter-spacing (`-0.025em`), commanding hierarchy (56px hero, 32px section, 20px card).
+  - Headings: `Plus Jakarta Sans` (`--font-display` aliases `--font-sans`), tight letter-spacing (`-0.025em`), commanding hierarchy (56px hero, 32px section, 20px card).
   - Body & Numbers: `Plus Jakarta Sans` (`--font-sans`), `tabular-nums` on all currency, timers, and fees.
   - Micro-labels: `text-xs font-semibold uppercase tracking-wider text-muted`.
-- **Color Tokens**: Warm paper canvas (`--bg: #fbfaf7` / dark `#100e0b`), ink typography (`--ink: #16130f` / `#f5f1e8`), electric indigo brand (`--brand: #5b3df5`), hairline crisp borders (`--line: #e7e2d8` / `#2f2a20`), emerald status (`--good: #0f7b4d`).
+- **Color Tokens**: White canvas (`--bg: #ffffff`), slate ink (`--ink: #0f172a`), indigo brand (`--brand: #4f46e5`), hairline borders (`--line: #e2e8f0`), emerald status (`--good: #10b981`). Light only; no dark mode.
 
 ---
 

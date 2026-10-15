@@ -21,27 +21,27 @@ Every AI agent working on this codebase must adhere strictly to these anti-slop 
 
 ## 2. Color Palette & Semantic Tokens
 
-| Token | Light Value | Dark Value | Purpose |
+| Token | Value (light only) | Dark | Purpose |
 | :--- | :--- | :--- | :--- |
-| `--bg` | `#fbfaf7` (Warm Paper) | `#100e0b` (Deep Obsidian) | Canvas background |
-| `--surface` | `#ffffff` (Pure White) | `#19160f` (Card Charcoal) | Base card & modal surface |
-| `--surface-2` | `#f4f1ea` (Soft Oat) | `#221e16` (Elevated Charcoal) | Hover fills, secondary cards |
-| `--ink` | `#16130f` (Dense Charcoal) | `#f5f1e8` (Cream Ink) | Primary high-contrast text |
-| `--muted` | `#6a645b` (Warm Stone) | `#a39b8d` (Muted Warm Sand) | Secondary labels, descriptions |
-| `--line` | `#e7e2d8` (Hairline Border) | `#2f2a20` (Subtle Dark Border) | Crisp 1px structural dividers |
-| `--brand` | `#5b3df5` (Electric Indigo) | `#8b76ff` (Vibrant Indigo) | Key CTAs, brand highlights |
-| `--brand-soft` | `#eeeaff` (Pale Lavender) | `#25205a` (Deep Indigo Glow) | Active badges, soft pills |
-| `--accent` | `#ffb020` (Warm Amber) | `#ffb020` (Warm Amber) | Highlights, notices, stars |
-| `--good` | `#0f7b4d` (Fintech Emerald) | `#4cd694` (Bright Mint) | Paid status, positive ledger |
-| `--good-soft` | `#e1f5ea` (Pale Mint) | `#0f2f22` (Deep Forest) | Success chips, paid badges |
-| `--bad` | `#b42318` (Crimson) | `#ff8a80` (Coral Red) | Errors, failed payments |
-| `--bad-soft` | `#fde8e6` (Pale Crimson) | `#3a1512` (Deep Rust) | Error badges, alert panels |
+| `--bg` | `#ffffff` | n/a | Canvas background |
+| `--surface` | `#ffffff` | n/a | Base card & modal surface |
+| `--surface-2` | `#f8fafc` | n/a | Hover fills, secondary cards |
+| `--ink` | `#0f172a` | n/a | Primary high-contrast text |
+| `--muted` | `#64748b` | n/a | Secondary labels, descriptions |
+| `--line` | `#e2e8f0` | n/a | Crisp 1px structural dividers |
+| `--brand` | `#4f46e5` | n/a | Key CTAs, brand highlights |
+| `--brand-soft` | `#eef2ff` | n/a | Active badges, soft pills |
+| `--accent` | `#f59e0b` | n/a | Highlights, notices, stars |
+| `--good` | `#10b981` | n/a | Paid status, positive ledger |
+| `--good-soft` | `#ecfdf5` | n/a | Success chips, paid badges |
+| `--bad` | `#ef4444` | n/a | Errors, failed payments |
+| `--bad-soft` | `#fef2f2` | n/a | Error badges, alert panels |
 
 ---
 
 ## 3. Typography Hierarchy (UI UX Pro Max Standard)
 
-- **Display Headings**: `Bricolage Grotesque` (`--font-display`)
+- **Display Headings**: `Plus Jakarta Sans` (`--font-display` aliases `--font-sans`)
   - Tracking: `-0.025em` to `-0.035em`
   - Weight: SemiBold (600) to ExtraBold (800)
   - Scale:

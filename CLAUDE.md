@@ -7,7 +7,7 @@
 ## 1. Project Overview & Tech Stack
 - **Product**: Tysonpe — Creator commerce & fintech platform for India (storefronts, UPI/card checkout, GST invoices, course LMS, payout ledgers).
 - **Core**: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Prisma with SQLite / PostgreSQL.
-- **Testing**: Vitest (`npm test`). Current suite has 357 passing tests.
+- **Testing**: Vitest (`npm test`). Current suite has 357 passing tests. Each vitest run uses its own SQLite file (`prisma/test-<pid>.db`), so concurrent runs are safe.
 - **Commands**:
   - Dev server: `npm run dev` (running on port 3100)
   - Test suite: `npm test`
@@ -29,10 +29,11 @@ Every page, component, and interaction must look like bespoke, human-crafted fin
 
 ### ✅ What to Enforce (UI UX Pro Max Standards)
 - **High Contrast Editorial Hierarchy**:
-  - Display: `Bricolage Grotesque` (`--font-display`), tight tracking `-0.025em`, commanding scale (56px hero, 32px sections, 20px cards).
-  - Body & Numbers: `Plus Jakarta Sans` (`--font-sans`), `tabular-nums` for all currency amounts and countdown clocks.
+  - One family: `Plus Jakarta Sans` (variable). `--font-display` is an alias of `--font-sans` (headings only differ by weight and `-0.025em` tracking). Commanding scale (56px hero, 32px sections, 20px cards).
+  - Numbers: `tabular-nums` for all currency amounts and countdown clocks.
   - Micro-labels: `text-xs font-semibold uppercase tracking-wider text-muted`.
-- **Palette**: Warm paper canvas (`#fbfaf7` / dark `#100e0b`), ink typography (`#16130f` / `#f5f1e8`), electric indigo brand (`#5b3df5`), hairline crisp borders (`#e7e2d8` / `#2f2a20`), emerald success (`#0f7b4d`).
+- **Palette** (light only, no dark mode): white canvas (`#ffffff`), slate ink (`#0f172a`), indigo brand (`#4f46e5`), hairline borders (`#e2e8f0`), emerald success (`#10b981`). The landing page and site nav/footer use an obsidian `#08090d` surface with emerald accents; the logo mark uses `--logo-mark`.
+- **Copy honesty**: no invented customers, testimonials, uptime or success-rate figures, certifications, or named-competitor numbers. State what is built (Live) and what is not (Planned). Payments are test mode until launch.
 - **Surface Elevation**: Multi-layer borders (`border border-line/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_6px_16px_rgba(0,0,0,0.02)]`).
 
 ---
