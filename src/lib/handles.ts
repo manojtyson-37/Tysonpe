@@ -5,6 +5,9 @@ export const RESERVED_HANDLES = new Set([
   "library", "orders", "explore", "pricing", "help", "support", "static", "_next", "tysonpe",
 ]);
 
+/** Product slugs that would be shadowed by a fixed route under /c/[handle]/. */
+export const RESERVED_PRODUCT_SLUGS: ReadonlySet<string> = new Set(["community"]);
+
 export const handleSchema = z
   .string()
   .trim()

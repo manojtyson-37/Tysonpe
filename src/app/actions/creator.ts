@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireCreator } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { slugify } from "@/lib/handles";
+import { RESERVED_PRODUCT_SLUGS, slugify } from "@/lib/handles";
 import { AppError, refundOrder } from "@/lib/orders";
 import {
   GST_RATES,
@@ -35,7 +35,7 @@ async function uniqueSlug(creatorId: string, title: string, ignoreId?: string) {
   for (let i = 0; i < 50; i++) {
     const slug = i === 0 ? base : `${base}-${i + 1}`;
     const hit = await db.product.findUnique({ where: { creatorId_slug: { creatorId, slug } } });
-    if (!hit || hit.id === ignoreId) return slug;
+    if (!RESERVED_PRODUCT_SLUGS.has(slug) && (!hit || hit.id === ignoreId)) return slug;
   }
   return `${base}-${Date.now()}`;
 }
