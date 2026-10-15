@@ -105,7 +105,8 @@ export async function settleEasebuzzDemoAction(orderId: string, outcome: DemoOut
 
 /** Allows resetting demo enrollment so presenters can test multiple gateways repeatedly. */
 export async function resetDemoEnrollmentAction(productId: string) {
-  if (!simulatedPaymentsAllowed()) throw new Error("Demo actions disabled in production.");
+  if (!simulatedPaymentsAllowed() || getProvider().name !== "mock")
+    throw new Error("Demo actions are only available on a demo deployment with simulated payments.");
   const user = await requireUser();
   await db.enrollment.deleteMany({ where: { userId: user.id, productId } });
   redirect(`/demo`);

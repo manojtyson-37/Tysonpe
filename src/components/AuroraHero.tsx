@@ -26,6 +26,7 @@ export function AuroraHero() {
     const onPause = () => setPlaying(false);
     v.addEventListener("play", onPlay);
     v.addEventListener("pause", onPause);
+    setPlaying(!v.paused); // autoplay may have started before hydration
     const sync = () => {
       if (mq.matches) v.pause();
       else void v.play().catch(() => {});

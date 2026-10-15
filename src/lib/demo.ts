@@ -7,5 +7,5 @@ export const DEFAULT_DEMO_PASSWORD = "tysonpe-demo-1";
 
 /** Password of the seeded demo accounts, or null when this deployment must not advertise them (the live site). */
 export function demoLoginPassword(): string | null {
-  return simulatedPaymentsAllowed() ? (process.env.DEMO_PASSWORD ?? DEFAULT_DEMO_PASSWORD) : null;
+  return simulatedPaymentsAllowed() ? (process.env.DEMO_PASSWORD || DEFAULT_DEMO_PASSWORD) : null;
 }

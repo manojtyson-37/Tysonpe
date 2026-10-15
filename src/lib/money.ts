@@ -74,6 +74,13 @@ const PLANS: Record<string, { platformBps: number; gatewayBps: number }> = {
   ultimate: { platformBps: 0, gatewayBps: 150 },
 };
 
+/** Human-readable fee rates for a plan, for UI copy that must never drift from the ledger maths. */
+export function planRates(planKey: string) {
+  const plan = PLANS[planKey] ?? PLANS.basic;
+  const pct = (bps: number) => `${bps / 100}%`;
+  return { platform: pct(plan.platformBps), gateway: pct(plan.gatewayBps) };
+}
+
 export function feeBreakdown(grossPaise: number, planKey: string) {
   const plan = PLANS[planKey] ?? PLANS.basic;
   const platformFeePaise = Math.round((grossPaise * plan.platformBps) / 10000);

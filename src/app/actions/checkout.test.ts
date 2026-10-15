@@ -186,4 +186,33 @@ describe("settleDemoAction and settleEasebuzzDemoAction", () => {
     await expect(resetDemoEnrollmentAction(product.id)).rejects.toThrow("REDIRECT:/demo");
     expect(await db.enrollment.count({ where: { userId: buyer.id, productId: product.id } })).toBe(0);
   });
+
+  it("resetDemoEnrollmentAction refuses to delete a paid enrollment when a real gateway is configured", async () => {
+    const { order, buyer, product } = await setup();
+    await db.order.update({ where: { id: order.id }, data: { provider: "mock" } });
+    await settleDemoAction(order.id, "success");
+    vi.stubEnv("PAYMENTS_MODE", "");
+    vi.stubEnv("RAZORPAY_KEY_ID", "rzp_test_dummy");
+    vi.stubEnv("RAZORPAY_KEY_SECRET", "dummy-secret");
+    try {
+      await expect(resetDemoEnrollmentAction(product.id)).rejects.toThrow(/only available on a demo deployment/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(await db.enrollment.count({ where: { userId: buyer.id, productId: product.id } })).toBe(1);
+  });
+
+  it("resetDemoEnrollmentAction and settleDemoAction are refused in production without DEMO_DEPLOYMENT", async () => {
+    const { order, product } = await setup();
+    await db.order.update({ where: { id: order.id }, data: { provider: "mock" } });
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("DEMO_DEPLOYMENT", "");
+    try {
+      await expect(resetDemoEnrollmentAction(product.id)).rejects.toThrow(/only available on a demo deployment/);
+      await expect(settleDemoAction(order.id, "success")).rejects.toThrow();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect((await db.order.findUniqueOrThrow({ where: { id: order.id } })).status).toBe("created");
+  });
 });

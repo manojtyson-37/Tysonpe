@@ -10,6 +10,10 @@ export default async function setup() {
   const env = { ...process.env, DATABASE_URL: TEST_DB_URL };
   if (TEST_DB_IS_POSTGRES) {
     // Opt-in only (TEST_DATABASE_URL): wipe the public schema of a throwaway database, then migrate.
+    // Refuse anything that is not local unless explicitly confirmed, so a pasted production URL can never be wiped.
+    const host = new URL(TEST_DB_URL).hostname;
+    if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(host) && process.env.TEST_DB_WIPE_OK !== "1")
+      throw new Error(`Refusing to wipe ${host}: TEST_DATABASE_URL must be local (or set TEST_DB_WIPE_OK=1 for a throwaway DB).`);
     const client = new Client({ connectionString: TEST_DB_URL });
     await client.connect();
     try {

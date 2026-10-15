@@ -2,17 +2,18 @@ import Link from "next/link";
 import { AuroraHero } from "@/components/AuroraHero";
 import { HomeInteractiveDemo } from "@/components/HomeInteractiveDemo";
 import { DEMO_HANDLE } from "@/lib/demo";
-import { feeBreakdown, formatINR, gstComponent } from "@/lib/money";
+import { feeBreakdown, formatINR, gstComponent, planRates } from "@/lib/money";
 
 const SALE_PRICE = 2999;
 const salePaise = SALE_PRICE * 100;
 const saleGst = gstComponent(salePaise, 18);
 const saleFees = feeBreakdown(salePaise, "basic");
+const saleRates = planRates("basic");
 const SALE_ROWS = [
   { label: "Learner pays (GST-inclusive)", value: formatINR(salePaise) },
-  { label: "  of which GST @ 18%", value: formatINR(saleGst) },
-  { label: "Platform fee (Basic, 10%)", value: `− ${formatINR(saleFees.platformFeePaise)}` },
-  { label: "Gateway fee (2%)", value: `− ${formatINR(saleFees.gatewayFeePaise)}` },
+  { label: "of which GST @ 18%", value: formatINR(saleGst) },
+  { label: `Platform fee (Basic, ${saleRates.platform})`, value: `− ${formatINR(saleFees.platformFeePaise)}` },
+  { label: `Gateway fee (${saleRates.gateway})`, value: `− ${formatINR(saleFees.gatewayFeePaise)}` },
   { label: "Creator net", value: formatINR(saleFees.netPaise), strong: true },
 ];
 

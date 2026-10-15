@@ -3,15 +3,21 @@ import bcrypt from "bcryptjs";
 import { db } from "../src/lib/db";
 
 // Demo data for local development only.
-const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? "tysonpe-demo-1";
+const DEMO_PASSWORD = process.env.DEMO_PASSWORD || "tysonpe-demo-1";
 
 async function main() {
   if (process.env.NODE_ENV === "production") throw new Error("Refusing to seed in production.");
+  const target = process.env.DATABASE_URL ?? "";
+  if (/^postgres(ql)?:\/\//.test(target)) {
+    // Hosted database: the seed plants publicly known demo accounts, so only the demo project may be seeded.
+    if (process.env.DEMO_DEPLOYMENT !== "1") throw new Error("Refusing to seed a hosted database without DEMO_DEPLOYMENT=1.");
+    console.log(`Seeding hosted database at ${new URL(target).host}`);
+  }
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
 
   const asha = await db.user.upsert({
     where: { email: "asha@demo.tysonpe.test" },
-    update: {},
+    update: { passwordHash },
     create: { email: "asha@demo.tysonpe.test", name: "Asha Rao", passwordHash },
   });
   const creator = await db.creator.upsert({
@@ -107,7 +113,7 @@ async function main() {
 
   const learner = await db.user.upsert({
     where: { email: "learner@demo.tysonpe.test" },
-    update: {},
+    update: { passwordHash },
     create: { email: "learner@demo.tysonpe.test", name: "Ravi Kumar", passwordHash },
   });
 

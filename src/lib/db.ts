@@ -11,7 +11,7 @@ function create() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set");
   const adapter = isPostgres
-    ? new PrismaPg({ connectionString: url })
+    ? new PrismaPg({ connectionString: url, max: 5 }) // small pool: one per serverless instance
     : new PrismaBetterSqlite3({ url });
   return new PrismaClient({ adapter });
 }

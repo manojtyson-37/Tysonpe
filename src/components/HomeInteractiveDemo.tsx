@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { feeBreakdown } from "@/lib/money";
+import { feeBreakdown, planRates } from "@/lib/money";
 import Link from "next/link";
 import {
   GooglePayIcon,
@@ -67,12 +67,15 @@ export function HomeInteractiveDemo() {
   };
 
   // Fee calculator: real plan rates from src/lib/money.ts, no competitor figures.
-  const planRows = [
-    { key: "basic", label: "Basic", rate: "10% + 2% gateway" },
-    { key: "pro", label: "Pro", rate: "5.5% + 2% gateway" },
-    { key: "advanced", label: "Advanced", rate: "3.5% + 2% gateway" },
-    { key: "ultimate", label: "Ultimate", rate: "0% + 1.5% gateway" },
-  ].map((r) => ({ ...r, ...feeBreakdown(monthlySales * 100, r.key) }));
+  const planRows = ["basic", "pro", "advanced", "ultimate"].map((key) => {
+    const rates = planRates(key);
+    return {
+      key,
+      label: key[0].toUpperCase() + key.slice(1),
+      rate: `${rates.platform} + ${rates.gateway} gateway`,
+      ...feeBreakdown(monthlySales * 100, key),
+    };
+  });
   const basicNet = planRows[0].netPaise / 100;
   const ultimateNet = planRows[3].netPaise / 100;
 

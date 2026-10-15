@@ -181,7 +181,7 @@ export async function createCheckoutOrder(input: {
       },
     });
     return created;
-  });
+  }, { timeout: 15_000 });
 
   if (order.provider === "free") return markOrderPaid({ providerOrderId: order.providerOrderId, paymentId: "free" });
   return order;
