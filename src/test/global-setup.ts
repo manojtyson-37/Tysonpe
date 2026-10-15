@@ -1,16 +1,27 @@
 import { execSync } from "node:child_process";
 import { rmSync } from "node:fs";
-import { TEST_DB_FILE, TEST_DB_URL } from "./db-path";
+import { Client } from "pg";
+import { TEST_DB_FILE, TEST_DB_IS_POSTGRES, TEST_DB_URL } from "./db-path";
 
 const files = () => [TEST_DB_FILE, `${TEST_DB_FILE}-journal`, `${TEST_DB_FILE}-wal`, `${TEST_DB_FILE}-shm`];
 
-// Fresh migrated SQLite DB for the integration tests, private to this run.
-export default function setup() {
+// Fresh migrated database for the integration tests, private to this run.
+export default async function setup() {
+  const env = { ...process.env, DATABASE_URL: TEST_DB_URL };
+  if (TEST_DB_IS_POSTGRES) {
+    // Opt-in only (TEST_DATABASE_URL): wipe the public schema of a throwaway database, then migrate.
+    const client = new Client({ connectionString: TEST_DB_URL });
+    await client.connect();
+    try {
+      await client.query("DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;");
+    } finally {
+      await client.end();
+    }
+    execSync("npx prisma migrate deploy", { stdio: "pipe", env });
+    return;
+  }
   for (const f of files()) rmSync(f, { force: true });
-  execSync("npx prisma migrate deploy", {
-    stdio: "pipe",
-    env: { ...process.env, DATABASE_URL: TEST_DB_URL },
-  });
+  execSync("npx prisma migrate deploy", { stdio: "pipe", env });
   return () => {
     for (const f of files()) rmSync(f, { force: true });
   };

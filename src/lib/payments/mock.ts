@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { hmacHex, verifyPaymentSignature, verifyWebhookSignature } from "./signature";
+import { simulatedPaymentsAllowed } from "./demo-mode";
 import type { PaymentProvider } from "./types";
 
 /**
@@ -20,7 +21,7 @@ export class MockProvider implements PaymentProvider {
   readonly publicKey = null;
 
   constructor() {
-    if (process.env.NODE_ENV === "production") {
+    if (!simulatedPaymentsAllowed()) {
       throw new Error("MockProvider is disabled in production; configure RAZORPAY_* keys.");
     }
   }

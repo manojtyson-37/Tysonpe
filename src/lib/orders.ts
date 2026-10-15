@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Prisma } from "@/generated/prisma/client";
-import { db } from "./db";
+import { db, lockKey } from "./db";
 import { fiscalYear, formatInvoiceNo } from "./invoice";
 import { feeBreakdown, priceOrder } from "./money";
 import { getEasebuzzProvider, getProvider } from "./payments";
@@ -146,6 +146,8 @@ export async function createCheckoutOrder(input: {
     : null;
 
   const order = await db.$transaction(async (tx) => {
+    // Serialize concurrent checkouts of this purchase so the re-check below is race-free on Postgres.
+    await lockKey(tx, `checkout:${input.userId}:${product.id}`);
     // Re-check inside the transaction: a concurrent request (second tab) may have just created it.
     const pending = await tx.order.findMany({
       where: { userId: input.userId, productId: product.id, status: "created" },

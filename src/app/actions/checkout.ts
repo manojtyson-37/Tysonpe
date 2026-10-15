@@ -1,5 +1,6 @@
 "use server";
 
+import { simulatedPaymentsAllowed } from "@/lib/payments/demo-mode";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -55,7 +56,7 @@ export async function confirmPaymentAction(
 
 /** Dev-only: simulate the gateway completing or failing a payment. */
 export async function mockPayAction(orderId: string, outcome: "success" | "failure") {
-  if (process.env.NODE_ENV === "production" || getProvider().name !== "mock")
+  if (!simulatedPaymentsAllowed() || getProvider().name !== "mock")
     throw new Error("Mock payments are only available in mock payments mode.");
   const user = await requireUser();
   const order = await db.order.findFirst({ where: { id: orderId, userId: user.id } });
@@ -104,7 +105,7 @@ export async function settleEasebuzzDemoAction(orderId: string, outcome: DemoOut
 
 /** Allows resetting demo enrollment so presenters can test multiple gateways repeatedly. */
 export async function resetDemoEnrollmentAction(productId: string) {
-  if (process.env.NODE_ENV === "production") throw new Error("Demo actions disabled in production.");
+  if (!simulatedPaymentsAllowed()) throw new Error("Demo actions disabled in production.");
   const user = await requireUser();
   await db.enrollment.deleteMany({ where: { userId: user.id, productId } });
   redirect(`/demo`);

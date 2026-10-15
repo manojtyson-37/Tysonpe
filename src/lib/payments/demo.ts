@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { AppError, confirmPayment, markOrderFailed } from "@/lib/orders";
+import { simulatedPaymentsAllowed } from "./demo-mode";
 import { signMockPayment } from "./mock";
 
 export const DEMO_OUTCOMES = ["success", "failure", "cancel"] as const;
@@ -11,7 +12,7 @@ export type DemoOutcome = (typeof DEMO_OUTCOMES)[number];
  * gateway callback, so paid orders, invoices, enrolment and the ledger behave exactly as in production.
  */
 export async function settleDemoPayment(input: { userId: string; orderId: string; outcome: DemoOutcome }) {
-  if (process.env.NODE_ENV === "production") throw new Error("Demo payments are disabled in production.");
+  if (!simulatedPaymentsAllowed()) throw new Error("Demo payments are disabled in production.");
   if (!DEMO_OUTCOMES.includes(input.outcome)) throw new AppError("invalid_outcome");
   const order = await db.order.findFirst({ where: { id: input.orderId, userId: input.userId } });
   if (!order || order.provider !== "mock") throw new AppError("not_found", "Order not found.");

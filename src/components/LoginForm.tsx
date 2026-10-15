@@ -4,23 +4,19 @@ import { useState } from "react";
 import { login } from "@/app/actions/auth";
 import { ActionForm, FormError, SubmitButton } from "./form";
 
-export function LoginForm({ next }: { next?: string }) {
+export function LoginForm({ next, demoPassword }: { next?: string; demoPassword?: string }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const fillDemo = (role: "creator" | "learner") => {
-    if (role === "creator") {
-      setEmail("asha@demo.tysonpe.test");
-      setPassword("tysonpe-demo-1");
-    } else {
-      setEmail("learner@demo.tysonpe.test");
-      setPassword("tysonpe-demo-1");
-    }
+    setEmail(role === "creator" ? "asha@demo.tysonpe.test" : "learner@demo.tysonpe.test");
+    setPassword(demoPassword ?? "");
   };
 
   return (
     <div className="space-y-5">
-      {/* 1-Click Demo Autofill Box */}
+      {/* 1-Click Demo Autofill Box: only rendered on demo deployments / local dev */}
+      {demoPassword && (
       <div className="rounded-xl border border-line bg-surface-2/60 p-3.5">
         <div className="flex items-center justify-between text-xs">
           <span className="font-semibold uppercase tracking-wider text-[10px] text-muted">
@@ -47,6 +43,7 @@ export function LoginForm({ next }: { next?: string }) {
           </button>
         </div>
       </div>
+      )}
 
       <ActionForm action={login} className="space-y-4">
         {next && <input type="hidden" name="next" value={next} />}

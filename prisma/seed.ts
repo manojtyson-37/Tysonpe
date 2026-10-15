@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { db } from "../src/lib/db";
 
 // Demo data for local development only.
-const DEMO_PASSWORD = "tysonpe-demo-1";
+const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? "tysonpe-demo-1";
 
 async function main() {
   if (process.env.NODE_ENV === "production") throw new Error("Refusing to seed in production.");
