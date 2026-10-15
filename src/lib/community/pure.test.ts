@@ -110,6 +110,14 @@ describe("checkRate", () => {
     expect(checkRate("post", `${u}-other`)).toBe(true);
   });
 
+  it("allows 10 edits per minute per user, then blocks (separate from posts and comments)", () => {
+    const u = `edit-user-${Math.random()}`;
+    for (let i = 0; i < 10; i++) expect(checkRate("edit", u)).toBe(true);
+    expect(checkRate("edit", u)).toBe(false);
+    expect(checkRate("edit", `${u}-other`)).toBe(true);
+    expect(checkRate("post", u)).toBe(true);
+    expect(checkRate("comment", u)).toBe(true);
+  });
   it("allows 3 backfills per 10 minutes per creator, then blocks", () => {
     const u = `backfill-creator-${Math.random()}`;
     for (let i = 0; i < 3; i++) expect(checkRate("backfill", u)).toBe(true);

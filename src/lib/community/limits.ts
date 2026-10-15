@@ -4,6 +4,7 @@ import { createLimiter } from "@/lib/auth/rate-limit";
 const limiters = {
   post: createLimiter({ max: 5, windowMs: 60_000 }),
   comment: createLimiter({ max: 20, windowMs: 60_000 }),
+  edit: createLimiter({ max: 10, windowMs: 60_000 }),
   like: createLimiter({ max: 60, windowMs: 60_000 }),
   // Console backfill/recalculate walks all of a creator's progress: keyed by creator id.
   backfill: createLimiter({ max: 3, windowMs: 600_000 }),
