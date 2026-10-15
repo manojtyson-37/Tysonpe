@@ -16,7 +16,7 @@ TagMango gates community channels, gamification and achievements behind its Adva
 | Membership | A learner is a member of a creator's community while they hold at least one `Enrollment` for one of that creator's products. Refunds already delete the `Enrollment` row (`refundOrder`), so access ends automatically with no extra hook. The creator is always a member. |
 | Access | `open`: any member. `product_gated`: members enrolled in at least one product linked to the channel. A gated channel with no linked products is visible to the creator only. |
 | Posts | Optional title (max 120), body 1–2,000 characters, **plain text** (line breaks kept, nothing parsed as HTML or Markdown; URLs shown as text). Author edits or deletes their own post (edit sets `editedAt`). Only the author can edit a post. The creator can delete any post, pin or unpin one (max 3 pinned per channel), and ban a member. |
-| Comments | One level under a post, body 1–1,000 characters. Author or creator can delete. |
+| Comments | One level under a post, body 1–1,000 characters. The author edits their own comment (edit sets `editedAt`; nobody else can, not even the creator). Author or creator can delete. |
 | Likes | One per user per post or comment. Toggle. |
 | Ban | `CommunityBan(creatorId, userId)`. A banned user has no access to any channel of that creator (no read, no write). The creator can unban. A creator cannot ban themselves. |
 | Feed | Newest first, pinned posts on top, cursor pagination (20 per page). Comment and like counts are returned with each post. |
@@ -141,9 +141,16 @@ A creator opens the community, creates a product-gated channel, and links a prod
 - Product slug `community` and channel slugs `leaderboard`/`new` are reserved so fixed routes can't be shadowed.
 - The community layout does not call `requireUser`, so every page under `community/` must call `requireUser(next)` first; that keeps the destination for logged-out deep links (`/login?next=...`).
 - Creating or updating a channel with product links is all-or-nothing: the channel and its product links are written in one service call, so a failure leaves nothing half-saved.
-- The leaderboard computes ranks in memory over all earners in the period (one grouped query); fine for thousands of members, revisit with SQL window functions on Postgres.
+- The leaderboard is ranked in the database: a grouped sum ordered desc with `take: 20` (banned users excluded by relation filter), and the viewer's rank outside the top is a count of strictly higher earners + 1, so ties keep competition ranking. Rows carry `isMe`, never user ids.
 - Community posts have no uploads, mentions or notifications; see limits above.
 - Creator-authored posts and comments show the store name (`Creator.displayName`); other authors show their account name.
 - Turning gamification on replays existing lesson, quiz and course progress (`backfillPoints`, which also evaluates badges), so earlier activity counts; nothing is awarded while it is off.
 - Files differ from the Architecture list above: services are `community/{viewer,channels,posts}.ts` and `gamification/{service,hooks}.ts`; pure helpers are `gamification/{time,rules,levels,streak,ranking,badges}.ts` and `community/{access,validation,limits}.ts`.
 - Postgres: `prisma/postgres/schema.prisma` is regenerated and has its own migration. The SQLite test suite does not exercise the Postgres path; daily caps and the pin limit use `lockKey` advisory locks there.
+- Comments are editable by their author (`Comment.editedAt`, `editComment`); this supersedes the delete-only wording from the original scope.
+- Pinning is done inline in the feed (a pin/unpin control on each post); there is no pinning section in the creator console.
+- Only the post daily cap has a dedicated service test; the comment and like caps share the same rule code (`POINT_RULES` + `awardGated`).
+- Thread comments paginate in pages of 50 (`getThread(userId, postId, { after })` returns `nextCommentCursor`).
+- Banning requires the target to be linked to the community: enrolled in one of the creator's products, author of a post or comment in their channels, or already banned. Anything else is `not_found`.
+- Leaderboard rows carry `isMe`, not user ids.
+- Follow-ups: prune orphaned `PointEvent` rows (content deleted by paths that don't clean up); wrap `resolveCommunity` in React `cache()`; run the learning hook via `after()`; fix the shared form reset in `form.tsx`; `SiteNav` overflows at 375px (owned by another worker).
