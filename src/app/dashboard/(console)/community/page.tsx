@@ -34,8 +34,8 @@ export default async function CommunityConsole() {
         sub="Channels your customers talk in. Open to every buyer, or limited to buyers of chosen products."
         action={<Link href={`/c/${creator.handle}/community`} className="btn btn-secondary btn-sm">Open community ↗</Link>}
       />
-      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
-        <div className="space-y-6">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="min-w-0 space-y-6">
           <section className="space-y-3" aria-label="Channels">
             {channels.map((c, i) => (
               <div key={c.id} className="card">
@@ -80,7 +80,7 @@ export default async function CommunityConsole() {
           </section>
         </div>
 
-        <div className="space-y-6 xl:sticky xl:top-24 xl:self-start">
+        <div className="min-w-0 space-y-6 xl:sticky xl:top-24 xl:self-start">
           <section className="card px-5 pb-5 pt-4">
             <h2 className="mb-3 font-semibold">New channel</h2>
             <ChannelForm action={createChannelAction} products={products} submitLabel="Create channel" />

@@ -42,11 +42,11 @@ export default async function ChannelPage({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
+        <div className="min-w-0">
           <h2 className="text-xl font-extrabold">{channel.name}</h2>
           {channel.description && <p className="text-sm text-muted">{channel.description}</p>}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <span className="badge badge-muted">{channel.kind === "announcement" ? "Announcements" : "Discussion"}</span>
           <span className="badge badge-muted">{channel.access === "open" ? "All customers" : "Selected products"}</span>
         </div>

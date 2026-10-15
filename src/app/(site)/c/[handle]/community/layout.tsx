@@ -50,8 +50,8 @@ export default async function CommunityLayout({ children, params }: { children: 
             )}
           </div>
         ) : (
-          <div className={`mt-6 grid gap-6 ${profile ? "lg:grid-cols-[200px_minmax(0,1fr)_240px]" : "lg:grid-cols-[200px_minmax(0,1fr)]"}`}>
-            <aside className="lg:sticky lg:top-24 lg:self-start">
+          <div className={`mt-6 grid grid-cols-[minmax(0,1fr)] gap-6 ${profile ? "lg:grid-cols-[200px_minmax(0,1fr)_240px]" : "lg:grid-cols-[200px_minmax(0,1fr)]"}`}>
+            <aside className="min-w-0 lg:sticky lg:top-24 lg:self-start">
               <ChannelNav
                 handle={creator.handle}
                 channels={channels.map((c) => ({ slug: c.slug, name: c.name, kind: c.kind, access: c.access }))}
@@ -60,7 +60,7 @@ export default async function CommunityLayout({ children, params }: { children: 
             </aside>
             <div className="min-w-0">{children}</div>
             {profile && (
-              <aside className="lg:sticky lg:top-24 lg:self-start">
+              <aside className="min-w-0 lg:sticky lg:top-24 lg:self-start">
                 <MemberCard profile={profile} leaderboardHref={`/c/${creator.handle}/community/leaderboard`} />
               </aside>
             )}
