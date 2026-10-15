@@ -421,4 +421,43 @@ describe("bans", () => {
     await banMember(ctx.creatorUser.id, ctx.creator.id, ctx.member.id); // idempotent
     expect((await listBans(ctx.creator.id)).map((b) => b.name)).toEqual(["Meera Learner"]);
   });
+
+  it("the target must be linked to this creator's community (unrelated user -> not_found, nothing written)", async () => {
+    await expect(banMember(ctx.creatorUser.id, ctx.creator.id, ctx.stranger.id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(banMember(ctx.creatorUser.id, ctx.creator.id, "no-such-user")).rejects.toMatchObject({ code: "not_found" });
+    expect(await db.communityBan.count({ where: { creatorId: ctx.creator.id } })).toBe(0);
+  });
+
+  it("enrolment in ANOTHER creator's product does not link a user to this community", async () => {
+    const other = await makeCreatorWithProduct();
+    const outsider = await makeUser();
+    await enroll(outsider.id, other.product.id);
+    await expect(banMember(ctx.creatorUser.id, ctx.creator.id, outsider.id)).rejects.toMatchObject({ code: "not_found" });
+  });
+
+  it("a commenter or poster who lost their enrolment can still be banned", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "spam" });
+    await addComment(ctx.member2.id, id, { body: "spam too" });
+    await db.enrollment.deleteMany({ where: { userId: { in: [ctx.member.id, ctx.member2.id] } } });
+    await expect(banMember(ctx.creatorUser.id, ctx.creator.id, ctx.member.id)).resolves.toBeUndefined();
+    await expect(banMember(ctx.creatorUser.id, ctx.creator.id, ctx.member2.id)).resolves.toBeUndefined();
+    expect(await db.communityBan.count({ where: { creatorId: ctx.creator.id } })).toBe(2);
+  });
+
+  it("posting in ANOTHER creator's channel does not link a user to this community", async () => {
+    const other = await makeCreatorWithProduct();
+    const otherChannel = await makeChannel(other.creator.id, { slug: "elsewhere" });
+    const poster = await makeUser();
+    await enroll(poster.id, other.product.id);
+    await createPost(poster.id, otherChannel.id, { body: "hi" });
+    await db.enrollment.deleteMany({ where: { userId: poster.id } });
+    await expect(banMember(ctx.creatorUser.id, ctx.creator.id, poster.id)).rejects.toMatchObject({ code: "not_found" });
+  });
+
+  it("an already banned user stays idempotent even with no other link left", async () => {
+    await banMember(ctx.creatorUser.id, ctx.creator.id, ctx.member.id);
+    await db.enrollment.deleteMany({ where: { userId: ctx.member.id } });
+    await expect(banMember(ctx.creatorUser.id, ctx.creator.id, ctx.member.id)).resolves.toBeUndefined();
+    expect(await db.communityBan.count({ where: { creatorId: ctx.creator.id } })).toBe(1);
+  });
 });

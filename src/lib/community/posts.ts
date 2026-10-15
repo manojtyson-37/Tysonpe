@@ -254,8 +254,20 @@ export async function banMember(actorUserId: string, creatorId: string, targetUs
   const creator = await db.creator.findUnique({ where: { id: creatorId }, select: { userId: true } });
   if (!creator || creator.userId !== actorUserId) throw forbidden();
   if (targetUserId === creator.userId) throw new AppError("invalid", "You can't ban yourself.");
-  const user = await db.user.findUnique({ where: { id: targetUserId }, select: { id: true } });
-  if (!user) throw notFound();
+  // The target must belong to THIS creator's community (so ids of arbitrary users can't be probed or banned):
+  // enrolled in one of their products, author in their channels (may have since been refunded), or already banned.
+  const linked = await db.user.count({
+    where: {
+      id: targetUserId,
+      OR: [
+        { enrollments: { some: { product: { creatorId } } } },
+        { posts: { some: { channel: { creatorId } } } },
+        { comments: { some: { post: { channel: { creatorId } } } } },
+        { bans: { some: { creatorId } } },
+      ],
+    },
+  });
+  if (linked === 0) throw notFound();
   await db.communityBan.upsert({
     where: { creatorId_userId: { creatorId, userId: targetUserId } },
     create: { creatorId, userId: targetUserId },
