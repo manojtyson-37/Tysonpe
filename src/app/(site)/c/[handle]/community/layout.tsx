@@ -2,13 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BrandScope } from "@/components/Brand";
 import { ChannelNav } from "@/components/community/ChannelNav";
-import { requireUser } from "@/lib/auth/session";
+import { getCurrentUser } from "@/lib/auth/session";
 import { ensureDefaultChannel, listChannelsFor } from "@/lib/community/channels";
 import { resolveCommunity } from "@/lib/community/viewer";
 
 export default async function CommunityLayout({ children, params }: { children: React.ReactNode; params: Promise<{ handle: string }> }) {
   const { handle } = await params;
-  const user = await requireUser(`/c/${handle}/community`);
+  const user = await getCurrentUser();
+  if (!user) return <>{children}</>; // each page runs requireUser with its own full path (keeps deep links)
   const ctx = await resolveCommunity(handle, user.id);
   if (!ctx) notFound();
   const { creator, viewer } = ctx;
@@ -37,7 +38,7 @@ export default async function CommunityLayout({ children, params }: { children: 
                 ? "The creator has removed your access. Contact them if you think this is a mistake."
                 : viewer.enrolledProductIds.length > 0
                   ? `${creator.displayName} hasn't opened a channel for your purchase yet. Check back soon.`
-                  : "Buy any of their products and the community opens up here straight away."}
+                  : "Customers of this creator get access here."}
             </p>
             {!viewer.banned && viewer.enrolledProductIds.length === 0 && (
               <Link href={`/c/${creator.handle}`} className="btn btn-primary mt-5">See what {creator.displayName} offers</Link>

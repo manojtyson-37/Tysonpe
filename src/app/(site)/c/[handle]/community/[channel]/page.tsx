@@ -9,6 +9,7 @@ import { canPost } from "@/lib/community/access";
 import { getChannelFor } from "@/lib/community/channels";
 import { listPosts } from "@/lib/community/posts";
 import { resolveCommunity } from "@/lib/community/viewer";
+import { AppError } from "@/lib/errors";
 
 export const metadata: Metadata = { title: "Community" };
 
@@ -28,7 +29,14 @@ export default async function ChannelPage({
   const channel = await getChannelFor(creator.id, slug, viewer);
   if (!channel) notFound(); // missing OR no access: same answer
   const cursor = typeof sp.cursor === "string" ? sp.cursor.slice(0, 64) : undefined;
-  const { posts, nextCursor } = await listPosts({ creatorId: creator.id, channelId: channel.id, userId: user.id, cursor });
+  let page: Awaited<ReturnType<typeof listPosts>>;
+  try {
+    page = await listPosts({ creatorId: creator.id, channelId: channel.id, userId: user.id, cursor });
+  } catch (e) {
+    if (e instanceof AppError) notFound();
+    throw e;
+  }
+  const { posts, nextCursor } = page;
   const base = `/c/${creator.handle}/community/${channel.slug}`;
 
   return (
