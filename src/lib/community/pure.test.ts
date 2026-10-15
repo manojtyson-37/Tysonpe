@@ -109,4 +109,11 @@ describe("checkRate", () => {
     expect(checkRate("post", u)).toBe(false);
     expect(checkRate("post", `${u}-other`)).toBe(true);
   });
+
+  it("allows 3 backfills per 10 minutes per creator, then blocks", () => {
+    const u = `backfill-creator-${Math.random()}`;
+    for (let i = 0; i < 3; i++) expect(checkRate("backfill", u)).toBe(true);
+    expect(checkRate("backfill", u)).toBe(false);
+    expect(checkRate("backfill", `${u}-other`)).toBe(true);
+  });
 });

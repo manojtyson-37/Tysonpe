@@ -270,4 +270,27 @@ describe("backfillPoints", () => {
     expect(badges.map((b) => b.badgeKey).sort()).toEqual(["course_complete", "first_lesson"]);
     expect((await backfillPoints(ctx.creator.id)).awarded).toBe(0);
   });
+
+  it("also lights badges for post authors who have no lessons (first_post, popular_post)", async () => {
+    const ch = await makeChannel(ctx.creator.id);
+    const poster = await makeUser("Post Only");
+    await enroll(poster.id, ctx.product.id);
+    const post = await makePost(ch.id, poster.id);
+    for (let i = 0; i < 10; i++) {
+      const u = await makeUser();
+      await db.like.create({ data: { userId: u.id, postId: post.id } });
+    }
+    expect(await db.userBadge.count({ where: { userId: poster.id } })).toBe(0);
+    await backfillPoints(ctx.creator.id);
+    const keys = (await db.userBadge.findMany({ where: { userId: poster.id }, select: { badgeKey: true } })).map((b) => b.badgeKey).sort();
+    expect(keys).toEqual(["first_post", "popular_post"]);
+  });
+
+  it("does nothing for a creator with gamification off", async () => {
+    const ch = await makeChannel(ctx.creator.id);
+    await makePost(ch.id, ctx.learner.id);
+    await db.creator.update({ where: { id: ctx.creator.id }, data: { gamificationEnabled: false } });
+    await backfillPoints(ctx.creator.id);
+    expect(await db.userBadge.count({ where: { creatorId: ctx.creator.id } })).toBe(0);
+  });
 });

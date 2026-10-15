@@ -196,6 +196,9 @@ export async function backfillPoints(creatorId: string): Promise<{ awarded: numb
     const at = done.reduce((m, d) => (d.completedAt > m ? d.completedAt : m), done[0].completedAt);
     if ((await awardGated(creator, { userId: e.userId, creatorId, kind: "course_complete", refId: e.productId, at })).awarded) awarded++;
   }
+  // Post authors too: first_post / popular_post need no lessons, and likes on their posts count toward popular_post.
+  const authors = await db.post.findMany({ where: { channel: { creatorId } }, distinct: ["authorId"], select: { authorId: true } });
+  for (const a of authors) people.add(a.authorId);
   // Badges too, so "Turn on" / "Recalculate" don't leave earned badges unlit until the learner's next action.
   for (const userId of people) await evaluateBadges(userId, creatorId);
   return { awarded };
