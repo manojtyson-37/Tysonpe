@@ -63,7 +63,10 @@ export default async function LearnPage({ params, searchParams }: PageProps<"/li
           <h1 className="text-2xl font-extrabold sm:text-3xl">{course.product.title}</h1>
           <p className="text-sm text-muted">by {course.product.creator.displayName}</p>
         </div>
-        {order && <Link className="text-sm font-semibold text-brand hover:underline" href={`/orders/${order.orderId}/invoice`}>Invoice</Link>}
+        <div className="flex items-center gap-4">
+          <Link className="text-sm font-semibold text-brand hover:underline" href={`/c/${course.product.creator.handle}/community`}>Community</Link>
+          {order && <Link className="text-sm font-semibold text-brand hover:underline" href={`/orders/${order.orderId}/invoice`}>Invoice</Link>}
+        </div>
       </div>
 
       {progress.total > 0 && (

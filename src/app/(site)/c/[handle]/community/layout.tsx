@@ -2,19 +2,24 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BrandScope } from "@/components/Brand";
 import { ChannelNav } from "@/components/community/ChannelNav";
+import { MemberCard } from "@/components/community/MemberCard";
 import { getCurrentUser } from "@/lib/auth/session";
 import { ensureDefaultChannel, listChannelsFor } from "@/lib/community/channels";
 import { resolveCommunity } from "@/lib/community/viewer";
+import { getProfile } from "@/lib/gamification/service";
 
 export default async function CommunityLayout({ children, params }: { children: React.ReactNode; params: Promise<{ handle: string }> }) {
   const { handle } = await params;
   const user = await getCurrentUser();
-  if (!user) return <>{children}</>; // each page runs requireUser with its own full path (keeps deep links)
+  // SECURITY: every page under community/ MUST call requireUser(<its own full path>) first.
+  // This layout skips auth for logged-out visitors so deep links survive the login redirect.
+  if (!user) return <>{children}</>;
   const ctx = await resolveCommunity(handle, user.id);
   if (!ctx) notFound();
   const { creator, viewer } = ctx;
   if (viewer.isCreator) await ensureDefaultChannel(creator.id);
   const channels = await listChannelsFor(creator.id, viewer);
+  const profile = creator.gamificationEnabled && !viewer.isCreator && channels.length > 0 ? await getProfile(user.id, creator.id) : null;
 
   return (
     <BrandScope color={creator.brandColor}>
@@ -45,7 +50,7 @@ export default async function CommunityLayout({ children, params }: { children: 
             )}
           </div>
         ) : (
-          <div className="mt-6 grid gap-6 lg:grid-cols-[200px_minmax(0,1fr)]">
+          <div className={`mt-6 grid gap-6 ${profile ? "lg:grid-cols-[200px_minmax(0,1fr)_240px]" : "lg:grid-cols-[200px_minmax(0,1fr)]"}`}>
             <aside className="lg:sticky lg:top-24 lg:self-start">
               <ChannelNav
                 handle={creator.handle}
@@ -54,6 +59,11 @@ export default async function CommunityLayout({ children, params }: { children: 
               />
             </aside>
             <div className="min-w-0">{children}</div>
+            {profile && (
+              <aside className="lg:sticky lg:top-24 lg:self-start">
+                <MemberCard profile={profile} leaderboardHref={`/c/${creator.handle}/community/leaderboard`} />
+              </aside>
+            )}
           </div>
         )}
       </div>

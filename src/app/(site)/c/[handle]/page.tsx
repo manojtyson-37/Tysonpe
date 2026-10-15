@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 async function getCreator(handle: string) {
   return db.creator.findUnique({
     where: { handle: handle.toLowerCase() },
-    include: { products: { where: { status: "published" }, orderBy: { createdAt: "desc" } } },
+    include: { products: { where: { status: "published" }, orderBy: { createdAt: "desc" } }, _count: { select: { channels: true } } },
   });
 }
 
@@ -30,6 +30,9 @@ export default async function Storefront({ params }: PageProps<"/c/[handle]">) {
             <h1 className="text-3xl font-extrabold sm:text-4xl">{creator.displayName}</h1>
             {creator.bio && <p className="mt-2 max-w-2xl text-muted">{creator.bio}</p>}
             <p className="mt-2 text-sm text-muted">{creator.products.length} {creator.products.length === 1 ? "product" : "products"}</p>
+            {creator._count.channels > 0 && (
+              <Link href={`/c/${creator.handle}/community`} className="btn btn-secondary btn-sm mt-3">Community</Link>
+            )}
           </div>
         </div>
       </div>
