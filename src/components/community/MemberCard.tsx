@@ -5,12 +5,12 @@ import { focusRing } from "./styles";
 
 type Profile = Awaited<ReturnType<typeof getProfile>>;
 
-export function MemberCard({ profile, leaderboardHref }: { profile: Profile; leaderboardHref: string }) {
+function Details({ profile, leaderboardHref }: { profile: Profile; leaderboardHref: string }) {
   const { level, points, streak, badges } = profile;
   const pct = Math.min(100, Math.round((level.into / level.span) * 100));
   const earned = new Set(badges.map((b) => b.key));
   return (
-    <section aria-label="Your progress" className="card px-5 pb-5 pt-4">
+    <>
       <p className="text-xs font-semibold uppercase tracking-wider text-muted">Your level</p>
       <p className="mt-1 text-3xl font-extrabold tabular-nums">{level.level}</p>
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`Progress to level ${level.level + 1}`}>
@@ -44,6 +44,35 @@ export function MemberCard({ profile, leaderboardHref }: { profile: Profile; lea
       <Link href={leaderboardHref} className={`mt-3 inline-flex min-h-10 items-center rounded-lg text-sm font-semibold text-[color:var(--brand-text)] transition-all duration-150 hover:underline active:scale-[0.98] ${focusRing}`}>
         View leaderboard
       </Link>
+    </>
+  );
+}
+
+/** lg and up: the full card, always visible. Hidden (display:none) below lg so only one copy is exposed. */
+export function MemberCard({ profile, leaderboardHref }: { profile: Profile; leaderboardHref: string }) {
+  return (
+    <section aria-label="Your progress" className="card hidden px-5 pb-5 pt-4 lg:block">
+      <Details profile={profile} leaderboardHref={leaderboardHref} />
     </section>
+  );
+}
+
+/** Below lg: a compact, collapsed-by-default summary that expands to the same detail content. */
+export function MemberCardCompact({ profile, leaderboardHref }: { profile: Profile; leaderboardHref: string }) {
+  const { level, points, streak } = profile;
+  return (
+    <details className="group card lg:hidden">
+      <summary className={`flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-[inherit] px-5 py-2 text-sm font-semibold tabular-nums transition-colors duration-150 hover:bg-surface-2 [&::-webkit-details-marker]:hidden ${focusRing}`}>
+        <span className="min-w-0 flex-1">
+          Level {level.level} · {points} points{streak > 0 ? ` · ${streak}-day streak` : ""}
+        </span>
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-muted transition-transform duration-150 group-open:rotate-90">
+          <path d="m6 3.5 4.5 4.5L6 12.5" />
+        </svg>
+      </summary>
+      <div className="px-5 pb-5 pt-1">
+        <Details profile={profile} leaderboardHref={leaderboardHref} />
+      </div>
+    </details>
   );
 }
