@@ -184,6 +184,16 @@ describe("posts", () => {
     expect(row.editedAt).not.toBeNull();
   });
 
+  it("a member cannot edit their post once its channel became an announcement channel", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "v1" });
+    await db.channel.update({ where: { id: ctx.channel.id }, data: { kind: "announcement" } });
+    await expect(editPost(ctx.member.id, id, { body: "now an announcement" })).rejects.toMatchObject({ code: "forbidden" });
+    expect((await db.post.findUniqueOrThrow({ where: { id } })).body).toBe("v1");
+    // The creator keeps posting (and editing their own posts) there.
+    const mine = await createPost(ctx.creatorUser.id, ctx.channel.id, { body: "official" });
+    await expect(editPost(ctx.creatorUser.id, mine.id, { body: "official v2" })).resolves.toBeUndefined();
+  });
+
   it("author or creator may delete; another member may not", async () => {
     const a = await createPost(ctx.member.id, ctx.channel.id, { body: "x" });
     await expect(deletePost(ctx.member2.id, a.id)).rejects.toMatchObject({ code: "forbidden" });

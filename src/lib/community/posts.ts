@@ -145,8 +145,9 @@ export async function createPost(userId: string, channelId: string, input: unkno
 }
 
 export async function editPost(userId: string, postId: string, input: unknown): Promise<void> {
-  const { post } = await gatePost(userId, postId);
+  const { post, info, viewer } = await gatePost(userId, postId);
   if (post.authorId !== userId) throw forbidden();
+  if (!canPost(info, viewer)) throw forbidden(); // channel became announcement-only: members can't rewrite into it
   const data = parse(postSchema, input);
   await db.post.update({ where: { id: postId }, data: { ...data, editedAt: new Date() } });
 }
