@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { checkRate } from "@/lib/community/limits";
-import { addComment, createPost, deleteComment, deletePost, editPost, setPinned, toggleLike } from "@/lib/community/posts";
+import { addComment, createPost, deleteComment, deletePost, editComment, editPost, setPinned, toggleLike } from "@/lib/community/posts";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import type { FormState } from "./auth";
@@ -50,6 +50,20 @@ export async function editPostAction(postId: string, _prev: FormState, fd: FormD
   if (!id.success) return { error: "Post not found." };
   try {
     await editPost(user.id, id.data, { title: str(fd, "title"), body: str(fd, "body") });
+  } catch (e) {
+    return failState(e);
+  }
+  refreshCommunity();
+  return { fields: { saved: "1" } };
+}
+
+export async function editCommentAction(commentId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const id = idSchema.safeParse(commentId);
+  if (!id.success) return { error: "Comment not found." };
+  if (!checkRate("comment", user.id)) return { error: TOO_FAST };
+  try {
+    await editComment(user.id, id.data, { body: str(fd, "body") });
   } catch (e) {
     return failState(e);
   }

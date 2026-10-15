@@ -354,6 +354,7 @@ model Comment {
   authorId  String
   body      String
   createdAt DateTime @default(now())
+  editedAt  DateTime?
 
   post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
   author User   @relation(fields: [authorId], references: [id], onDelete: Cascade)

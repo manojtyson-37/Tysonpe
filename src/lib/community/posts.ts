@@ -12,7 +12,7 @@ export type PostView = {
   author: AuthorView; commentCount: number; likeCount: number; likedByMe: boolean; canEdit: boolean; canDelete: boolean;
 };
 export type CommentView = {
-  id: string; body: string; createdAt: Date; author: AuthorView; likeCount: number; likedByMe: boolean; canDelete: boolean;
+  id: string; body: string; createdAt: Date; editedAt: Date | null; author: AuthorView; likeCount: number; likedByMe: boolean; canDelete: boolean;
 };
 
 const notFound = () => new AppError("not_found", "Not found.");
@@ -106,7 +106,7 @@ export async function getThread(userId: string | null, postId: string) {
   const rows = await db.comment.findMany({
     where: { postId },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    select: { id: true, body: true, createdAt: true, authorId: true, author: { select: { id: true, name: true } } },
+    select: { id: true, body: true, createdAt: true, editedAt: true, authorId: true, author: { select: { id: true, name: true } } },
   });
   const ids = rows.map((r) => r.id);
   const [likes, mine] = await Promise.all([
@@ -116,7 +116,7 @@ export async function getThread(userId: string | null, postId: string) {
   const lc = new Map(likes.map((l) => [l.commentId, l._count._all]));
   const liked = new Set(mine.map((m) => m.commentId));
   const comments: CommentView[] = rows.map((r) => ({
-    id: r.id, body: r.body, createdAt: r.createdAt,
+    id: r.id, body: r.body, createdAt: r.createdAt, editedAt: r.editedAt,
     author: authorView(r.author, creator),
     likeCount: lc.get(r.id) ?? 0, likedByMe: liked.has(r.id), canDelete: r.authorId === userId || canModerate(viewer),
   }));
@@ -176,6 +176,16 @@ export async function addComment(userId: string, postId: string, input: unknown)
   const c = await db.comment.create({ data: { postId, authorId: userId, body: data.body }, select: { id: true } });
   await awardSafely({ userId, creatorId: ch.creatorId, kind: "comment_created", refId: c.id, sourceId: c.id });
   return c;
+}
+
+/** Author-only (not even the creator rewrites someone else's words); same access gate as every other comment operation. */
+export async function editComment(userId: string, commentId: string, input: unknown): Promise<void> {
+  const comment = await db.comment.findUnique({ where: { id: commentId }, select: { id: true, postId: true, authorId: true } });
+  if (!comment) throw notFound();
+  await gatePost(userId, comment.postId);
+  if (comment.authorId !== userId) throw forbidden();
+  const data = parse(commentSchema, input);
+  await db.comment.update({ where: { id: commentId }, data: { body: data.body, editedAt: new Date() } });
 }
 
 export async function deleteComment(userId: string, commentId: string): Promise<void> {

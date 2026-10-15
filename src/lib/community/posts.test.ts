@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db, isPostgres } from "@/lib/db";
 import { enroll, makeChannel, makeCreatorWithProduct, makeUser } from "@/test/factories";
 import {
-  addComment, banMember, createPost, deleteComment, deletePost, editPost, getThread, listBans, listPosts,
+  addComment, banMember, createPost, deleteComment, deletePost, editComment, editPost, getThread, listBans, listPosts,
   setPinned, toggleLike, unbanMember,
 } from "./posts";
 import { LIMITS } from "./validation";
@@ -56,6 +56,9 @@ describe("access (server-side, every operation)", () => {
     await expect(setPinned(ctx.stranger.id, id, true)).rejects.toMatchObject({ code: "not_found" });
     await expect(deletePost(ctx.stranger.id, id)).rejects.toMatchObject({ code: "not_found" });
     await expect(deleteComment(ctx.stranger.id, c.id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(editComment(ctx.stranger.id, c.id, { body: "hack" })).rejects.toMatchObject({ code: "not_found" });
+    await expect(editComment(ctx.stranger.id, "no-such-comment", { body: "hack" })).rejects.toMatchObject({ code: "not_found" });
+    expect((await db.comment.findUniqueOrThrow({ where: { id: c.id } })).body).toBe("c");
     await expect(toggleLike(ctx.stranger.id, { commentId: c.id })).rejects.toMatchObject({ code: "not_found" });
     expect(await db.like.count({ where: { OR: [{ userId: ctx.stranger.id }, { commentId: c.id }, { postId: id }] } })).toBe(0);
   });
@@ -71,6 +74,7 @@ describe("access (server-side, every operation)", () => {
     if (how === "refunded") await db.enrollment.deleteMany({ where: { userId: ctx.member.id } });
     else await banMember(ctx.creatorUser.id, ctx.creator.id, ctx.member.id);
     await expect(deleteComment(ctx.member.id, c.id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(editComment(ctx.member.id, c.id, { body: "edit" })).rejects.toMatchObject({ code: "not_found" });
     await expect(editPost(ctx.member.id, id, { body: "edit" })).rejects.toMatchObject({ code: "not_found" });
     await expect(deletePost(ctx.member.id, id)).rejects.toMatchObject({ code: "not_found" });
     await expect(setPinned(ctx.member.id, id, true)).rejects.toMatchObject({ code: "not_found" });
@@ -78,6 +82,7 @@ describe("access (server-side, every operation)", () => {
     await expect(toggleLike(ctx.member.id, { commentId: c.id })).rejects.toMatchObject({ code: "not_found" });
     await expect(getThread(ctx.member.id, id)).rejects.toMatchObject({ code: "not_found" });
     expect(await db.comment.count({ where: { id: c.id } })).toBe(1);
+    expect((await db.comment.findUniqueOrThrow({ where: { id: c.id } })).body).toBe("my comment");
   });
 
   it("a gated channel is invisible to members of other products", async () => {
@@ -226,6 +231,42 @@ describe("comments", () => {
     await expect(deleteComment(ctx.member.id, c.id)).rejects.toMatchObject({ code: "forbidden" });
     await deleteComment(ctx.creatorUser.id, c.id);
     expect(await db.comment.count({ where: { postId: id } })).toBe(0);
+  });
+});
+
+describe("editing comments", () => {
+  it("only the author edits; edit sets editedAt and the thread exposes it", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "q" });
+    const c = await addComment(ctx.member2.id, id, { body: "v1" });
+    expect((await getThread(ctx.member.id, id)).comments[0].editedAt).toBeNull();
+    await editComment(ctx.member2.id, c.id, { body: "  v2  " });
+    const row = await db.comment.findUniqueOrThrow({ where: { id: c.id } });
+    expect(row.body).toBe("v2");
+    expect(row.editedAt).not.toBeNull();
+    const view = (await getThread(ctx.member.id, id)).comments[0];
+    expect(view.body).toBe("v2");
+    expect(view.editedAt).toBeInstanceOf(Date);
+  });
+
+  it("another member or even the creator cannot edit someone else's comment (forbidden)", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "q" });
+    const c = await addComment(ctx.member2.id, id, { body: "mine" });
+    await expect(editComment(ctx.member.id, c.id, { body: "hack" })).rejects.toMatchObject({ code: "forbidden" });
+    await expect(editComment(ctx.creatorUser.id, c.id, { body: "hack" })).rejects.toMatchObject({ code: "forbidden" });
+    const row = await db.comment.findUniqueOrThrow({ where: { id: c.id } });
+    expect(row.body).toBe("mine");
+    expect(row.editedAt).toBeNull();
+  });
+
+  it("validates with the comment schema and leaves the comment untouched on failure", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "q" });
+    const c = await addComment(ctx.member2.id, id, { body: "keep" });
+    await expect(editComment(ctx.member2.id, c.id, { body: "   " })).rejects.toMatchObject({ code: "invalid" });
+    await expect(editComment(ctx.member2.id, c.id, { body: "\u200B\uFEFF" })).rejects.toMatchObject({ code: "invalid" });
+    await expect(editComment(ctx.member2.id, c.id, { body: "x".repeat(LIMITS.commentBody + 1) })).rejects.toMatchObject({ code: "invalid" });
+    const row = await db.comment.findUniqueOrThrow({ where: { id: c.id } });
+    expect(row.body).toBe("keep");
+    expect(row.editedAt).toBeNull();
   });
 });
 
