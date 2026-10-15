@@ -32,6 +32,7 @@ describe("awardPoints", () => {
   it("the creator earns no points in their own community", async () => {
     const r = await awardPoints({ userId: ctx.creatorUser.id, creatorId: ctx.creator.id, kind: "post_created", refId: "p1" });
     expect(r.awarded).toBe(false);
+    expect(await db.pointEvent.count({ where: { userId: ctx.creatorUser.id } })).toBe(0);
   });
 
   it("stops at the daily cap (3 awarded posts) but resumes the next IST day", async () => {
@@ -141,6 +142,19 @@ describe("getProfile", () => {
     expect(p.badges).toEqual([]);
   });
 
+  it("maps earned badges to their catalog label, description and earnedAt (unknown keys dropped)", async () => {
+    const early = new Date("2026-10-01T08:00:00Z");
+    const late = new Date("2026-10-05T08:00:00Z");
+    await db.userBadge.create({ data: { userId: ctx.learner.id, creatorId: ctx.creator.id, badgeKey: "streak_7", earnedAt: late } });
+    await db.userBadge.create({ data: { userId: ctx.learner.id, creatorId: ctx.creator.id, badgeKey: "first_post", earnedAt: early } });
+    await db.userBadge.create({ data: { userId: ctx.learner.id, creatorId: ctx.creator.id, badgeKey: "retired_badge", earnedAt: early } });
+    const p = await getProfile(ctx.learner.id, ctx.creator.id);
+    expect(p.badges).toEqual([
+      { key: "first_post", label: "First post", description: "Started a conversation in the community.", earnedAt: early },
+      { key: "streak_7", label: "7-day streak", description: "Learned on 7 days in a row.", earnedAt: late },
+    ]);
+  });
+
   it("reports a live streak from lesson completions today", async () => {
     const now = new Date("2026-10-15T08:00:00Z");
     for (const [i, d] of [14, 15].entries()) {
@@ -188,6 +202,9 @@ describe("getLeaderboard", () => {
   });
 
   it("excludes banned members and the creator, and caps the list at 20", async () => {
+    // The creator is enrolled in their own product and has points: only the exclusion keeps them off the board.
+    await enroll(ctx.creatorUser.id, ctx.product.id);
+    await db.pointEvent.create({ data: { userId: ctx.creatorUser.id, creatorId: ctx.creator.id, kind: "course_complete", points: 100, refId: "x" } });
     const banned = await makeUser("Bad Actor");
     await enroll(banned.id, ctx.product.id);
     await awardPoints({ userId: banned.id, creatorId: ctx.creator.id, kind: "course_complete", refId: "p1" });
@@ -200,6 +217,8 @@ describe("getLeaderboard", () => {
     const lb = await getLeaderboard(ctx.creator.id, "all", null);
     expect(lb.top).toHaveLength(20);
     expect(lb.top.some((r) => r.name === "Bad A.")).toBe(false);
+    expect(lb.top.some((r) => r.name === "Creator P.")).toBe(false); // makeCreatorWithProduct's account name
+    expect(lb.top.every((r) => r.points === 10)).toBe(true); // nobody with 100 slipped in
     expect(lb.me).toBeNull();
     // A banned viewer has no standing on the board either.
     expect((await getLeaderboard(ctx.creator.id, "all", banned.id)).me).toBeNull();
