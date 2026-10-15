@@ -29,7 +29,7 @@ Every page, component, and interaction must look like bespoke, human-crafted fin
 
 ### ✅ What to Enforce (UI UX Pro Max Standards)
 - **High Contrast Editorial Hierarchy**:
-  - Display: `Bricolage Grotesque` (`--font-display`) for h1-h3, tracking `-0.025em`. Body: `Plus Jakarta Sans` (`--font-sans`). Figures and ledgers: `JetBrains Mono` (`font-mono`). Scale: ~58px hero, 32px sections, 20px cards.
+  - Display: `Bricolage Grotesque` (`--font-display`) for h1-h3, tracking `-0.025em`. Body: `Plus Jakarta Sans` (`--font-sans`). Figures and ledgers: `JetBrains Mono` (`font-mono`). Scale: ~56px hero, 32px sections, 20px cards.
   - Numbers: `tabular-nums` for all currency amounts and countdown clocks.
   - Micro-labels (app screens only, never above marketing headings): `.t-label` (12px, uppercase, `0.06em`, muted).
 - **Palette** (light only, no dark mode): warm paper canvas (`#fbfaf7`), warm ink (`#16130f`, also the primary button `--brand`), hairline borders (`#e4dfd3`), emerald (`#0f7b4d`) reserved for money, success and the logo mark. No indigo/violet anywhere. Landing page is product-first on paper: one real computed sale in the hero, tables not card grids, no video or generated imagery.
@@ -53,7 +53,7 @@ Tokens are in `src/app/globals.css` (`--dur-*`, `--ease-*`); budget and rules in
 1. **Speed & Restraint**:
    - Fast interactions (buttons, toggles, chips, hover): `--dur-fast` 150ms with `--ease-standard`.
    - Modals, overlays, drawers: `--dur-overlay` 220ms with `--ease-overlay`; exit 160ms.
-   - Never use 400ms to 500ms transitions for simple utility clicks.
+   - Never use 400ms to 500ms transitions for simple utility clicks, except the mobile bottom sheet (500ms).
    - Animate only transform, opacity, filter, clip-path. Never `transition: all`.
 2. **Tactile Micro-Interactions**:
    - Buttons and interactive chips press to `scale(0.98)` (`0.97` on small controls) with explicit transition properties. No hover-scale.

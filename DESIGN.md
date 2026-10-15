@@ -46,6 +46,7 @@ Success test: a viewer cannot guess the page was machine-generated, and a screen
 | `--bad` / `--bad-soft` | `#b42318` / `#fbeae8` | Errors, failed payments |
 | `--warn-soft` | `#fdf3dc` | Notices |
 | `--brand-soft` | `#ece8dd` | Active nav, soft fills |
+| `--accent` | `#f59e0b` | Logo dot only |
 
 One ground, one ink, one accent. No indigo or violet, no gradients, no glows, no blur blobs, no pure `#000`. Stay in one warm grey family.
 
@@ -53,7 +54,7 @@ One ground, one ink, one accent. No indigo or violet, no gradients, no glows, no
 
 | Role | Face | Utility | Notes |
 |---|---|---|---|
-| Display and headings | Bricolage Grotesque 600 (`--font-display`) | `.t-display`, `.t-heading` | Tracking `-0.025em`, leading 1.0 to 1.15, sentence case, `text-wrap: balance` |
+| Display and headings | Bricolage Grotesque 600 (`--font-display`) | `.t-display`, `.t-heading` | Hero up to ~56px, sections up to 32px; tracking `-0.025em`, leading 1.0 to 1.15, sentence case, `text-wrap: balance` |
 | Body and UI | Plus Jakarta Sans (`--font-sans`) | `.t-body`, `.t-meta` | Body 16px/1.5; measure 45 to 75ch |
 | Ledger figures | JetBrains Mono (`--font-mono`) | `.t-ledger` | Ledgers, tables and rupee columns only |
 | Numbers elsewhere | Plus Jakarta Sans | `.t-num` | `tabular-nums` always |

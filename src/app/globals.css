@@ -143,9 +143,12 @@ body {
 }
 h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
 
-:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
+/* Layered so Tailwind utilities (e.g. focus:outline-hidden) can override it deliberately. */
+@layer base {
+  :focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
 }
 
 @layer components {
@@ -184,7 +187,7 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
     letter-spacing: 0.06em;
     color: var(--muted);
   }
-  /* Money, counts and clocks: tabular figures of the text face, true minus. */
+  /* Money, counts and clocks: tabular figures of the text face. CSS cannot produce a true minus; the Money component renders U+2212. */
   .t-num {
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1;
@@ -218,10 +221,6 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
     transition-duration: var(--dur-fast);
     transition-timing-function: var(--ease-standard);
   }
-  .input:focus-visible {
-    outline: var(--focus-ring);
-    outline-offset: var(--focus-ring-offset);
-  }
   .label { @apply mb-1.5 block text-sm font-medium; }
   .hint { @apply mt-1 text-xs text-muted; }
   .err { @apply mt-1 text-xs font-medium text-bad; }
@@ -249,7 +248,15 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
   .badge-brand { @apply bg-brand-soft text-brand; }
 
   .table { @apply w-full text-left text-sm; }
-  .table th { @apply border-b border-line px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted; }
+  .table th {
+    @apply border-b border-line px-4 py-3;
+    font-size: 0.75rem;
+    line-height: 1.33;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
   .table td { @apply border-b border-line px-4 py-3 align-middle; }
   .table tr:last-child td { @apply border-b-0; }
 
@@ -335,6 +342,9 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
     --dur-exit: 0.01ms;
     --dur-reveal: 0.01ms;
     --dur-sheet: 0.01ms;
+    --scale-press: 1;
+    --scale-press-lg: 1;
+    --scale-enter-min: 1;
     --move-enter: 0px;
     --move-exit: 0px;
     --blur-enter: 0px;
