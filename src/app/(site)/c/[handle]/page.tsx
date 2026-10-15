@@ -31,7 +31,7 @@ export default async function Storefront({ params }: PageProps<"/c/[handle]">) {
             {creator.bio && <p className="mt-2 max-w-2xl text-muted">{creator.bio}</p>}
             <p className="mt-2 text-sm text-muted">{creator.products.length} {creator.products.length === 1 ? "product" : "products"}</p>
             {creator._count.channels > 0 && (
-              <Link href={`/c/${creator.handle}/community`} className="btn btn-secondary btn-sm mt-3">Community</Link>
+              <Link href={`/c/${creator.handle}/community`} className="btn btn-secondary btn-sm mt-3">Customer community</Link>
             )}
           </div>
         </div>

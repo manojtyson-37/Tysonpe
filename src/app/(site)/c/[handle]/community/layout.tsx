@@ -24,9 +24,10 @@ export default async function CommunityLayout({ children, params }: { children: 
   return (
     <BrandScope color={creator.brandColor}>
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted">Community</p>
-        <h1 className="text-2xl font-extrabold sm:text-3xl">
-          <Link href={`/c/${creator.handle}`} className="transition-colors duration-150 hover:text-brand">{creator.displayName}</Link>
+        <p aria-hidden className="text-xs font-semibold uppercase tracking-wider text-muted">Community</p>
+        <h1 className="min-w-0 break-words text-2xl font-extrabold sm:text-3xl">
+          <span className="sr-only">Community: </span>
+          <Link href={`/c/${creator.handle}`} className="transition-colors duration-150 hover:text-[color:var(--brand-text)]">{creator.displayName}</Link>
         </h1>
 
         {channels.length === 0 ? (
@@ -50,19 +51,20 @@ export default async function CommunityLayout({ children, params }: { children: 
             )}
           </div>
         ) : (
-          <div className={`mt-6 grid grid-cols-[minmax(0,1fr)] gap-6 ${profile ? "lg:grid-cols-[200px_minmax(0,1fr)_240px]" : "lg:grid-cols-[200px_minmax(0,1fr)]"}`}>
-            <aside className="min-w-0 lg:sticky lg:top-24 lg:self-start">
+          // Mobile: one column, progress card first. lg: nav + feed (card under the nav). xl: nav + feed + card.
+          <div className={`mt-6 grid grid-cols-[minmax(0,1fr)] gap-6 ${profile ? "lg:grid-cols-[200px_minmax(0,1fr)] lg:grid-rows-[auto_1fr] xl:grid-cols-[200px_minmax(0,1fr)_240px] xl:grid-rows-[auto]" : "lg:grid-cols-[200px_minmax(0,1fr)]"}`}>
+            <div className={`min-w-0 ${profile ? "lg:col-start-1 lg:row-start-1 xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:self-start xl:overflow-y-auto" : "lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:self-start lg:overflow-y-auto"}`}>
               <ChannelNav
                 handle={creator.handle}
                 channels={channels.map((c) => ({ slug: c.slug, name: c.name, kind: c.kind, access: c.access }))}
                 showLeaderboard={creator.gamificationEnabled}
               />
-            </aside>
-            <div className="min-w-0">{children}</div>
+            </div>
+            <div className={`min-w-0 ${profile ? "lg:col-start-2 lg:row-span-2 lg:row-start-1 xl:row-span-1" : ""}`}>{children}</div>
             {profile && (
-              <aside className="min-w-0 lg:sticky lg:top-24 lg:self-start">
+              <div className="order-first min-w-0 lg:sticky lg:top-24 lg:order-none lg:col-start-1 lg:row-start-2 lg:self-start xl:col-start-3 xl:row-start-1">
                 <MemberCard profile={profile} leaderboardHref={`/c/${creator.handle}/community/leaderboard`} />
-              </aside>
+              </div>
             )}
           </div>
         )}
