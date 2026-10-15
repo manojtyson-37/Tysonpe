@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormState } from "@/app/actions/auth";
 import { ActionForm, Field, FormError, SavedNote, SubmitButton, useFormValues } from "@/components/form";
 
@@ -11,8 +11,17 @@ function Fields({ channel, products }: { channel?: Channel; products: ProductOpt
   const submitted = useFormValues();
   const [picked, setPicked] = useState<string | null>(null);
   const access = picked ?? submitted?.access ?? channel?.access ?? "open";
+  const ref = useRef<HTMLDivElement>(null);
+  // React 19 resets the form after a successful action; the select snaps back to its default, so drop the stale pick too.
+  useEffect(() => {
+    const form = ref.current?.closest("form");
+    if (!form) return;
+    const onReset = () => setPicked(null);
+    form.addEventListener("reset", onReset);
+    return () => form.removeEventListener("reset", onReset);
+  }, []);
   return (
-    <>
+    <div ref={ref} className="contents">
       <Field name="name" label="Channel name" defaultValue={channel?.name} placeholder="Masterclass Q&A" required />
       <Field name="description" label="Description" defaultValue={channel?.description} hint="One line, shown above the feed." />
       <div className="grid gap-3 sm:grid-cols-2">
@@ -45,7 +54,7 @@ function Fields({ channel, products }: { channel?: Channel; products: ProductOpt
           <p className="hint mt-2">With none ticked, only you can see this channel.</p>
         </fieldset>
       )}
-    </>
+    </div>
   );
 }
 

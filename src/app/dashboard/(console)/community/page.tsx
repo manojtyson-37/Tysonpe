@@ -14,6 +14,11 @@ import { db } from "@/lib/db";
 
 export const metadata: Metadata = { title: "Community" };
 
+function deleteMessage(name: string, postCount: number) {
+  if (postCount === 0) return `Delete "${name}"? This can't be undone.`;
+  return `Delete "${name}" and its ${postCount} ${postCount === 1 ? "post" : "posts"}, comments and likes? Points members earned here are removed too. This can't be undone.`;
+}
+
 export default async function CommunityConsole() {
   const { creator } = await requireCreator();
   await ensureDefaultChannel(creator.id);
@@ -47,7 +52,7 @@ export default async function CommunityConsole() {
                       <form action={moveChannelAction.bind(null, c.id, "up")}><button className="btn btn-secondary btn-sm" disabled={i === 0}>Move up</button></form>
                       <form action={moveChannelAction.bind(null, c.id, "down")}><button className="btn btn-secondary btn-sm" disabled={i === channels.length - 1}>Move down</button></form>
                       <form action={deleteChannelAction.bind(null, c.id)} className="ml-auto">
-                        <ConfirmButton className="btn btn-danger btn-sm" message={`Delete "${c.name}" and all ${c.postCount} of its posts? This can't be undone.`}>Delete</ConfirmButton>
+                        <ConfirmButton className="btn btn-danger btn-sm" message={deleteMessage(c.name, c.postCount)}>Delete</ConfirmButton>
                       </form>
                     </div>
                   </div>

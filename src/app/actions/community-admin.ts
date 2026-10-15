@@ -55,8 +55,10 @@ export async function updateChannelAction(channelId: string, _prev: FormState, f
 
 export async function deleteChannelAction(channelId: string) {
   const { creator } = await requireCreator();
+  const id = idSchema.safeParse(channelId);
+  if (!id.success) return;
   try {
-    await deleteChannel(creator.id, idSchema.parse(channelId));
+    await deleteChannel(creator.id, id.data);
   } catch (e) {
     if (!(e instanceof AppError)) throw e;
   }
@@ -65,8 +67,11 @@ export async function deleteChannelAction(channelId: string) {
 
 export async function moveChannelAction(channelId: string, dir: "up" | "down") {
   const { creator } = await requireCreator();
+  const id = idSchema.safeParse(channelId);
+  const direction = z.enum(["up", "down"]).safeParse(dir);
+  if (!id.success || !direction.success) return;
   try {
-    await moveChannel(creator.id, idSchema.parse(channelId), z.enum(["up", "down"]).parse(dir));
+    await moveChannel(creator.id, id.data, direction.data);
   } catch (e) {
     if (!(e instanceof AppError)) throw e;
   }
@@ -89,7 +94,9 @@ export async function banMemberAction(userId: string) {
 
 export async function unbanMemberAction(userId: string) {
   const { creator } = await requireCreator();
-  await unbanMember(creator.id, idSchema.parse(userId));
+  const id = idSchema.safeParse(userId);
+  if (!id.success) return;
+  await unbanMember(creator.id, id.data);
   refresh();
 }
 
