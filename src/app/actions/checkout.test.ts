@@ -209,7 +209,7 @@ describe("settleDemoAction and settleEasebuzzDemoAction", () => {
     vi.stubEnv("DEMO_DEPLOYMENT", "");
     try {
       await expect(resetDemoEnrollmentAction(product.id)).rejects.toThrow(/only available on a demo deployment/);
-      await expect(settleDemoAction(order.id, "success")).rejects.toThrow();
+      await expect(settleDemoAction(order.id, "success")).rejects.toThrow(/disabled in production/);
     } finally {
       vi.unstubAllEnvs();
     }

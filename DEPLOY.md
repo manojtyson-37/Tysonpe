@@ -17,7 +17,7 @@ Postgres: `prisma/postgres/schema.prisma` is generated from it (`npm run db:sync
 | `DEMO_PASSWORD` | optional override of the seeded demo accounts' password | unset |
 | `RAZORPAY_*` / `EASEBUZZ_*` | unset | live keys, `EASEBUZZ_ENV=prod` |
 
-`DEMO_DEPLOYMENT=1` is the only way simulated payments run in production (and it is ignored, with an error logged, if live
+`DEMO_DEPLOYMENT=1` is the only way simulated payments run in production (and it is ignored, with an error logged, if any
 Razorpay keys or `EASEBUZZ_ENV=prod` are set): anyone could otherwise mark their own
 order paid. It also shows the one-click demo logins. Never set it on the live project.
 
