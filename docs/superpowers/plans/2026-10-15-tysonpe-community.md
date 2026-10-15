@@ -459,7 +459,7 @@ grep -E "DROP|ALTER TABLE" prisma/postgres/migrations/20261015120000_community/m
 node scripts/sync-postgres-schema.mjs --check
 ```
 
-Expected: `8` new tables; the only ALTER lines are `ALTER TABLE "Creator" ADD COLUMN "gamificationEnabled" BOOLEAN NOT NULL DEFAULT true;` plus foreign keys; **no DROP** anywhere; last line `postgres schema in sync`. Read the SQL once: it must match the SQLite migration's tables and indexes. The Postgres path is not exercised by the SQLite test suite, so this review is the check.
+Expected: `8` new tables; the only ALTER lines are one `ALTER TABLE "Creator" ADD COLUMN ... "gamificationEnabled" BOOLEAN NOT NULL DEFAULT true` (Prisma pads the spaces) plus foreign keys; **no DROP** anywhere; last line `postgres schema in sync`. Read the SQL once: it must match the SQLite migration's tables and indexes. The Postgres path is not exercised by the SQLite test suite, so this review is the check.
 
 - [ ] **Step 7: Run test to verify it passes**
 
