@@ -19,6 +19,8 @@ export function cleanText(s: string): string {
     .replace(/\r\n?/g, "\n")
     .replace(/\t/g, " ")
     .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, "")
+    // zero-width + bidi controls (keeps U+200C/U+200D: Indic scripts, emoji sequences)
+    .replace(/[\u200B\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
