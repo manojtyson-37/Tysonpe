@@ -100,7 +100,8 @@ export async function listPosts(a: { creatorId: string; channelId: string; userI
 export async function getThread(userId: string | null, postId: string) {
   const { post, ch, viewer } = await gatePost(userId, postId);
   const creator = await db.creator.findUniqueOrThrow({ where: { id: ch.creatorId }, select: { userId: true, displayName: true } });
-  const row = await db.post.findUniqueOrThrow({ where: { id: post.id }, select: postSelect });
+  const row = await db.post.findUnique({ where: { id: post.id }, select: postSelect });
+  if (!row) throw notFound(); // deleted between the gate and this read
   const [postView] = await toPostViews([row], viewer, userId, creator);
   const rows = await db.comment.findMany({
     where: { postId },
@@ -155,7 +156,10 @@ export async function setPinned(userId: string, postId: string, pinned: boolean)
   if (!canModerate(viewer)) throw forbidden();
   await db.$transaction(async (tx) => {
     await lockKey(tx, `pin:${post.channelId}`); // two simultaneous pins can't both squeeze under the limit (no-op on SQLite)
-    if (pinned && !post.pinned) {
+    // Re-read under the lock: the pre-transaction `post.pinned` may be stale after a concurrent (un)pin.
+    const current = await tx.post.findUnique({ where: { id: postId }, select: { pinned: true } });
+    if (!current) throw notFound();
+    if (pinned && !current.pinned) {
       const count = await tx.post.count({ where: { channelId: post.channelId, pinned: true } });
       if (count >= LIMITS.maxPinned) throw new AppError("limit", `You can pin up to ${LIMITS.maxPinned} posts per channel.`);
     }

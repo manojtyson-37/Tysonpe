@@ -1,10 +1,22 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { enroll, makeChannel, makeCreatorWithProduct, makeUser } from "@/test/factories";
 import {
   addComment, banMember, createPost, deleteComment, deletePost, editPost, getThread, listBans, listPosts,
   setPinned, toggleLike, unbanMember,
 } from "./posts";
+
+let failAward = false;
+vi.mock("../gamification/service", async (orig) => {
+  const mod = await orig<typeof import("../gamification/service")>();
+  return {
+    ...mod,
+    awardPoints: (...a: Parameters<typeof mod.awardPoints>) => {
+      if (failAward) throw new Error("boom");
+      return mod.awardPoints(...a);
+    },
+  };
+});
 
 let ctx: Awaited<ReturnType<typeof setup>>;
 async function setup() {
@@ -18,6 +30,7 @@ async function setup() {
   return { creatorUser, creator, product, member, member2, stranger, channel };
 }
 beforeEach(async () => {
+  failAward = false;
   ctx = await setup();
 });
 const feed = (userId: string | null, cursor?: string) =>
@@ -33,6 +46,37 @@ describe("access (server-side, every operation)", () => {
     await expect(getThread(ctx.stranger.id, id)).rejects.toMatchObject({ code: "not_found" });
     await expect(addComment(ctx.stranger.id, id, { body: "x" })).rejects.toMatchObject({ code: "not_found" });
     await expect(toggleLike(ctx.stranger.id, { postId: id })).rejects.toMatchObject({ code: "not_found" });
+  });
+
+  it("a stranger cannot edit, pin, delete, or like a comment (not_found, not forbidden)", async () => {
+    const { id } = await createPost(ctx.creatorUser.id, ctx.channel.id, { body: "hello" });
+    const c = await addComment(ctx.member.id, id, { body: "c" });
+    await expect(editPost(ctx.stranger.id, id, { body: "hack" })).rejects.toMatchObject({ code: "not_found" });
+    await expect(setPinned(ctx.stranger.id, id, true)).rejects.toMatchObject({ code: "not_found" });
+    await expect(deletePost(ctx.stranger.id, id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(deleteComment(ctx.stranger.id, c.id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(toggleLike(ctx.stranger.id, { commentId: c.id })).rejects.toMatchObject({ code: "not_found" });
+    expect(await db.like.count()).toBe(0);
+  });
+
+  it("an anonymous visitor cannot read a thread", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "hello" });
+    await expect(getThread(null, id)).rejects.toMatchObject({ code: "not_found" });
+  });
+
+  it.each(["refunded", "banned"] as const)("a %s author loses every operation on their own content", async (how) => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "mine" });
+    const c = await addComment(ctx.member.id, id, { body: "my comment" });
+    if (how === "refunded") await db.enrollment.deleteMany({ where: { userId: ctx.member.id } });
+    else await banMember(ctx.creatorUser.id, ctx.creator.id, ctx.member.id);
+    await expect(deleteComment(ctx.member.id, c.id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(editPost(ctx.member.id, id, { body: "edit" })).rejects.toMatchObject({ code: "not_found" });
+    await expect(deletePost(ctx.member.id, id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(setPinned(ctx.member.id, id, true)).rejects.toMatchObject({ code: "not_found" });
+    await expect(addComment(ctx.member.id, id, { body: "again" })).rejects.toMatchObject({ code: "not_found" });
+    await expect(toggleLike(ctx.member.id, { commentId: c.id })).rejects.toMatchObject({ code: "not_found" });
+    await expect(getThread(ctx.member.id, id)).rejects.toMatchObject({ code: "not_found" });
+    expect(await db.comment.count({ where: { id: c.id } })).toBe(1);
   });
 
   it("a gated channel is invisible to members of other products", async () => {
@@ -228,6 +272,23 @@ describe("points from community actions", () => {
     const c = await addComment(ctx.member2.id, id, { body: "hi" });
     await deleteComment(ctx.member2.id, c.id);
     expect(await points(ctx.member2.id)).toBe(0);
+  });
+
+  it("a failing award never breaks the community action (rows still written, no points)", async () => {
+    failAward = true;
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const p = await createPost(ctx.member.id, ctx.channel.id, { body: "x" });
+      const c = await addComment(ctx.member2.id, p.id, { body: "hi" });
+      await expect(toggleLike(ctx.member2.id, { postId: p.id })).resolves.toEqual({ liked: true, likeCount: 1 });
+      expect(await db.post.count({ where: { id: p.id } })).toBe(1);
+      expect(await db.comment.count({ where: { id: c.id } })).toBe(1);
+      expect(await db.like.count({ where: { postId: p.id } })).toBe(1);
+      expect(err).toHaveBeenCalledTimes(3); // awardSafely's catch swallowed each failure
+      expect(await points(ctx.member.id)).toBe(0);
+    } finally {
+      err.mockRestore();
+    }
   });
 
   it("posting still works when gamification is off (and earns nothing)", async () => {
