@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { db } from "@/lib/db";
+import { db, isPostgres } from "@/lib/db";
 import { enroll, makeChannel, makeCreatorWithProduct, makeUser } from "@/test/factories";
 import {
   addComment, banMember, createPost, deleteComment, deletePost, editPost, getThread, listBans, listPosts,
   setPinned, toggleLike, unbanMember,
 } from "./posts";
+import { LIMITS } from "./validation";
 
 let failAward = false;
 vi.mock("../gamification/service", async (orig) => {
@@ -56,7 +57,7 @@ describe("access (server-side, every operation)", () => {
     await expect(deletePost(ctx.stranger.id, id)).rejects.toMatchObject({ code: "not_found" });
     await expect(deleteComment(ctx.stranger.id, c.id)).rejects.toMatchObject({ code: "not_found" });
     await expect(toggleLike(ctx.stranger.id, { commentId: c.id })).rejects.toMatchObject({ code: "not_found" });
-    expect(await db.like.count()).toBe(0);
+    expect(await db.like.count({ where: { OR: [{ userId: ctx.stranger.id }, { commentId: c.id }, { postId: id }] } })).toBe(0);
   });
 
   it("an anonymous visitor cannot read a thread", async () => {
@@ -195,6 +196,14 @@ describe("posts", () => {
     await expect(setPinned(ctx.creatorUser.id, ids[3], true)).rejects.toMatchObject({ code: "limit" });
     await setPinned(ctx.creatorUser.id, ids[0], false);
     await expect(setPinned(ctx.creatorUser.id, ids[3], true)).resolves.toBeUndefined();
+  });
+
+  // Postgres-only: SQLite serialises writers, so the pin-count race cannot occur there.
+  it.runIf(isPostgres)("concurrent pins never exceed the per-channel cap", async () => {
+    const ids: string[] = [];
+    for (let i = 0; i < 8; i++) ids.push((await createPost(ctx.creatorUser.id, ctx.channel.id, { body: `c${i}` })).id);
+    await Promise.allSettled(ids.map((id) => setPinned(ctx.creatorUser.id, id, true)));
+    expect(await db.post.count({ where: { channelId: ctx.channel.id, pinned: true } })).toBe(LIMITS.maxPinned);
   });
 });
 
