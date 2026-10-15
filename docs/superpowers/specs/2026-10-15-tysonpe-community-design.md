@@ -130,3 +130,20 @@ UserBadge        id, userId, creatorId, badgeKey, earnedAt                 @@uni
 ## Success criteria
 
 A creator opens the community, creates a product-gated channel, and links a product. A buyer of that product posts, comments and likes; a user who never bought it cannot see the channel, its posts or its counts. Completing lessons, passing a quiz and posting award points exactly once each, levels and badges update, the streak counts correctly across IST days, and the leaderboard ranks members without exposing emails. Banning or refunding removes access immediately. Everything passes tests, typecheck, lint, build and a real-browser walkthrough.
+
+## Build notes
+
+- The creator earns no points and is excluded from leaderboards (they are not a member of their own community). Banned members are excluded from the leaderboard too.
+- The leaderboard also requires members to be enrolled in the creator's products, so refunded members (no enrolment left) drop off it.
+- Points are awarded after the learning transaction commits, best-effort (`lib/gamification/hooks.ts`). A failure is logged and never fails the learner's action; `backfillPoints` (Recalculate in the creator console) repairs gaps.
+- `like_received` uses `refId = "{likerId}:{targetId}"`: unlike then re-like never awards twice, and a self-like awards nothing.
+- Deleting a post removes `PointEvent` rows whose `sourceId` is the post, its comments, or the likes it received.
+- Product slug `community` and channel slugs `leaderboard`/`new` are reserved so fixed routes can't be shadowed.
+- The community layout does not call `requireUser`, so every page under `community/` must call `requireUser(next)` first; that keeps the destination for logged-out deep links (`/login?next=...`).
+- Creating or updating a channel with product links is all-or-nothing: the channel and its product links are written in one service call, so a failure leaves nothing half-saved.
+- The leaderboard computes ranks in memory over all earners in the period (one grouped query); fine for thousands of members, revisit with SQL window functions on Postgres.
+- Community posts have no uploads, mentions or notifications; see limits above.
+- Creator-authored posts and comments show the store name (`Creator.displayName`); other authors show their account name. Refunded members (no enrolment left) drop off the leaderboard.
+- Turning gamification on replays existing lesson, quiz and course progress (`backfillPoints`, which also evaluates badges), so earlier activity counts; nothing is awarded while it is off.
+- Files differ from the Architecture list above: services are `community/{viewer,channels,posts}.ts` and `gamification/{service,hooks}.ts`; pure helpers are `gamification/{time,rules,levels,streak,ranking,badges}.ts` and `community/{access,validation,limits}.ts`.
+- Postgres: `prisma/postgres/schema.prisma` is regenerated and has its own migration. The SQLite test suite does not exercise the Postgres path; daily caps and the pin limit use `lockKey` advisory locks there.

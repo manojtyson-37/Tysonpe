@@ -146,7 +146,30 @@ async function main() {
     },
   });
 
-  console.log("Seeded. Demo logins: asha@demo.tysonpe.test (creator), learner@demo.tysonpe.test (learner).");
+  // Demo community: open #general, a creator-only announcements channel, and a channel gated to the flagship course.
+  if ((await db.channel.count({ where: { creatorId: creator.id } })) === 0) {
+    const general = await db.channel.create({
+      data: { creatorId: creator.id, name: "General", slug: "general", description: "Say hello and ask anything.", position: 0 },
+    });
+    const news = await db.channel.create({
+      data: { creatorId: creator.id, name: "Announcements", slug: "announcements", description: "Updates from Asha.", kind: "announcement", position: 1 },
+    });
+    const qa = await db.channel.create({
+      data: {
+        creatorId: creator.id, name: "Masterclass Q&A", slug: "masterclass-q-a", description: "Questions about the Personal Finance Masterclass.",
+        access: "product_gated", position: 2, products: { create: [{ productId: course.id }] },
+      },
+    });
+    await db.post.createMany({
+      data: [
+        { channelId: news.id, authorId: asha.id, title: "Welcome to the community", body: "This is where we talk money and answer questions. Be kind, stay curious.", pinned: true },
+        { channelId: general.id, authorId: learner.id, body: "Finished week 1. The 50-30-20 worksheet made my budget click." },
+        { channelId: qa.id, authorId: learner.id, title: "SIP date vs salary date?", body: "Should my SIP date match my salary date, or a few days later?" },
+      ],
+    });
+  }
+
+  console.log("Seeded. Demo logins:asha@demo.tysonpe.test (creator), learner@demo.tysonpe.test (learner).");
   console.log("Demo password is in prisma/seed.ts. Storefront: /c/asha-rao");
 }
 
