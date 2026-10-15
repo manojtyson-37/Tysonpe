@@ -18,15 +18,19 @@ export function MemberCard({ profile, leaderboardHref }: { profile: Profile; lea
       <p className="mt-2 text-xs text-muted tabular-nums">{points} points · {level.next - points} to level {level.level + 1}</p>
 
       <p className="mt-4 text-sm font-semibold tabular-nums">{streak > 0 ? `${streak}-day streak` : "No active streak"}</p>
-      <p className="text-xs text-muted">Complete a lesson today to {streak > 0 ? "keep it going" : "start one"}.</p>
+      <p className="text-xs text-muted">Finish a lesson each day to {streak > 0 ? "keep it going" : "start one"}.</p>
 
       <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wider text-muted">Badges</p>
       <ul className="flex flex-wrap gap-1.5">
-        {BADGES.map((b) => (
-          <li key={b.key} title={b.description} className={`badge ${earned.has(b.key) ? "badge-brand" : "badge-muted opacity-60"}`}>
-            {b.label}
-          </li>
-        ))}
+        {BADGES.map((b) => {
+          const isEarned = earned.has(b.key);
+          return (
+            <li key={b.key} title={b.description} className={`badge ${isEarned ? "badge-brand" : "border border-dashed border-line bg-surface text-muted"}`}>
+              {b.label}
+              <span className="sr-only"> ({isEarned ? "earned" : "not earned yet"})</span>
+            </li>
+          );
+        })}
       </ul>
       <Link href={leaderboardHref} className="mt-4 inline-block text-sm font-semibold text-brand hover:underline">View leaderboard</Link>
     </section>

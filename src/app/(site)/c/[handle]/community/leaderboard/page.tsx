@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Empty } from "@/components/ui";
 import { requireUser } from "@/lib/auth/session";
-import { listChannelsFor } from "@/lib/community/channels";
+import { ensureDefaultChannel, listChannelsFor } from "@/lib/community/channels";
 import { resolveCommunity } from "@/lib/community/viewer";
 import { getLeaderboard } from "@/lib/gamification/service";
 
@@ -21,6 +21,7 @@ export default async function LeaderboardPage({
   const user = await requireUser(`/c/${handle}/community/leaderboard`);
   const ctx = await resolveCommunity(handle, user.id);
   if (!ctx || !ctx.creator.gamificationEnabled) notFound();
+  if (ctx.viewer.isCreator) await ensureDefaultChannel(ctx.creator.id);
   if ((await listChannelsFor(ctx.creator.id, ctx.viewer)).length === 0) notFound(); // members only
   const period = sp.period === "all" ? "all" : "week";
   const lb = await getLeaderboard(ctx.creator.id, period, user.id);
