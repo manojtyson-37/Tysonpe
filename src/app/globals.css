@@ -228,10 +228,15 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
   }
 
   .input {
-    @apply w-full rounded-control border border-line-strong bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/70 focus:border-ink;
+    @apply w-full rounded-control border border-line-strong bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/70 focus:border-ink disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted;
     transition-property: border-color, background-color;
     transition-duration: var(--dur-fast);
     transition-timing-function: var(--ease-standard);
+  }
+  .input[aria-invalid="true"] { border-color: var(--bad); }
+  /* Touch: inputs, selects and textareas are at least 44px tall. Desktop keeps the compact drawn size. */
+  @media (pointer: coarse) {
+    .input { min-height: 44px; }
   }
   .label { @apply mb-1.5 block text-sm font-medium; }
   .hint { @apply mt-1 text-xs text-muted; }

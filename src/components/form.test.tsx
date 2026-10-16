@@ -1,0 +1,352 @@
+import { describe, expect, it } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import {
+  Checkbox,
+  ColorField,
+  Field,
+  Input,
+  InputGroup,
+  RadioCard,
+  Select,
+  SubmitButton,
+  Switch,
+  Textarea,
+  isHexColor,
+  legacyButtonLook,
+} from "./form";
+
+const render = renderToStaticMarkup;
+
+/** Pull an attribute value off the first element matching `tag` in the markup. */
+function attr(html: string, tag: string, name: string): string | undefined {
+  const el = html.match(new RegExp(`<${tag}\\b[^>]*>`))?.[0] ?? "";
+  return el.match(new RegExp(`\\s${name}="([^"]*)"`, "i"))?.[1];
+}
+
+describe("Input", () => {
+  it("wires label for= to the input id", () => {
+    const html = render(<Input id="email" name="email" label="Email" />);
+    expect(html).toContain('<label for="email" class="label">Email</label>');
+    expect(attr(html, "input", "id")).toBe("email");
+    expect(attr(html, "input", "name")).toBe("email");
+    expect(attr(html, "input", "class")).toBe("input");
+  });
+
+  it("generates a unique id when none is given and links it to the label", () => {
+    const html = render(<Input name="email" label="Email" />);
+    const id = attr(html, "input", "id");
+    expect(id).toBeTruthy();
+    expect(attr(html, "label", "for")).toBe(id);
+  });
+
+  it("has no aria-invalid or aria-describedby when clean", () => {
+    const html = render(<Input name="a" label="A" />);
+    expect(html).not.toContain("aria-invalid");
+    expect(html).not.toContain("aria-describedby");
+    expect(html).not.toContain('role="alert"');
+  });
+
+  it("renders helper text below the input and describes the input with it", () => {
+    const html = render(<Input id="pw" name="pw" label="Password" hint="At least 8 characters." />);
+    expect(html).toContain('<p id="pw-hint" class="hint">At least 8 characters.</p>');
+    expect(attr(html, "input", "aria-describedby")).toBe("pw-hint");
+    expect(html.indexOf("<input")).toBeLessThan(html.indexOf("pw-hint"));
+    expect(html.indexOf("<label")).toBeLessThan(html.indexOf("<input"));
+  });
+
+  it("renders an error with role=alert, aria-invalid and an id linked by aria-describedby", () => {
+    const html = render(<Input id="pw" name="pw" label="Password" hint="Hint" error="Too short." />);
+    expect(html).toContain('<p id="pw-err" role="alert" class="err">Too short.</p>');
+    expect(attr(html, "input", "aria-invalid")).toBe("true");
+    expect(attr(html, "input", "aria-describedby")).toBe("pw-err");
+    // the error replaces the hint rather than stacking two lines
+    expect(html).not.toContain("pw-hint");
+  });
+
+  it("passes native attributes through and puts className on the wrapper", () => {
+    const html = render(
+      <Input id="e" name="e" label="E" type="email" required placeholder="you@example.com" autoComplete="email" className="max-w-sm" />,
+    );
+    expect(html).toMatch(/^<div class="max-w-sm">/);
+    expect(attr(html, "input", "type")).toBe("email");
+    expect(html).toMatch(/<input[^>]*\srequired/);
+    expect(attr(html, "input", "placeholder")).toBe("you@example.com");
+    expect(attr(html, "input", "autocomplete")).toBe("email");
+  });
+});
+
+describe("Textarea", () => {
+  it("wires label, rows, hint and error like Input", () => {
+    const html = render(<Textarea id="bio" name="bio" label="Bio" rows={6} error="Required." />);
+    expect(attr(html, "label", "for")).toBe("bio");
+    expect(html).toMatch(/^<div><label/);
+    expect(attr(html, "textarea", "id")).toBe("bio");
+    expect(attr(html, "textarea", "rows")).toBe("6");
+    expect(attr(html, "textarea", "class")).toBe("input");
+    expect(attr(html, "textarea", "aria-invalid")).toBe("true");
+    expect(attr(html, "textarea", "aria-describedby")).toBe("bio-err");
+    expect(html).toContain('id="bio-err" role="alert"');
+  });
+
+  it("defaults to four rows", () => {
+    expect(attr(render(<Textarea id="t" name="t" label="T" />), "textarea", "rows")).toBe("4");
+  });
+});
+
+describe("Select", () => {
+  const options = (
+    <>
+      <option value="a">A</option>
+      <option value="b">B</option>
+    </>
+  );
+
+  it("keeps a native select with the input look, a custom chevron and no native arrow", () => {
+    const html = render(<Select id="role" name="role" label="Role">{options}</Select>);
+    expect(attr(html, "label", "for")).toBe("role");
+    expect(html).toContain("<select");
+    expect(html).toContain('<option value="a">A</option>');
+    expect(attr(html, "select", "class")).toMatch(/^input appearance-none /);
+    expect(html).toContain("<svg");
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).toContain("pointer-events-none");
+  });
+
+  it("wires error and aria-invalid on the select", () => {
+    const html = render(<Select id="role" name="role" label="Role" error="Pick one.">{options}</Select>);
+    expect(attr(html, "select", "aria-invalid")).toBe("true");
+    expect(attr(html, "select", "aria-describedby")).toBe("role-err");
+    expect(html).toContain('id="role-err" role="alert"');
+  });
+});
+
+describe("InputGroup", () => {
+  it("renders prefix and suffix text inside one bordered group around the input", () => {
+    const html = render(<InputGroup id="h" name="handle" label="Handle" prefix="/c/" suffix=".tysonpe.in" />);
+    expect(attr(html, "label", "for")).toBe("h");
+    expect(html.indexOf("/c/")).toBeLessThan(html.indexOf("<input"));
+    expect(html.indexOf("<input")).toBeLessThan(html.indexOf(".tysonpe.in"));
+    expect(html).toContain("focus-within:border-ink");
+    expect(attr(html, "input", "id")).toBe("h");
+  });
+
+  it("omits the addon it was not given", () => {
+    const html = render(<InputGroup id="amt" name="amt" label="Amount" prefix="₹" />);
+    expect(html).toContain("₹");
+    expect(html.match(/bg-surface-2/g)).toHaveLength(1);
+  });
+
+  it("marks the group and input invalid and links the error", () => {
+    const html = render(<InputGroup id="h" name="handle" label="Handle" prefix="/c/" error="Taken." />);
+    expect(attr(html, "input", "aria-invalid")).toBe("true");
+    expect(attr(html, "input", "aria-describedby")).toBe("h-err");
+    expect(html).toContain("has-[[aria-invalid=true]]:border-bad");
+    expect(html).toContain('id="h-err" role="alert"');
+  });
+});
+
+describe("Checkbox", () => {
+  it("wraps the box and label text in a label bound with for=", () => {
+    const html = render(<Checkbox id="tos" name="tos" label="I agree to the terms" />);
+    expect(html).toContain('<label for="tos"');
+    expect(attr(html, "input", "type")).toBe("checkbox");
+    expect(attr(html, "input", "id")).toBe("tos");
+    expect(html).toContain("I agree to the terms");
+    expect(html).not.toContain("aria-invalid");
+  });
+
+  it("supports hint and error with aria wiring", () => {
+    const html = render(<Checkbox id="tos" name="tos" label="Agree" hint="Required to continue." error="Accept the terms." />);
+    expect(attr(html, "input", "aria-invalid")).toBe("true");
+    expect(attr(html, "input", "aria-describedby")).toBe("tos-err");
+    expect(html).toContain('id="tos-err" role="alert"');
+    const withHint = render(<Checkbox id="tos" name="tos" label="Agree" hint="Required to continue." />);
+    expect(attr(withHint, "input", "aria-describedby")).toBe("tos-hint");
+  });
+
+  it("passes checked state through", () => {
+    expect(render(<Checkbox id="c" name="c" label="C" defaultChecked />)).toMatch(/<input[^>]*\schecked/);
+  });
+});
+
+describe("Switch", () => {
+  it("is a native checkbox with role=switch, labelled and peer-styled", () => {
+    const html = render(<Switch id="live" name="live" label="Accept payments" defaultChecked />);
+    expect(attr(html, "input", "type")).toBe("checkbox");
+    expect(attr(html, "input", "role")).toBe("switch");
+    expect(attr(html, "input", "class")).toContain("peer");
+    expect(attr(html, "input", "class")).toContain("sr-only");
+    expect(html).toContain('<label for="live"');
+    expect(html).toContain("peer-checked:bg-ink");
+    expect(html).toMatch(/<input[^>]*\schecked/);
+  });
+
+  it("wires hint and error", () => {
+    const html = render(<Switch id="s" name="s" label="S" hint="Takes effect now." error="Could not save." />);
+    expect(attr(html, "input", "aria-invalid")).toBe("true");
+    expect(attr(html, "input", "aria-describedby")).toBe("s-err");
+    expect(html).toContain('id="s-err" role="alert"');
+  });
+});
+
+describe("RadioCard", () => {
+  it("is a native radio under a label, selected state from peer-checked, with title and description", () => {
+    const html = render(
+      <RadioCard name="role" value="creator" title="Sell my content" description="Storefront and payouts." defaultChecked />,
+    );
+    expect(html).toMatch(/^<label /);
+    expect(attr(html, "input", "type")).toBe("radio");
+    expect(attr(html, "input", "name")).toBe("role");
+    expect(attr(html, "input", "value")).toBe("creator");
+    expect(attr(html, "input", "class")).toContain("peer");
+    expect(attr(html, "input", "class")).toContain("sr-only");
+    expect(html).toMatch(/<input[^>]*\schecked/);
+    expect(html).toContain("peer-checked:border-ink");
+    expect(html).toContain("peer-focus-visible:outline");
+    expect(html).toContain("Sell my content");
+    expect(html).toContain("Storefront and payouts.");
+  });
+
+  it("names the radio by the title and describes it by the description", () => {
+    const html = render(<RadioCard name="g" value="a" title="Razorpay" description="Overlay checkout" />);
+    const input = html.match(/<input\b[^>]*>/)?.[0] ?? "";
+    const labelledby = input.match(/aria-labelledby="([^"]*)"/)?.[1];
+    const describedby = input.match(/aria-describedby="([^"]*)"/)?.[1];
+    expect(html).toContain(`id="${labelledby}"`);
+    expect(html).toContain(`id="${describedby}"`);
+    expect(html.match(new RegExp(`id="${labelledby}"[^>]*>Razorpay<`))).not.toBeNull();
+    expect(html.match(new RegExp(`id="${describedby}"[^>]*>Overlay checkout<`))).not.toBeNull();
+  });
+
+  it("renders the trailing slot after the text and children under the description", () => {
+    const html = render(
+      <RadioCard name="g" value="a" title="Razorpay" trailing={<span>Test mode</span>}>
+        <span>Footer note</span>
+      </RadioCard>,
+    );
+    expect(html.indexOf("Razorpay")).toBeLessThan(html.indexOf("Footer note"));
+    expect(html.indexOf("Footer note")).toBeLessThan(html.indexOf("Test mode"));
+  });
+
+  it("works with neither title nor description and drops the aria links", () => {
+    const html = render(<RadioCard name="w" value="1">Paytm wallet</RadioCard>);
+    expect(html).toContain("Paytm wallet");
+    expect(html).not.toContain("aria-labelledby");
+    expect(html).not.toContain("aria-describedby");
+  });
+
+  it("passes disabled through and dims the card, and merges className on the label", () => {
+    const html = render(<RadioCard name="g" value="a" title="T" disabled className="col-span-2" />);
+    expect(html).toMatch(/<input[^>]*\sdisabled/);
+    expect(html).toContain("peer-disabled:opacity-50");
+    expect(html).toMatch(/^<label class="[^"]*col-span-2/);
+  });
+});
+
+describe("ColorField", () => {
+  it("pairs a native colour input with a hex text input that carries the name", () => {
+    const html = render(<ColorField id="brand" name="brandColor" label="Brand colour" defaultValue="#5B3DF5" />);
+    expect(attr(html, "label", "for")).toBe("brand");
+    expect(html).toContain('type="color"');
+    expect(html).toContain('value="#5b3df5"');
+    const text = html.match(/<input\b[^>]*type="text"[^>]*>/)?.[0] ?? "";
+    expect(text).toContain('id="brand"');
+    expect(text).toContain('name="brandColor"');
+    expect(text).toContain('value="#5B3DF5"');
+    // only the text input submits; the picker has no name
+    const picker = html.match(/<input\b[^>]*type="color"[^>]*>/)?.[0] ?? "";
+    expect(picker).not.toContain("name=");
+    expect(picker).toContain("aria-label=");
+  });
+
+  it("falls back to a valid picker value for a non-hex default", () => {
+    const html = render(<ColorField id="c" name="c" label="C" defaultValue="red" />);
+    expect(html).toMatch(/type="color"[^>]*value="#000000"|value="#000000"[^>]*type="color"/);
+  });
+
+  it("wires hint and error onto the hex input", () => {
+    const html = render(<ColorField id="c" name="c" label="C" defaultValue="#16130f" error="Use a 6 digit hex." />);
+    const text = html.match(/<input\b[^>]*type="text"[^>]*>/)?.[0] ?? "";
+    expect(text).toContain('aria-invalid="true"');
+    expect(text).toContain('aria-describedby="c-err"');
+    expect(html).toContain('id="c-err" role="alert"');
+  });
+});
+
+describe("isHexColor", () => {
+  it("accepts only #rrggbb", () => {
+    expect(isHexColor("#16130f")).toBe(true);
+    expect(isHexColor("#ABCDEF")).toBe(true);
+    expect(isHexColor("#abc")).toBe(false);
+    expect(isHexColor("16130f")).toBe(false);
+    expect(isHexColor("#16130g")).toBe(false);
+    expect(isHexColor("")).toBe(false);
+  });
+});
+
+describe("legacyButtonLook", () => {
+  it("reads variant and size from old btn class strings and keeps the remainder", () => {
+    expect(legacyButtonLook("btn btn-primary")).toEqual({ variant: "primary", size: "md", className: undefined });
+    expect(legacyButtonLook("btn btn-secondary btn-sm")).toEqual({ variant: "secondary", size: "sm", className: undefined });
+    expect(legacyButtonLook("btn btn-primary btn-lg w-full")).toEqual({ variant: "primary", size: "lg", className: "w-full" });
+    expect(legacyButtonLook("btn btn-primary w-full active:scale-[0.98]")).toEqual({
+      variant: "primary",
+      size: "md",
+      className: "w-full active:scale-[0.98]",
+    });
+    expect(legacyButtonLook("btn btn-danger")).toMatchObject({ variant: "danger" });
+    expect(legacyButtonLook("btn btn-ghost")).toMatchObject({ variant: "ghost" });
+  });
+});
+
+describe("SubmitButton", () => {
+  it("renders the Button primitive as a submit button with the default primary look", () => {
+    const html = render(<SubmitButton>Save changes</SubmitButton>);
+    expect(html).toMatch(/^<button /);
+    expect(html).toContain('type="submit"');
+    expect(html).toContain('class="btn btn-primary"');
+    expect(html).toContain("Save changes");
+    expect(html).not.toContain("aria-busy");
+  });
+
+  it("keeps working with the legacy className call sites without duplicating btn classes", () => {
+    const sm = render(<SubmitButton className="btn btn-secondary btn-sm">Add</SubmitButton>);
+    expect(sm).toContain('class="btn btn-secondary btn-sm"');
+    const wide = render(<SubmitButton className="btn btn-primary btn-lg w-full" pendingText="Creating order…">Pay</SubmitButton>);
+    expect(wide).toContain('class="btn btn-primary btn-lg w-full"');
+  });
+
+  it("accepts variant and size props directly", () => {
+    const html = render(<SubmitButton variant="secondary" size="sm" className="w-full">Go</SubmitButton>);
+    expect(html).toContain('class="btn btn-secondary btn-sm w-full"');
+  });
+});
+
+describe("Field (context-free usage)", () => {
+  it("still renders label, input, hint and the same call-site props", () => {
+    const html = render(<Field name="email" label="Email" type="email" autoComplete="email" hint="We never share it." required />);
+    const id = attr(html, "input", "id");
+    expect(id).toMatch(/-email$/);
+    expect(attr(html, "label", "for")).toBe(id);
+    expect(attr(html, "input", "name")).toBe("email");
+    expect(attr(html, "input", "aria-describedby")).toBe(`${id}-hint`);
+    expect(html).toContain("We never share it.");
+  });
+
+  it("renders a prefix as an input group addon", () => {
+    const html = render(<Field name="handle" label="Store handle" prefix="/c/" />);
+    expect(html).toContain("/c/");
+    expect(html).toContain("focus-within:border-ink");
+  });
+
+  it("renders textarea and select variants", () => {
+    expect(render(<Field name="bio" label="Bio" as="textarea" rows={3} />)).toContain('rows="3"');
+    const sel = render(<Field name="g" label="G" as="select"><option value="x">X</option></Field>);
+    expect(sel).toContain("<select");
+    expect(sel).toContain("<svg");
+  });
+
+  it("applies defaultValue", () => {
+    expect(render(<Field name="n" label="N" defaultValue="Asha" />)).toContain('value="Asha"');
+  });
+});
