@@ -14,3 +14,5 @@ export { Avatar } from "./avatar";
 export type { AvatarSize } from "./avatar";
 export { Table, Th, Tr, Td, MoneyCell, DateCell, RowActions, EmptyRow } from "./table";
 export type { TableProps } from "./table";
+export { Tabs, TabPanel, SegmentedControl, nextIndex, isLinkActive, tabId, tabPanelId } from "./tabs";
+export type { TabsProps, LinkTabsProps, StateTabsProps, LinkTabItem, StateTabItem, TabMatch, SegmentedControlProps, SegmentedOption } from "./tabs";
