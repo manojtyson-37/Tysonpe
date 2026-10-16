@@ -114,7 +114,7 @@ export default async function EditProduct({ params, searchParams }: PageProps<"/
                         <div className="mt-2">
                           <ActionForm action={renameSection.bind(null, section.id)} className="flex items-end gap-2">
                             <Field name="title" label="Section title" defaultValue={section.title} className="flex-1" required />
-                            <SubmitButton className="btn btn-secondary btn-sm" pendingText="…">Save</SubmitButton>
+                            <SubmitButton className="btn btn-secondary btn-sm" pendingText="Saving…">Save</SubmitButton>
                           </ActionForm>
                         </div>
                       </details>

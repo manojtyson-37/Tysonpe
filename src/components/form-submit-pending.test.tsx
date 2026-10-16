@@ -47,16 +47,21 @@ describe("SubmitButton pending announcement", () => {
     expect(html.match(/Creating order…/g)).toHaveLength(1);
   });
 
-  it("the live region is a sibling after the button, never inside it (button descendants are presentational)", () => {
+  it("the live region is a sibling before the button, never inside it, and the button stays the last child", () => {
     for (const pending of [false, true]) {
       mockPending = pending;
       const html = render(<SubmitButton pendingText="Creating order…">Pay now</SubmitButton>);
-      expect(html.indexOf("</button>")).toBeGreaterThan(-1);
-      expect(html.indexOf("</button>")).toBeLessThan(html.indexOf('role="status"'));
+      expect(html.indexOf("<button")).toBeGreaterThan(-1);
+      // Region first, so it is not inside the button (descendants are presentational) ...
+      expect(html.indexOf('role="status"')).toBeGreaterThan(-1);
+      expect(html.indexOf('role="status"')).toBeLessThan(html.indexOf("<button"));
+      // ... and the button is the last child, so `space-y-N` (:not(:last-child) margin) never reaches it.
+      expect(html.endsWith("</button>")).toBe(true);
       // The button's own accessible name is the label alone, in both states.
       const button = html.match(/<button\b[\s\S]*<\/button>/)?.[0] ?? "";
       expect(button).toContain("Pay now");
       expect(button).not.toContain("Creating order…");
+      expect(button).not.toContain('role="status"');
     }
   });
 

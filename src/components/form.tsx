@@ -110,6 +110,16 @@ export function SubmitButton({
   const look = legacyButtonLook(className);
   return (
     <>
+      {/*
+        Outside the button on purpose: a button's descendants are presentational, so a live region inside it is
+        never announced, and Button remounts its children when `loading` flips. Always mounted, text swapped in
+        place, so the pending text is announced once and the button's accessible name stays the label.
+        Rendered BEFORE the button so the button stays the form's last child: `space-y-N` is
+        `:not(:last-child)` margin, and a trailing sr-only span would hand the button a bottom margin.
+      */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {pending ? pendingText : ""}
+      </span>
       <Button
         type="submit"
         loading={pending}
@@ -119,14 +129,6 @@ export function SubmitButton({
       >
         {children}
       </Button>
-      {/*
-        Outside the button on purpose: a button's descendants are presentational, so a live region inside it is
-        never announced, and Button remounts its children when `loading` flips. Always mounted, text swapped in
-        place, so the pending text is announced once and the button's accessible name stays the label.
-      */}
-      <span role="status" aria-live="polite" className="sr-only">
-        {pending ? pendingText : ""}
-      </span>
     </>
   );
 }

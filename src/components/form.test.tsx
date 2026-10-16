@@ -380,7 +380,8 @@ describe("legacyButtonLook", () => {
 describe("SubmitButton", () => {
   it("renders the Button primitive as a submit button with the default primary look", () => {
     const html = render(<SubmitButton>Save changes</SubmitButton>);
-    expect(html).toMatch(/^<button /);
+    // The status region precedes the button (it must stay the last child); the button is the markup's tail.
+    expect(html).toMatch(/<button [^>]*>[\s\S]*<\/button>$/);
     expect(html).toContain('type="submit"');
     expect(html).toContain('class="btn btn-primary"');
     expect(html).toContain("Save changes");
@@ -431,16 +432,16 @@ describe("Field (context-free usage)", () => {
 
 describe("ColorField casing helpers", () => {
   it("typing a full uppercase hex keeps the user's casing in the box but emits lowercase", () => {
-    expect(colorFromText("#ABCDEF")).toEqual({ text: "#ABCDEF", picker: "#abcdef", emit: "#abcdef" });
+    expect(colorFromText("#ABCDEF")).toStrictEqual({ text: "#ABCDEF", picker: "#abcdef", emit: "#abcdef" });
   });
 
   it("does not move the picker or emit while the typed value is not yet a full hex colour", () => {
-    expect(colorFromText("#ABC")).toEqual({ text: "#ABC" });
-    expect(colorFromText("")).toEqual({ text: "" });
-    expect(colorFromText("#ABCDEFG")).toEqual({ text: "#ABCDEFG" });
+    expect(colorFromText("#ABC")).toStrictEqual({ text: "#ABC" });
+    expect(colorFromText("")).toStrictEqual({ text: "" });
+    expect(colorFromText("#ABCDEFG")).toStrictEqual({ text: "#ABCDEFG" });
   });
 
   it("an uppercase value from the native picker is lowercased everywhere, box included", () => {
-    expect(colorFromPicker("#5B3DF5")).toEqual({ text: "#5b3df5", picker: "#5b3df5", emit: "#5b3df5" });
+    expect(colorFromPicker("#5B3DF5")).toStrictEqual({ text: "#5b3df5", picker: "#5b3df5", emit: "#5b3df5" });
   });
 });
