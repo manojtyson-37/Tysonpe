@@ -12,6 +12,7 @@ import {
   nextFocusIndex,
   overlayKey,
   registerOverlay,
+  returnOverlayFocus,
   tabAtEdge,
 } from "./overlay";
 
@@ -154,8 +155,14 @@ export function Sheet({ title, closeLabel, triggerLabel, triggerIcon, triggerCla
     if (!open || !panel) return;
 
     const unlock = lockBodyScroll(document.body, window.innerWidth - document.documentElement.clientWidth);
-    const unregister = registerOverlay(uid);
-    closeRef.current?.focus({ preventScroll: true });
+    // How focus enters this sheet: the close button. Also what an overlay closing over the sheet calls to hand focus
+    // back; if focus is already inside the panel there is nothing to move.
+    const focusInto = () => {
+      if (panel.contains(document.activeElement)) return;
+      closeRef.current?.focus({ preventScroll: true });
+    };
+    const unregister = registerOverlay(uid, focusInto);
+    focusInto();
 
     const onKeyDown = (event: KeyboardEvent) => {
       // Only the top of the shared overlay stack acts: with a Dialog open over this sheet, Escape and Tab are the dialog's.
@@ -196,8 +203,9 @@ export function Sheet({ title, closeLabel, triggerLabel, triggerIcon, triggerCla
   useLayoutEffect(() => {
     const step = dialogFocusStep(wasOpenRef.current, open);
     wasOpenRef.current = open;
-    if (step === "return") triggerRef.current?.focus({ preventScroll: true });
-  }, [open]);
+    // Over another overlay (this sheet closing under a dialog), focus goes into that one instead of the trigger behind it.
+    if (step === "return") returnOverlayFocus(uid, () => triggerRef.current?.focus({ preventScroll: true }));
+  }, [open, uid]);
 
   return (
     <>

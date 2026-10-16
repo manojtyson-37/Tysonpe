@@ -1,12 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   escapeAlreadyHandled,
+  focusReturnTarget,
   isActiveOverlay,
   isTopOverlay,
   overlayKey,
   popOverlay,
   pushOverlay,
   registerOverlay,
+  returnOverlayFocus,
   tabAtEdge,
 } from "./overlay";
 
@@ -127,5 +129,82 @@ describe("overlayKey (who handles a keydown)", () => {
   it("any other key is nobody's business", () => {
     expect(overlayKey(true, key("Enter"))).toBe("ignore");
     expect(overlayKey(true, key("a"))).toBe("ignore");
+  });
+});
+
+describe("focusReturnTarget (where focus goes when an overlay closes)", () => {
+  // Regression: a confirm dialog closing over the console drawer returned focus to its own trigger, which sits behind
+  // the still-open modal sheet, so document.activeElement was BODY.
+  it.each([
+    [[], "trigger"],
+    [["sheet"], "top-overlay"],
+    [["sheet", "dialog"], "top-overlay"],
+  ] as const)("stack remaining %j -> %s", (stack, expected) => {
+    expect(focusReturnTarget(stack)).toBe(expected);
+  });
+});
+
+describe("returnOverlayFocus (the one place a closing overlay gives focus back)", () => {
+  it("returns to the trigger, and moves nothing else, when no other overlay is open", () => {
+    const unregister = registerOverlay("rf-solo", vi.fn());
+    const focusTrigger = vi.fn();
+    unregister(); // a Dialog has already unregistered by its layout-effect body
+    expect(returnOverlayFocus("rf-solo", focusTrigger)).toBe("trigger");
+    expect(focusTrigger).toHaveBeenCalledTimes(1);
+  });
+
+  it("focuses into the overlay now on top, never the trigger behind it, when one remains", () => {
+    const focusSheet = vi.fn();
+    const focusDialog = vi.fn();
+    const unregisterSheet = registerOverlay("rf-sheet", focusSheet);
+    const unregisterDialog = registerOverlay("rf-dialog", focusDialog);
+    unregisterDialog();
+    const focusTrigger = vi.fn();
+    expect(returnOverlayFocus("rf-dialog", focusTrigger)).toBe("top-overlay");
+    expect(focusTrigger).not.toHaveBeenCalled();
+    expect(focusSheet).toHaveBeenCalledTimes(1);
+    expect(focusDialog).not.toHaveBeenCalled();
+    unregisterSheet();
+  });
+
+  it("ignores the closing overlay even while it is still registered (a Sheet drops its entry in a later passive cleanup)", () => {
+    const focusSheet = vi.fn();
+    const focusDialog = vi.fn();
+    const unregisterDialog = registerOverlay("rf-dialog2", focusDialog);
+    const unregisterSheet = registerOverlay("rf-sheet2", focusSheet);
+    const focusTrigger = vi.fn();
+    expect(returnOverlayFocus("rf-sheet2", focusTrigger)).toBe("top-overlay");
+    expect(focusDialog).toHaveBeenCalledTimes(1);
+    expect(focusSheet).not.toHaveBeenCalled();
+    expect(focusTrigger).not.toHaveBeenCalled();
+    unregisterSheet();
+    unregisterDialog();
+  });
+
+  it("with two remaining, focuses the topmost", () => {
+    const calls: string[] = [];
+    const un = ["a", "b", "c"].map((id) => registerOverlay(`rf-${id}`, () => calls.push(id)));
+    un[2]();
+    returnOverlayFocus("rf-c", () => calls.push("trigger"));
+    expect(calls).toEqual(["b"]);
+    un[1]();
+    un[0]();
+  });
+
+  it("does not fall back to the hidden trigger when the top overlay registered no focus routine", () => {
+    const unregister = registerOverlay("rf-mute");
+    const focusTrigger = vi.fn();
+    expect(returnOverlayFocus("rf-gone", focusTrigger)).toBe("top-overlay");
+    expect(focusTrigger).not.toHaveBeenCalled();
+    unregister();
+  });
+
+  it("forgets an overlay's focus routine when it unregisters", () => {
+    const focusInto = vi.fn();
+    registerOverlay("rf-forgotten", focusInto)();
+    const unregister = registerOverlay("rf-other"); // no routine of its own
+    returnOverlayFocus("rf-x", vi.fn());
+    expect(focusInto).not.toHaveBeenCalled();
+    unregister();
   });
 });

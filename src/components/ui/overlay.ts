@@ -50,18 +50,51 @@ export function isTopOverlay(stack: OverlayStack, id: string): boolean {
 // Every open Dialog and Sheet listens on `document`; only the top of this one shared stack acts, so Escape closes one
 // overlay and Tab is trapped once, whichever kind is on top. (Module state, like the scroll-lock registry below.)
 let openOverlays: OverlayStack = [];
+// How to move focus into each open overlay: the same routine it runs on open. Kept beside the stack so that an overlay
+// closing over another can hand focus to the one now on top without knowing what kind it is.
+const overlayFocusers = new Map<string, () => void>();
 
-/** Puts `id` on top of the shared stack. Returns an idempotent function that takes it off again. */
-export function registerOverlay(id: string): () => void {
+/**
+ * Puts `id` on top of the shared stack; `focusInto` is how focus enters that overlay (its open-time focus routine).
+ * Returns an idempotent function that takes it off again.
+ */
+export function registerOverlay(id: string, focusInto?: () => void): () => void {
   openOverlays = pushOverlay(openOverlays, id);
+  if (focusInto) overlayFocusers.set(id, focusInto);
   return () => {
     openOverlays = popOverlay(openOverlays, id);
+    overlayFocusers.delete(id);
   };
 }
 
 /** Whether `id` is the top of the shared stack right now, read at event time. */
 export function isActiveOverlay(id: string): boolean {
   return isTopOverlay(openOverlays, id);
+}
+
+export type FocusReturnTarget = "trigger" | "top-overlay";
+
+/**
+ * Where focus goes when an overlay closes, given the stack that remains. With nothing left open it returns to the
+ * closing overlay's own trigger. With another overlay still open the trigger sits behind that modal, so focus must go
+ * into the overlay now on top instead: never to the hidden trigger, and never to <body>.
+ */
+export function focusReturnTarget(stackAfterClose: OverlayStack): FocusReturnTarget {
+  return stackAfterClose.length === 0 ? "trigger" : "top-overlay";
+}
+
+/**
+ * Called by a closing overlay (`closingId`) from its layout-effect body, once, to give focus back. Reads the shared stack
+ * minus `closingId` (a Sheet's registration is only dropped in a later passive cleanup, so it may still be listed), and
+ * either runs `focusTrigger` or moves focus into the overlay now on top. Returns where focus went. If the top overlay
+ * registered no focus routine, nothing is moved rather than falling back to the trigger behind it.
+ */
+export function returnOverlayFocus(closingId: string, focusTrigger: () => void): FocusReturnTarget {
+  const remaining = popOverlay(openOverlays, closingId);
+  const target = focusReturnTarget(remaining);
+  if (target === "trigger") focusTrigger();
+  else overlayFocusers.get(remaining[remaining.length - 1])?.();
+  return target;
 }
 
 export type OverlayKeyIntent = "close" | "trap" | "ignore";

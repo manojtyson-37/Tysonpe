@@ -198,4 +198,20 @@ describe("one overlay implementation", () => {
     const cleanup = mainEffect.slice(mainEffect.indexOf("return () =>"));
     expect(cleanup).not.toMatch(/\.focus\(/);
   });
+
+  it("the sheet and the dialog give focus back only through returnOverlayFocus, and hand it their open-time focus routine to the registry", () => {
+    for (const file of ["sheet", "dialog"]) {
+      const source = readFileSync(`src/components/ui/${file}.tsx`, "utf8");
+      expect(source, file).toMatch(/returnOverlayFocus\(uid,/);
+      expect(source, file).toMatch(/registerOverlay\(uid, focusInto\)/);
+      // no trigger focus outside the helper's callback: it runs only when nothing else is open
+      const calls = source.split("\n").filter((line) => /(trigger|triggerRef\.current\??)\.focus\(/.test(line));
+      for (const line of calls) expect(line, `${file}: ${line.trim()}`).toMatch(/returnOverlayFocus|^\s+if \(trigger\?\.isConnected\)/);
+    }
+  });
+
+  it("the dialog's safety net after its exit animation runs only when focus did not go to another overlay", () => {
+    const source = readFileSync("src/components/ui/dialog.tsx", "utf8");
+    expect(source).toMatch(/focusReturnedRef\.current = target === "top-overlay"/);
+  });
 });

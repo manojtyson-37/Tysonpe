@@ -27,6 +27,7 @@ import {
   popOverlay,
   pushOverlay,
   registerOverlay,
+  returnOverlayFocus,
   tabAtEdge,
   type OverlayStack,
 } from "./overlay";
@@ -260,11 +261,15 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
 
   useEffect(() => releaseScroll, [releaseScroll]);
 
+  // Closing over another overlay (a confirm over a sheet): the opener is behind that modal, so focus goes into the
+  // overlay now on top instead (see returnOverlayFocus), and the exit safety net below has nothing to put back.
   const returnFocus = useCallback(() => {
     const trigger = focusTargetRef.current;
-    if (trigger?.isConnected) trigger.focus({ preventScroll: true });
-    focusReturnedRef.current = !trigger || document.activeElement === trigger;
-  }, []);
+    const target = returnOverlayFocus(uid, () => {
+      if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+    });
+    focusReturnedRef.current = target === "top-overlay" || !trigger || document.activeElement === trigger;
+  }, [uid]);
 
   useLayoutEffect(() => {
     const panel = panelRef.current;
@@ -281,10 +286,15 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
     releaseScroll();
     unlockRef.current = lockBodyScroll(document.body, window.innerWidth - document.documentElement.clientWidth);
 
-    const first = initialFocusRef?.current ?? focusableWithin(panel)[0] ?? panel;
-    first.focus({ preventScroll: true });
+    // How focus enters this dialog. Also what an overlay closing over it calls to hand focus back; if focus is already
+    // inside the panel there is nothing to move.
+    const focusInto = () => {
+      if (panel.contains(document.activeElement)) return;
+      (initialFocusRef?.current ?? focusableWithin(panel)[0] ?? panel).focus({ preventScroll: true });
+    };
+    focusInto();
 
-    const unregister = registerOverlay(uid);
+    const unregister = registerOverlay(uid, focusInto);
 
     const onKeyDown = (event: KeyboardEvent) => {
       // Only the top of the shared overlay stack (dialogs and sheets) acts. An Escape someone else already used (a menu,
