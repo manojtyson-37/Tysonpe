@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { formatINR } from "@/lib/money";
 
 // ── Pure helpers (unit-tested) ───────────────────────────────────────────────
@@ -77,7 +78,8 @@ export function BarChart({
   tickCount?: number;
   className?: string;
 }) {
-  const titleId = `chart-title-${label.replace(/\s+/g, "-").toLowerCase()}`;
+  const uid = useId();
+  const titleId = `${uid}-chart-title`;
   const values = data.map((d) => d.value);
   const { min, max, tickValues } = computeTicks(values, tickCount);
   const plotH = CHART_HEIGHT - TOP_PADDING - BOTTOM_PADDING;

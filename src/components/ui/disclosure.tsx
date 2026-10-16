@@ -54,6 +54,7 @@ export function Disclosure({
       <button
         type="button"
         aria-expanded={open}
+        id={id}
         aria-controls={panelId}
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center justify-between gap-2 py-3 text-left text-sm font-medium text-ink"

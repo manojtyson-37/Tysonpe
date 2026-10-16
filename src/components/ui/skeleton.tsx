@@ -23,7 +23,7 @@ export function Skeleton({
   return (
     <div
       aria-hidden="true"
-      role="presentation"
+
       style={style}
       className={["rounded bg-line", className].filter(Boolean).join(" ")}
     />
@@ -67,7 +67,7 @@ export function SkeletonAvatar({
   return (
     <div
       aria-hidden="true"
-      role="presentation"
+
       style={{ width: `${size}px`, height: `${size}px` }}
       className={["shrink-0 rounded-full bg-line", className].filter(Boolean).join(" ")}
     />

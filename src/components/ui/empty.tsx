@@ -53,7 +53,7 @@ export function EmptyState({
   return (
     <div className={wrapper}>
       {icon && <div className="mb-4 text-muted">{icon}</div>}
-      <p className="text-base font-semibold">{title}</p>
+      <p className="text-lg font-semibold">{title}</p>
       {body && <p className="mt-1 max-w-sm text-sm text-muted">{body}</p>}
       {(action || secondaryAction) && (
         <div className="mt-5 flex flex-wrap justify-center gap-3">
