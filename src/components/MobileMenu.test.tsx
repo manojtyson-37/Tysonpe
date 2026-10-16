@@ -186,12 +186,14 @@ describe("MobileMenuView panel", () => {
     expect(onClose).toHaveBeenCalledTimes(links.length + 2);
   });
 
-  it("keeps the two icon buttons at a 44px-wide floor on coarse pointers", () => {
+  it("keeps the two icon buttons at a 44x44 floor on coarse pointers, in the border box itself (the .btn::after band rounds to 43)", () => {
     const [closeBtn] = tagAttrs(panel(null), "button").filter((a) => a["aria-label"] === "Close menu");
-    expect(closeBtn.class).toContain("pointer-coarse:min-w-11");
     const items = siteNavLinks({ user: null, storefrontHandle: "demo" });
     const [trigger] = tagAttrs(renderToStaticMarkup(<MobileMenu items={items} logoutAction={noop} />), "button");
-    expect(trigger.class).toContain("pointer-coarse:min-w-11");
+    for (const button of [closeBtn, trigger]) {
+      expect(button.class).toContain("pointer-coarse:min-w-11");
+      expect(button.class).toContain("pointer-coarse:min-h-11");
+    }
   });
 });
 

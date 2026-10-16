@@ -79,7 +79,7 @@ export function MobileMenuView({ panelId, titleId, open, items, logoutAction, on
             type="button"
             aria-label="Close menu"
             onClick={onClose}
-            className={`${buttonClass({ variant: "ghost", size: "sm" })} px-2 pointer-coarse:min-w-11`}
+            className={`${buttonClass({ variant: "ghost", size: "sm" })} px-2 pointer-coarse:min-h-11 pointer-coarse:min-w-11`}
           >
             <IconX size={20} />
           </button>
@@ -199,7 +199,7 @@ export function MobileMenu({ items, logoutAction }: MobileMenuProps) {
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen(true)}
-        className={`${buttonClass({ variant: "ghost", size: "sm" })} -mr-2 px-2 pointer-coarse:min-w-11 lg:hidden`}
+        className={`${buttonClass({ variant: "ghost", size: "sm" })} -mr-2 px-2 pointer-coarse:min-h-11 pointer-coarse:min-w-11 lg:hidden`}
       >
         <IconMenu size={22} />
       </button>
