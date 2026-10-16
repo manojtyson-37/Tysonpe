@@ -13,6 +13,8 @@
   --logo-mark: #10b981;
   --logo-mark-ink: #ffffff;
   --brand-soft: #eef2ff;
+  --brand-text: var(--brand);
+  --brand-ring: var(--brand);
   --accent: #f59e0b;
   --good: #10b981;
   --good-soft: #ecfdf5;
@@ -62,7 +64,7 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
 @layer components {
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 ease-out
-      active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100;
+      active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--brand-ring)] disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100;
   }
   .btn-primary { @apply bg-brand text-brand-ink hover:brightness-110 active:brightness-95 shadow-xs; }
   .btn-secondary { @apply border border-line bg-surface text-ink hover:bg-surface-2 hover:border-line/80 shadow-xs; }
@@ -73,7 +75,7 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
 
   .input {
     @apply w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/70
-      transition duration-150 focus:border-brand focus:outline-2 focus:outline-brand/25;
+      transition duration-150 focus:border-[color:var(--brand-ring)] focus:outline-2 focus:outline-[color:color-mix(in_oklab,var(--brand-ring)_25%,transparent)];
   }
   .label { @apply mb-1.5 block text-sm font-medium; }
   .hint { @apply mt-1 text-xs text-muted; }
@@ -97,7 +99,7 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
   .badge-bad { @apply bg-bad-soft text-bad; }
   .badge-warn { @apply bg-warn-soft text-ink; }
   .badge-muted { @apply bg-surface-2 text-muted; }
-  .badge-brand { @apply bg-brand-soft text-brand; }
+  .badge-brand { @apply bg-brand-soft text-[color:var(--brand-text)]; }
 
   .table { @apply w-full text-left text-sm; }
   .table th { @apply border-b border-line px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted; }

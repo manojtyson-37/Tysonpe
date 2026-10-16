@@ -34,8 +34,13 @@ export default async function CommunityConsole() {
         sub="Channels your customers talk in. Open to every paying customer, or limited to buyers of chosen products."
         action={<Link href={`/c/${creator.handle}/community`} className="btn btn-secondary btn-sm min-h-10">Open community <span aria-hidden>↗</span></Link>}
       />
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="min-w-0 space-y-6">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_380px] xl:grid-rows-[auto_1fr]">
+        <section className="card min-w-0 px-5 pb-5 pt-4 xl:col-start-2 xl:row-start-1 xl:self-start">
+          <h2 className="mb-3 font-semibold">New channel</h2>
+          <ChannelForm action={createChannelAction} products={products} submitLabel="Create channel" />
+        </section>
+
+        <div className="min-w-0 space-y-6 xl:col-start-1 xl:row-span-2 xl:row-start-1">
           <section className="space-y-3" aria-label="Channels">
             {channels.map((c, i) => (
               <div key={c.id} className="card">
@@ -52,8 +57,8 @@ export default async function CommunityConsole() {
                   <div className="space-y-4 border-t border-line px-5 pb-5 pt-4">
                     <ChannelForm action={updateChannelAction.bind(null, c.id)} channel={c} products={products} submitLabel="Save channel" />
                     <div className="flex flex-wrap gap-2 border-t border-line pt-3">
-                      <form action={moveChannelAction.bind(null, c.id, "up")}><button aria-label={`Move ${c.name} up`} className="btn btn-secondary btn-sm min-h-10" disabled={i === 0}>Move up</button></form>
-                      <form action={moveChannelAction.bind(null, c.id, "down")}><button aria-label={`Move ${c.name} down`} className="btn btn-secondary btn-sm min-h-10" disabled={i === channels.length - 1}>Move down</button></form>
+                      <form action={moveChannelAction.bind(null, c.id, "up")}><button aria-label={`Move up: ${c.name}`} className="btn btn-secondary btn-sm min-h-10" disabled={i === 0}>Move up</button></form>
+                      <form action={moveChannelAction.bind(null, c.id, "down")}><button aria-label={`Move down: ${c.name}`} className="btn btn-secondary btn-sm min-h-10" disabled={i === channels.length - 1}>Move down</button></form>
                       <form action={deleteChannelAction.bind(null, c.id)} className="ml-auto">
                         <ConfirmButton className="btn btn-danger btn-sm min-h-10" aria-label={`Delete channel ${c.name}`} message={deleteMessage(c.name, c.postCount)}>Delete</ConfirmButton>
                       </form>
@@ -83,31 +88,23 @@ export default async function CommunityConsole() {
           </section>
         </div>
 
-        {/* `contents` below xl lets "New channel" jump to the top on small screens while Gamification stays last. */}
-        <div className="contents xl:sticky xl:top-24 xl:block xl:min-w-0 xl:space-y-6 xl:self-start">
-          <section className="card order-first min-w-0 px-5 pb-5 pt-4 xl:order-none">
-            <h2 className="mb-3 font-semibold">New channel</h2>
-            <ChannelForm action={createChannelAction} products={products} submitLabel="Create channel" />
-          </section>
-
-          <section className="card min-w-0 px-5 pb-5 pt-4" aria-label="Gamification">
-            <h2 className="font-semibold">Points, levels and badges</h2>
-            <p className="mt-1 text-sm text-muted">
-              Learners earn points for lessons, quizzes, finishing a course and taking part in the community. {creator.gamificationEnabled ? "It's on." : "It's off: nothing is awarded and the leaderboard is hidden."}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <form action={setGamificationAction.bind(null, !creator.gamificationEnabled)}>
-                <button className="btn btn-secondary btn-sm min-h-10">{creator.gamificationEnabled ? "Turn off" : "Turn on"}</button>
+        <section className="card min-w-0 px-5 pb-5 pt-4 xl:col-start-2 xl:row-start-2 xl:self-start" aria-label="Gamification">
+          <h2 className="font-semibold">Points, levels and badges</h2>
+          <p className="mt-1 text-sm text-muted">
+            Learners earn points for lessons, quizzes, finishing a course and taking part in the community. {creator.gamificationEnabled ? "It's on." : "It's off: nothing is awarded and the leaderboard is hidden."}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <form action={setGamificationAction.bind(null, !creator.gamificationEnabled)}>
+              <button className="btn btn-secondary btn-sm min-h-10">{creator.gamificationEnabled ? "Turn off" : "Turn on"}</button>
+            </form>
+            {creator.gamificationEnabled && (
+              <form action={recalculatePointsAction}>
+                <button className="btn btn-secondary btn-sm min-h-10">Recalculate from progress</button>
               </form>
-              {creator.gamificationEnabled && (
-                <form action={recalculatePointsAction}>
-                  <button className="btn btn-secondary btn-sm min-h-10">Recalculate from progress</button>
-                </form>
-              )}
-            </div>
-            {creator.gamificationEnabled && <p className="hint">Recalculate replays existing lesson and quiz progress. Safe to repeat: nothing is awarded twice.</p>}
-          </section>
-        </div>
+            )}
+          </div>
+          {creator.gamificationEnabled && <p className="hint">Recalculate replays existing lesson and quiz progress. Safe to repeat: nothing is awarded twice.</p>}
+        </section>
       </div>
     </>
   );

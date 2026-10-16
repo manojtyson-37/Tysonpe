@@ -64,7 +64,7 @@ export function MemberCardCompact({ profile, leaderboardHref }: { profile: Profi
     <details className="group card lg:hidden">
       <summary className={`flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-[inherit] px-5 py-2 text-sm font-semibold tabular-nums transition-colors duration-150 hover:bg-surface-2 [&::-webkit-details-marker]:hidden ${focusRing}`}>
         <span className="min-w-0 flex-1">
-          Level {level.level} · {points} points{streak > 0 ? ` · ${streak}-day streak` : ""}
+          <span className="sr-only">Your progress: </span>Level {level.level} · {points} points{streak > 0 ? ` · ${streak}-day streak` : ""}
         </span>
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-muted transition-transform duration-150 group-open:rotate-90">
           <path d="m6 3.5 4.5 4.5L6 12.5" />
