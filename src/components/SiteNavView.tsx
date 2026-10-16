@@ -5,12 +5,12 @@ import type { SiteNavItem } from "./site-nav-links";
 import { buttonClass } from "./ui/button";
 
 const navLink =
-  "min-h-10 items-center whitespace-nowrap rounded-control px-2 text-sm font-medium text-muted transition-colors duration-(--dur-fast) hover:text-ink";
+  "min-h-10 items-center pointer-coarse:min-h-11 whitespace-nowrap rounded-control px-2 text-sm font-medium text-muted transition-colors duration-(--dur-fast) hover:text-ink";
 
 type Props = { items: SiteNavItem[]; logoutAction: () => void | Promise<void> };
 
 /**
- * The public header: wordmark, the plain links, one ink action. Below `md` only the wordmark, the ink action and the
+ * The public header: wordmark, the plain links, one ink action. Below `lg` only the wordmark, the ink action and the
  * hamburger show; every other item is in the MobileMenu sheet, which renders the same `items`. No server imports here, so
  * it renders in tests; `SiteNav` supplies the user and the logout server action.
  */
@@ -25,7 +25,7 @@ export function SiteNavView({ items, logoutAction }: Props) {
           {items.map((item) => {
             if (item.kind === "link") {
               return (
-                <Link key={item.key} href={item.href} className={`hidden md:inline-flex ${navLink}`}>
+                <Link key={item.key} href={item.href} className={`hidden lg:inline-flex ${navLink}`}>
                   {item.label}
                 </Link>
               );
@@ -38,7 +38,7 @@ export function SiteNavView({ items, logoutAction }: Props) {
               );
             }
             return (
-              <form key={item.key} action={logoutAction} className="hidden md:block">
+              <form key={item.key} action={logoutAction} className="hidden lg:block">
                 <button className={`inline-flex ${navLink}`} type="submit">
                   {item.label}
                 </button>

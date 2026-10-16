@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { isValidElement, type ReactElement, type ReactNode } from "react";
+import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MobileMenu, MobileMenuView, menuPanelId } from "./MobileMenu";
+import { readFileSync } from "node:fs";
+import { DESKTOP_QUERY, MobileMenu, MobileMenuView, menuPanelId } from "./MobileMenu";
 import { SiteNavView } from "./SiteNavView";
 import { siteNavLinks, type SiteNavUser } from "./site-nav-links";
 import * as dialogModule from "./ui/dialog";
@@ -11,6 +13,13 @@ function tagAttrs(html: string, tag: string): Record<string, string>[] {
   return [...html.matchAll(new RegExp(`<${tag}\\s([^>]*)>`, "g"))].map((match) =>
     Object.fromEntries([...match[1].matchAll(/([\w-]+)="([^"]*)"/g)].map((attr) => [attr[1], attr[2]])),
   );
+}
+
+/** Every element in a returned React tree (host or component) matching `test`, without rendering it. */
+function findElements(node: ReactNode, test: (el: ReactElement<Record<string, unknown>>) => boolean): ReactElement<Record<string, unknown>>[] {
+  if (Array.isArray(node)) return node.flatMap((child) => findElements(child, test));
+  if (!isValidElement<Record<string, unknown>>(node)) return [];
+  return [...(test(node) ? [node] : []), ...findElements(node.props.children as ReactNode, test)];
 }
 
 const noop = () => {};
@@ -47,8 +56,8 @@ describe("MobileMenu trigger (closed state, as rendered on the server)", () => {
     expect(button["aria-controls"]).toMatch(/-panel$/);
   });
 
-  it("is hidden from md up, where the desktop links take over", () => {
-    expect(button.class).toContain("md:hidden");
+  it("is hidden from lg up, where the desktop links take over", () => {
+    expect(button.class).toContain("lg:hidden");
   });
 
   it("uses the shared menu glyph, not a text character", () => {
@@ -122,11 +131,11 @@ describe("MobileMenuView panel", () => {
     expect(backdrop["aria-hidden"]).toBe("true");
   });
 
-  it("is a navigation landmark and is hidden from md up", () => {
+  it("is a navigation landmark and is hidden from lg up", () => {
     const html = panel(null);
     expect(html).toMatch(/<nav [^>]*aria-label="Mobile"/);
     const [root] = tagAttrs(html, "div").filter((a) => "data-menu-root" in a);
-    expect(root.class).toContain("md:hidden");
+    expect(root.class).toContain("lg:hidden");
   });
 
   it("logged out: lists the public links and Log in, with the ink Start selling action", () => {
@@ -153,8 +162,59 @@ describe("MobileMenuView panel", () => {
     expect(hrefs).not.toContain("/dashboard");
   });
 
-  it("clicking any link closes the sheet (links carry no target and keep client navigation)", () => {
+  it("links carry no target, so client navigation is kept", () => {
     for (const a of tagAttrs(panel(null), "a")) expect(a.target).toBeUndefined();
+  });
+
+  it.each(STATES)("%s: every link, the primary action, the close button and the backdrop call onClose", (_name, user) => {
+    const onClose = vi.fn();
+    const items = siteNavLinks({ user, storefrontHandle: "demo" });
+    const tree = MobileMenuView({ panelId: "p", titleId: "t", open: true, items, logoutAction: noop, onClose });
+
+    const links = findElements(tree, (el) => typeof el.props.href === "string");
+    const expected = items.filter((i) => i.kind !== "logout").length;
+    expect(links).toHaveLength(expected);
+    for (const link of links) expect(link.props.onClick, String(link.props.href)).toBe(onClose);
+
+    const closeButton = findElements(tree, (el) => el.props["aria-label"] === "Close menu");
+    const backdrop = findElements(tree, (el) => "data-menu-backdrop" in el.props);
+    expect(closeButton).toHaveLength(1);
+    expect(backdrop).toHaveLength(1);
+    for (const el of [...closeButton, ...backdrop]) expect(el.props.onClick).toBe(onClose);
+
+    for (const el of [...links, ...closeButton, ...backdrop]) (el.props.onClick as () => void)();
+    expect(onClose).toHaveBeenCalledTimes(links.length + 2);
+  });
+
+  it("keeps the two icon buttons at a 44px-wide floor on coarse pointers", () => {
+    const [closeBtn] = tagAttrs(panel(null), "button").filter((a) => a["aria-label"] === "Close menu");
+    expect(closeBtn.class).toContain("pointer-coarse:min-w-11");
+    const items = siteNavLinks({ user: null, storefrontHandle: "demo" });
+    const [trigger] = tagAttrs(renderToStaticMarkup(<MobileMenu items={items} logoutAction={noop} />), "button");
+    expect(trigger.class).toContain("pointer-coarse:min-w-11");
+  });
+});
+
+describe("desktop/mobile switch", () => {
+  // Tailwind's `lg` is 64rem by default; the test fails if the theme ever overrides it, because then the media query
+  // below would no longer be the same width as the `lg:` utilities.
+  const LG_PX = 64 * 16;
+
+  it("DESKTOP_QUERY is the lg breakpoint, so the sheet closes exactly when the desktop links appear", () => {
+    expect(readFileSync("src/app/globals.css", "utf8")).not.toMatch(/--breakpoint-/);
+    expect(DESKTOP_QUERY).toBe(`(min-width: ${LG_PX}px)`);
+  });
+
+  it("the nav, the trigger and the sheet all switch at lg and none at md", () => {
+    const items = siteNavLinks({ user: { creator: {} }, storefrontHandle: "demo" });
+    const markup = [
+      renderToStaticMarkup(<SiteNavView items={items} logoutAction={noop} />),
+      panel({ creator: {} }),
+    ].join("");
+    expect(markup).toContain("lg:inline-flex");
+    expect(markup).toContain("lg:block");
+    expect(markup.match(/\blg:hidden\b/g)?.length).toBeGreaterThanOrEqual(2); // trigger + sheet root
+    expect(markup).not.toMatch(/\bmd:/);
   });
 });
 

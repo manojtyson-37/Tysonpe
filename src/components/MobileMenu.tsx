@@ -15,8 +15,9 @@ export function menuPanelId(uid: string): string {
 
 type LogoutAction = () => void | Promise<void>;
 
-// Matches Tailwind's `md` breakpoint, where the desktop links take over from this menu.
-const DESKTOP_QUERY = "(min-width: 768px)";
+// Matches Tailwind's `lg` breakpoint (64rem), where the desktop links take over from this menu. Every `lg:` class on the
+// nav and this menu must move with it; MobileMenu.test.tsx pins the pair.
+export const DESKTOP_QUERY = "(min-width: 1024px)";
 
 export type MobileMenuViewProps = {
   panelId: string;
@@ -43,7 +44,7 @@ export function MobileMenuView({ panelId, titleId, open, items, logoutAction, on
     <div
       data-menu-root=""
       className={[
-        "fixed inset-0 z-[60] overflow-hidden md:hidden",
+        "fixed inset-0 z-[60] overflow-hidden lg:hidden",
         open ? "visible" : "pointer-events-none invisible transition-[visibility] duration-(--dur-exit)",
       ].join(" ")}
     >
@@ -78,7 +79,7 @@ export function MobileMenuView({ panelId, titleId, open, items, logoutAction, on
             type="button"
             aria-label="Close menu"
             onClick={onClose}
-            className={`${buttonClass({ variant: "ghost", size: "sm" })} px-2`}
+            className={`${buttonClass({ variant: "ghost", size: "sm" })} px-2 pointer-coarse:min-w-11`}
           >
             <IconX size={20} />
           </button>
@@ -122,10 +123,10 @@ const subscribeNever = () => () => {};
 export type MobileMenuProps = { items: SiteNavItem[]; logoutAction: LogoutAction };
 
 /**
- * The hamburger and its sheet, shown below `md`. The sheet is portalled to `<body>` because the sticky header's
+ * The hamburger and its sheet, shown below `lg`. The sheet is portalled to `<body>` because the sticky header's
  * backdrop blur would otherwise become the containing block of a `fixed` child. Focus moves to the close button on open,
  * is trapped while open (Tab cycles), and returns to the hamburger on close; Escape and a backdrop click close it, the
- * page cannot scroll behind it, and growing past `md` closes it.
+ * page cannot scroll behind it, and growing past `lg` closes it.
  */
 export function MobileMenu({ items, logoutAction }: MobileMenuProps) {
   const uid = useId();
@@ -164,7 +165,7 @@ export function MobileMenu({ items, logoutAction }: MobileMenuProps) {
     };
     document.addEventListener("keydown", onKeyDown);
 
-    // The desktop links replace the menu at md; a sheet left open there would lock scroll behind nothing.
+    // The desktop links replace the menu at lg; a sheet left open there would lock scroll behind nothing.
     const query = window.matchMedia(DESKTOP_QUERY);
     const onViewport = () => {
       if (query.matches) setOpen(false);
@@ -198,7 +199,7 @@ export function MobileMenu({ items, logoutAction }: MobileMenuProps) {
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen(true)}
-        className={`${buttonClass({ variant: "ghost", size: "sm" })} -mr-2 px-2 md:hidden`}
+        className={`${buttonClass({ variant: "ghost", size: "sm" })} -mr-2 px-2 pointer-coarse:min-w-11 lg:hidden`}
       >
         <IconMenu size={22} />
       </button>

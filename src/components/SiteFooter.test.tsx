@@ -20,10 +20,29 @@ describe("SiteFooter", () => {
   });
 
   it("closes with a decorative full-width wordmark that assistive tech skips", () => {
-    const svg = html.match(/<svg [^>]*aria-hidden="true"[^>]*viewBox="0 0 1000 230"|<svg [^>]*viewBox="0 0 1000 230"[^>]*aria-hidden="true"/);
-    expect(svg).not.toBeNull();
+    const svg = html.match(/<svg [^>]*class="[^"]*\bw-full\b[^"]*"[^>]*>/)?.[0] ?? "";
+    expect(svg).toContain('aria-hidden="true"');
+    expect(svg).toMatch(/viewBox="0 0 1000 \d+"/);
     expect(html).toContain('textLength="1000"');
     expect(html).toMatch(/<svg [^>]*class="[^"]*\bw-full\b/);
+  });
+
+  it("gives the wordmark's descenders room: the viewBox is taller than baseline + 0.3 em (svg clips overflow)", () => {
+    const viewBoxHeight = Number(html.match(/<svg [^>]*viewBox="0 0 1000 (\d+)"/)?.[1]);
+    const text = html.match(/<text [^>]*>/)?.[0] ?? "";
+    const baseline = Number(text.match(/\by="(\d+)"/)?.[1]);
+    const fontSize = Number(text.match(/font-?[sS]ize="(\d+)"/)?.[1]);
+    expect(viewBoxHeight).toBeGreaterThan(0);
+    expect(baseline).toBeGreaterThan(0);
+    expect(fontSize).toBeGreaterThan(0);
+    expect(viewBoxHeight).toBeGreaterThanOrEqual(baseline + 0.3 * fontSize);
+  });
+
+  it("keeps footer links at the 44px touch floor on coarse pointers, and the blurb at the 15px marketing floor", () => {
+    const links = [...html.matchAll(/<a ([^>]*)>/g)].map((m) => m[1]).filter((a) => !a.includes("aria-label="));
+    expect(links.length).toBeGreaterThan(0);
+    for (const attrs of links) expect(attrs).toContain("pointer-coarse:min-h-11");
+    expect(html).toMatch(/<p class="[^"]*text-\[15px\][^"]*">Storefront, UPI checkout/);
   });
 
   it("clips the oversized wordmark so the page never scrolls sideways", () => {

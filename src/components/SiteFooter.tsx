@@ -14,7 +14,7 @@ export function SiteFooter({ storefrontHandle = DEMO_HANDLE }: { storefrontHandl
             <Link href="/" aria-label="Tysonpe home">
               <Logo className="!text-base text-ink" />
             </Link>
-            <p className="mt-4 max-w-xs text-sm">
+            <p className="mt-4 max-w-xs text-[15px]">
               Storefront, UPI checkout, GST invoices and a learner library for creators in India.
             </p>
           </div>
@@ -26,7 +26,7 @@ export function SiteFooter({ storefrontHandle = DEMO_HANDLE }: { storefrontHandl
                   <li key={link.href}>
                     <Link
                       href={link.href}
-                      className="inline-flex min-h-8 items-center rounded-control text-sm transition-colors duration-(--dur-fast) hover:text-ink"
+                      className="inline-flex min-h-8 items-center pointer-coarse:min-h-11 rounded-control text-sm transition-colors duration-(--dur-fast) hover:text-ink"
                     >
                       {link.label}
                     </Link>
@@ -40,7 +40,7 @@ export function SiteFooter({ storefrontHandle = DEMO_HANDLE }: { storefrontHandl
           © {new Date().getFullYear()} Tysonpe. Payments run in test mode; no real money moves.
         </p>
         {/* The wordmark, once, at the width of the page. Decorative: the real name is the logo link above. */}
-        <svg viewBox="0 0 1000 230" className="mt-6 block w-full select-none text-line-strong" aria-hidden="true" focusable="false">
+        <svg viewBox="0 0 1000 250" className="mt-6 block w-full select-none text-line-strong" aria-hidden="true" focusable="false">
           <text
             x="0"
             y="172"
