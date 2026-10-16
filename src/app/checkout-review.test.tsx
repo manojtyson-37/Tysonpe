@@ -27,6 +27,9 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
+import Link from "next/link";
+import { ActionForm, FormError, Input, SubmitButton } from "@/components/form";
+import { functionProps } from "@/test/rsc-safe";
 import CheckoutPage from "./(site)/checkout/[productId]/page";
 
 // 112000 paise = Rs 1,120 incl. GST. At 12%: GST = 1120 * 12 / 112 = Rs 120. A 10% coupon: -Rs 112, total Rs 1,008, GST Rs 108.
@@ -119,6 +122,19 @@ describe("checkout review: the order summary", () => {
     const inMoney = [...html.matchAll(/<span class="tabular-nums[^"]*">[\u2212]?₹[\d,.]+<\/span>/g)].length;
     expect(rupees).toBeGreaterThan(0);
     expect(inMoney).toBe(rupees);
+  });
+});
+
+describe("checkout review: renders from a server component", () => {
+  // renderToStaticMarkup drops function props, so the HTML tests cannot see what React Server Components reject.
+  // Walk the element tree: the only function allowed to cross is the bound server action on ActionForm.
+  it("passes no function prop anywhere except the server action", async () => {
+    const tree = await CheckoutPage({
+      params: Promise.resolve({ productId: "p1" }),
+      searchParams: Promise.resolve({}),
+    } as never);
+    const clientComponents = [ActionForm, SubmitButton, FormError, Input, Link];
+    expect(functionProps(tree, clientComponents)).toEqual(["<ActionForm>.action"]);
   });
 });
 

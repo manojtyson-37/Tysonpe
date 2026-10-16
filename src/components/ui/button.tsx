@@ -53,6 +53,11 @@ export type ButtonProps = Look &
     children: ReactNode;
   };
 
+/**
+ * Server-safe only without `onClick` or `loading`: with neither, the element carries no function prop and a server
+ * component can render it directly (e.g. a submit button in a plain GET form). Passing either makes it need a client
+ * component, because the handler cannot cross the server/client boundary.
+ */
 export function Button({
   variant,
   size,
@@ -68,13 +73,18 @@ export function Button({
   const cls = [buttonClass({ variant, size }), className].filter(Boolean).join(" ");
   // Loading blocks activation without `disabled`, so keyboard focus is not dropped to <body>.
   // preventDefault also stops a type=submit button from submitting its form.
-  const handleClick: ButtonHTMLAttributes<HTMLButtonElement>["onClick"] = (event) => {
-    if (loading) {
-      event.preventDefault();
-      return;
-    }
-    onClick?.(event);
-  };
+  // Only built when something needs it: a function prop on a plain button would make it unrenderable from a
+  // server component (React Server Components reject event handlers passed to a client boundary).
+  const handleClick: ButtonHTMLAttributes<HTMLButtonElement>["onClick"] =
+    loading || onClick
+      ? (event) => {
+          if (loading) {
+            event.preventDefault();
+            return;
+          }
+          onClick?.(event);
+        }
+      : undefined;
   return (
     <button
       type={type}
