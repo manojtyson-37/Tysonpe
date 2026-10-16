@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { DateCell, EmptyRow, MoneyCell, RowActions, Table, Td, Th, Tr } from "./table";
@@ -11,9 +12,15 @@ import {
 
 const render = (el: React.ReactElement) => renderToStaticMarkup(el);
 
-function sample(props: Partial<React.ComponentProps<typeof Table>> = {}) {
+type SampleProps = { caption?: string; "aria-label"?: string; className?: string; stickyHeader?: boolean; stack?: boolean };
+
+// Table requires a name, so the sample supplies a caption unless the test gives its own caption or aria-label.
+function sample({ caption, "aria-label": ariaLabel, ...rest }: SampleProps = {}) {
+  const name = ariaLabel
+    ? { "aria-label": ariaLabel, caption }
+    : { caption: caption ?? "Recent orders" };
   return (
-    <Table {...props}>
+    <Table {...name} {...rest}>
       <thead>
         <Tr>
           <Th>Order</Th>
@@ -33,7 +40,7 @@ function sample(props: Partial<React.ComponentProps<typeof Table>> = {}) {
 describe("Table", () => {
   it("renders a real table with hairline row separators and no card box", () => {
     const html = render(sample());
-    expect(html).toMatch(/<table class="[^"]*w-full[^"]*"/);
+    expect(html).toMatch(/<table role="table" class="[^"]*w-full[^"]*"/);
     expect(html).toContain("[&amp;_tbody]:divide-y");
     expect(html).toContain("[&amp;_tbody]:divide-line");
     expect(html).toContain("<thead>");
@@ -51,6 +58,19 @@ describe("Table", () => {
     expect(html).not.toMatch(/bg-gradient|background(-image)?:|radial/);
   });
 
+  it("draws the focus ring inset on the wrapper, since the mask would clip an outside outline", () => {
+    expect(render(sample())).toMatch(/^<div [^>]*class="[^"]*focus-visible:outline-offset-\[-2px\]/);
+    expect(render(sample({ stack: true }))).toContain("focus-visible:outline-offset-[-2px]");
+  });
+
+  it("pins explicit ARIA roles so stack mode keeps table semantics in WebKit", () => {
+    const html = render(sample({ stack: true }));
+    expect(html).toMatch(/<table role="table"/);
+    expect(html).toMatch(/<tr role="row"/);
+    expect(html).toMatch(/<th scope="col" role="columnheader"/);
+    expect(html).toMatch(/<td role="cell"/);
+  });
+
   it("uses a visually hidden caption and names the scroll region after it", () => {
     const html = render(sample({ caption: "Recent orders" }));
     expect(html).toContain('<caption class="sr-only">Recent orders</caption>');
@@ -65,11 +85,13 @@ describe("Table", () => {
     expect(html).toMatch(/<div [^>]*aria-label="Payouts"/);
   });
 
-  it("omits the region role and caption when no name is given", () => {
-    const html = render(sample());
-    expect(html).not.toContain("role=");
-    expect(html).not.toContain("<caption");
-    expect(html).not.toContain("aria-label");
+  it("requires a name for the focusable region, by caption or aria-label", () => {
+    // compile-time contract: @ts-expect-error fails typecheck if the unnamed form ever becomes valid
+    // @ts-expect-error a Table needs a caption or an aria-label
+    const unnamed = <Table>{null}</Table>;
+    expect(unnamed).toBeTruthy();
+    expect(render(<Table caption="A">{null}</Table>)).toContain('aria-label="A"');
+    expect(render(<Table aria-label="B">{null}</Table>)).toContain('aria-label="B"');
   });
 
   it("appends className to the scroll wrapper so callers can cap the height", () => {
@@ -123,10 +145,19 @@ describe("Table", () => {
   });
 });
 
+describe("class strings", () => {
+  it("never interpolates inside the exported class-string constants (Tailwind cannot see them)", () => {
+    const src = readFileSync(new URL("./table.tsx", import.meta.url), "utf8");
+    const consts = [...src.matchAll(/^const (FADE|FADE_FROM_SM|HEAD_STATIC|HEAD_STICKY|STACK_TABLE)\b[\s\S]*?;\n/gm)];
+    expect(consts.map((m) => m[1])).toEqual(["FADE", "FADE_FROM_SM", "HEAD_STATIC", "HEAD_STICKY", "STACK_TABLE"]);
+    for (const m of consts) expect(m[0], m[1]).not.toContain("${");
+  });
+});
+
 describe("Th", () => {
   it('is a column heading with scope="col" and the t-label style', () => {
     const html = render(<table><thead><tr><Th>Order</Th></tr></thead></table>);
-    expect(html).toContain('<th scope="col" class="t-label ');
+    expect(html).toContain('<th scope="col" role="columnheader" class="t-label ');
     expect(html).toContain(">Order</th>");
     expect(html).toContain("text-left");
   });
@@ -140,6 +171,8 @@ describe("Th", () => {
   it("supports row headings and className passthrough", () => {
     const html = render(<table><tbody><tr><Th scope="row" className="w-40">Fee</Th></tr></tbody></table>);
     expect(html).toContain('scope="row"');
+    expect(html).toContain('role="rowheader"');
+    expect(html).not.toContain("columnheader");
     expect(html).toMatch(/class="[^"]* w-40"/);
   });
 });
@@ -263,9 +296,10 @@ describe("EmptyRow", () => {
 
   it("is not turned into a label/value block by stack mode", () => {
     const html = render(
-      <Table stack><tbody><EmptyRow colSpan={2} title="Nothing here" /></tbody></Table>,
+      <Table stack caption="Orders"><tbody><EmptyRow colSpan={2} title="Nothing here" /></tbody></Table>,
     );
     expect(html).not.toContain('data-label="');
-    expect(html).toContain('<td colSpan="2" class="px-3 py-10 text-center">');
+    expect(html).toContain('<td role="cell" colSpan="2" class="px-3 py-10 text-center">');
+    expect(html).toContain('<tr role="row">');
   });
 });

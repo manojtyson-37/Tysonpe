@@ -30,14 +30,24 @@ const STACK_TABLE = [
   "max-sm:[&_td:not([colspan])]:before:tracking-[0.06em] max-sm:[&_td:not([colspan])]:before:text-muted",
 ].join(" ");
 
-export type TableProps = {
+// The scroll wrapper is focusable, so it must have a name: pass a caption, an aria-label, or both.
+type TableName =
+  | {
+      /** Visually hidden table title; also names the scroll region. */
+      caption: string;
+      /** Accessible name. Wins over `caption` for the region name. */
+      "aria-label"?: string;
+    }
+  | {
+      caption?: string;
+      /** Accessible name. Wins over `caption` for the region name. */
+      "aria-label": string;
+    };
+
+export type TableProps = TableName & {
   children: ReactNode;
   /** Classes for the scroll wrapper. With `stickyHeader`, cap its height here (for example `max-h-96`). */
   className?: string;
-  /** Visually hidden table title; also names the scroll region. */
-  caption?: string;
-  /** Accessible name when there is no caption. Wins over `caption` for the region name. */
-  "aria-label"?: string;
   /** Pins the head cells while the body scrolls inside the wrapper. Needs a height cap via `className`. */
   stickyHeader?: boolean;
   /** Below sm, render each row as label/value blocks (CSS only; pass `label` to each Td). */
@@ -47,10 +57,15 @@ export type TableProps = {
 /**
  * A real <table> in a keyboard-focusable horizontal scroll wrapper. No card box: rows are separated by
  * hairlines and the head carries the `.t-label` style. Compose with <thead>/<tbody>, Tr, Th and Td.
+ *
+ * The wrapper always reserves a fixed `pr-5` of end padding (from `sm` up with `stack`) for the scroll fade,
+ * so do not override its right padding via `className`. Header rows should use a plain <tr>, not Tr, which
+ * applies a hover fill meant for body rows. Needs `caption` or `aria-label` (it names the focusable region).
  */
 export function Table({ children, className, caption, "aria-label": ariaLabel, stickyHeader = false, stack = false }: TableProps) {
   const regionName = ariaLabel ?? caption;
-  const wrapperCls = join("overflow-x-auto", stack ? FADE_FROM_SM : FADE, className);
+  // The mask clips the global outside focus outline, so the ring is drawn inset on the wrapper.
+  const wrapperCls = join("overflow-x-auto focus-visible:outline-offset-[-2px]", stack ? FADE_FROM_SM : FADE, className);
   const tableCls = join(
     "w-full text-left text-sm [&_tbody]:divide-y [&_tbody]:divide-line",
     stickyHeader ? HEAD_STICKY : HEAD_STATIC,
@@ -60,10 +75,10 @@ export function Table({ children, className, caption, "aria-label": ariaLabel, s
     <div
       className={wrapperCls}
       tabIndex={0}
-      role={regionName ? "region" : undefined}
+      role="region"
       aria-label={regionName}
     >
-      <table className={tableCls} aria-label={ariaLabel} data-stack={stack ? "true" : undefined}>
+      <table role="table" className={tableCls} aria-label={ariaLabel} data-stack={stack ? "true" : undefined}>
         {caption && <caption className="sr-only">{caption}</caption>}
         {children}
       </table>
@@ -80,6 +95,7 @@ export function Th({
   return (
     <th
       scope={scope}
+      role={scope === "row" ? "rowheader" : "columnheader"}
       className={join("t-label px-3 py-2.5 align-bottom", align === "right" ? "text-right" : "text-left", className)}
       {...rest}
     />
@@ -90,6 +106,7 @@ export function Th({
 export function Tr({ className, ...rest }: ComponentPropsWithoutRef<"tr">) {
   return (
     <tr
+      role="row"
       className={join("transition-colors duration-(--dur-fast) ease-(--ease-standard) hover:bg-surface-2", className)}
       {...rest}
     />
@@ -108,6 +125,7 @@ export function Td({
 }) {
   return (
     <td
+      role="cell"
       data-label={label}
       className={join("px-3 py-3 align-middle text-sm", align === "right" && "text-right", className)}
       {...rest}
@@ -191,8 +209,8 @@ export function EmptyRow({
   action?: ReactNode;
 }) {
   return (
-    <tr>
-      <td colSpan={colSpan} className="px-3 py-10 text-center">
+    <tr role="row">
+      <td role="cell" colSpan={colSpan} className="px-3 py-10 text-center">
         <p className="text-sm font-semibold">{title}</p>
         {body && <p className="mx-auto mt-1 max-w-sm text-sm text-muted">{body}</p>}
         {action && <div className="mt-4 flex justify-center">{action}</div>}
