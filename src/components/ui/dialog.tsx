@@ -148,6 +148,20 @@ export function lockBodyScroll(body: BodyLike, scrollbarWidth: number): () => vo
   };
 }
 
+export type DialogFocusStep = "enter" | "return" | "none";
+
+/**
+ * What a change of `open` means for focus. Focus goes back to the opener only on a real open -> closed transition, and
+ * the Dialog does that in a layout-effect body (the commit's layout phase), never in an effect cleanup: React restores
+ * the previously focused element (the Cancel button, still mounted while the exit animation runs) AFTER the mutation
+ * phase, where cleanups run, so a focus call made in a cleanup is overwritten and focus ends on the dialog, then on body.
+ */
+export function dialogFocusStep(wasOpen: boolean, isOpen: boolean): DialogFocusStep {
+  if (isOpen && !wasOpen) return "enter";
+  if (!isOpen && wasOpen) return "return";
+  return "none";
+}
+
 export type ConfirmState = { open: boolean; submit: boolean };
 export type ConfirmAction = "open" | "confirm" | "cancel" | "submitted";
 
@@ -309,12 +323,19 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
 
   useEffect(() => releaseScroll, [releaseScroll]);
 
+  const returnFocus = useCallback(() => {
+    const trigger = focusTargetRef.current;
+    if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+    focusReturnedRef.current = !trigger || document.activeElement === trigger;
+  }, []);
+
   useLayoutEffect(() => {
     const panel = panelRef.current;
     if (!open || !panel) return;
 
     const active = document.activeElement;
     const trigger = returnFocusRef?.current ?? (active instanceof HTMLElement && active !== document.body ? active : null);
+    focusTargetRef.current = trigger;
 
     const origin = originFromRects(trigger?.getBoundingClientRect() ?? null, panel.getBoundingClientRect());
     originX.set(origin.x);
@@ -350,13 +371,27 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       openDialogs = popDialog(openDialogs, uid);
-      // Same path for Escape, Cancel and the backdrop: focus goes back to the opener at once, not after the exit animation.
-      focusTargetRef.current = trigger;
-      if (trigger?.isConnected) trigger.focus({ preventScroll: true });
-      focusReturnedRef.current = !trigger || document.activeElement === trigger;
+      // Focus is NOT returned here: see dialogFocusStep. The effect below does it, after React has restored focus.
       fallbackRef.current = setTimeout(releaseScroll, EXIT_FALLBACK_MS);
     };
   }, [open, mounted, uid, initialFocusRef, returnFocusRef, originX, originY, releaseScroll]);
+
+  // Same path for Escape, Cancel and the backdrop: focus goes back to the opener at once, not after the exit animation.
+  // This is the layout phase of the closing commit, which runs after React has restored the previously focused element.
+  const wasOpenRef = useRef(false);
+  useLayoutEffect(() => {
+    const step = dialogFocusStep(wasOpenRef.current, open);
+    wasOpenRef.current = open;
+    if (step === "return") returnFocus();
+  }, [open, returnFocus]);
+
+  // Unmounted while still open (a route change): there is no closing commit, so give focus back here.
+  useLayoutEffect(
+    () => () => {
+      if (wasOpenRef.current) returnFocus();
+    },
+    [returnFocus],
+  );
 
   const handleExitComplete = () => {
     releaseScroll();

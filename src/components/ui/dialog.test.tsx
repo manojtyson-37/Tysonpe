@@ -6,6 +6,7 @@ import {
   DialogView,
   confirmReducer,
   dialogMotion,
+  dialogFocusStep,
   dialogMotionPlan,
   isTopDialog,
   lockBodyScroll,
@@ -108,6 +109,24 @@ describe("dialogMotionPlan", () => {
       expect(plan.load).toBe(false);
       expect(plan.motion).toBeUndefined();
     }
+  });
+});
+
+describe("dialogFocusStep", () => {
+  // Regression: after Esc/Cancel/backdrop, document.activeElement was BODY instead of the trigger. The trigger was
+  // focused in the effect cleanup (mutation phase); React then restored focus to the still-mounted Cancel button, and
+  // the panel unmounted. Focus must go back in the layout-effect body, on a real open -> closed transition only.
+  it("returns focus to the opener only when the dialog goes from open to closed", () => {
+    expect(dialogFocusStep(true, false)).toBe("return");
+  });
+
+  it("does nothing on the first render, while closed, or while staying open", () => {
+    expect(dialogFocusStep(false, false)).toBe("none");
+    expect(dialogFocusStep(true, true)).toBe("none");
+  });
+
+  it("moves focus into the dialog only when it goes from closed to open", () => {
+    expect(dialogFocusStep(false, true)).toBe("enter");
   });
 });
 
