@@ -13,12 +13,14 @@ export interface EmptyStateProps {
   body?: string;
   action?: EmptyActionItem;
   secondaryAction?: EmptyActionItem;
+  /** Extra classes for every action, e.g. a touch-target floor. */
+  actionClassName?: string;
   inline?: boolean;
   className?: string;
 }
 
-function ActionButton({ item, primary }: { item: EmptyActionItem; primary: boolean }) {
-  const cls = primary ? "btn btn-primary" : "btn btn-outline";
+function ActionButton({ item, primary, className }: { item: EmptyActionItem; primary: boolean; className?: string }) {
+  const cls = [primary ? "btn btn-primary" : "btn btn-secondary", className].filter(Boolean).join(" ");
   if (item.href) {
     return (
       <Link href={item.href} className={cls}>
@@ -40,6 +42,7 @@ export function EmptyState({
   body,
   action,
   secondaryAction,
+  actionClassName,
   inline = false,
   className,
 }: EmptyStateProps) {
@@ -57,8 +60,8 @@ export function EmptyState({
       {body && <p className="mt-1 max-w-sm text-sm text-muted">{body}</p>}
       {(action || secondaryAction) && (
         <div className="mt-5 flex flex-wrap justify-center gap-3">
-          {action && <ActionButton item={action} primary />}
-          {secondaryAction && <ActionButton item={secondaryAction} primary={false} />}
+          {action && <ActionButton item={action} primary className={actionClassName} />}
+          {secondaryAction && <ActionButton item={secondaryAction} primary={false} className={actionClassName} />}
         </div>
       )}
     </div>

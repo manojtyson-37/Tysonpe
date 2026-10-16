@@ -57,6 +57,29 @@ describe("EmptyState", () => {
     expect(html).toContain(">Learn more<");
   });
 
+  // `.btn-outline` has never existed in globals.css, so the secondary action rendered unstyled. `.btn-secondary` does.
+  it("styles the secondary action with the real btn-secondary class, as an anchor or a button", () => {
+    for (const secondaryAction of [{ label: "Learn more", href: "/docs" }, { label: "Learn more", onClick: vi.fn() }]) {
+      const html = render(<EmptyState title="No data" action={{ label: "Import", href: "/import" }} secondaryAction={secondaryAction} />);
+      expect(html).toContain('class="btn btn-secondary"');
+      expect(html).toContain('class="btn btn-primary"');
+      expect(html).not.toContain("btn-outline");
+    }
+  });
+
+  it("lets the caller put a size floor on every action", () => {
+    const html = render(
+      <EmptyState
+        title="No data"
+        actionClassName="pointer-coarse:min-h-11"
+        action={{ label: "Import", href: "/import" }}
+        secondaryAction={{ label: "Learn more", onClick: vi.fn() }}
+      />
+    );
+    expect(html).toContain('class="btn btn-primary pointer-coarse:min-h-11"');
+    expect(html).toContain('class="btn btn-secondary pointer-coarse:min-h-11"');
+  });
+
   it("default mode includes a card class", () => {
     const html = render(<EmptyState title="Empty" />);
     expect(html).toMatch(/\bcard\b/);

@@ -4,8 +4,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Button } from "@/components/ui/button";
 import NotFound from "./not-found";
 import ErrorPage from "./error";
-import ConsoleLoading from "./dashboard/(console)/loading";
-import LibraryLoading from "./(site)/library/loading";
+import ConsoleLoading from "./dashboard/(console)/(overview)/loading";
+import LibraryLoading from "./(site)/library/(list)/loading";
 
 const render = (el: React.ReactElement) => renderToStaticMarkup(el);
 const hrefs = (html: string) => [...html.matchAll(/<a [^>]*href="([^"]*)"/g)].map((m) => m[1]);
@@ -54,19 +54,21 @@ describe("error boundary", () => {
   const error = Object.assign(new Error("connect ECONNREFUSED 10.0.0.7:5432"), { digest: "d4f9a1" });
   error.stack = "Error: connect ECONNREFUSED\n    at /srv/app/.next/server/chunks/db.js:12:3";
 
-  it("wires the retry control to reset", () => {
-    const reset = vi.fn();
-    const tree = ErrorPage({ error, reset });
-    const retry = find(tree, (el) => el.type === Button);
-    expect(retry).toHaveLength(1);
-    expect((retry[0].props as { onClick: unknown }).onClick).toBe(reset);
-    (retry[0].props as { onClick: () => void }).onClick();
-    expect(reset).toHaveBeenCalledTimes(1);
+  // Next 16 hands error.tsx `retry` (re-fetches the server payload), not the old `reset` (re-renders the same
+  // failed one). A server-component failure is the common case here, so reset would leave the button looking dead.
+  it("wires the retry control to retry", () => {
+    const retry = vi.fn();
+    const tree = ErrorPage({ error, retry });
+    const buttons = find(tree, (el) => el.type === Button);
+    expect(buttons).toHaveLength(1);
+    expect((buttons[0].props as { onClick: unknown }).onClick).toBe(retry);
+    (buttons[0].props as { onClick: () => void }).onClick();
+    expect(retry).toHaveBeenCalledTimes(1);
     expect(render(tree)).toMatch(/<button [^>]*type="button"[^>]*>Try again<\/button>/);
   });
 
   it("never prints the message or the stack, but labels the digest as a reference", () => {
-    const html = render(ErrorPage({ error, reset: () => {} }));
+    const html = render(ErrorPage({ error, retry: () => {} }));
     expect(html).not.toContain("ECONNREFUSED");
     expect(html).not.toContain("10.0.0.7");
     expect(html).not.toContain("/srv/app");
@@ -75,13 +77,13 @@ describe("error boundary", () => {
   });
 
   it("omits the reference line when there is no digest", () => {
-    const html = render(ErrorPage({ error: new Error("boom"), reset: () => {} }));
+    const html = render(ErrorPage({ error: new Error("boom"), retry: () => {} }));
     expect(html).not.toContain("Error reference");
     expect(html).not.toContain("boom");
   });
 
   it("links out to the home page, announces the failure once, and keeps the copy plain", () => {
-    const html = render(ErrorPage({ error, reset: () => {} }));
+    const html = render(ErrorPage({ error, retry: () => {} }));
     expect(hrefs(html)).toEqual(["/"]);
     expect(count(html, 'role="alert"')).toBe(1);
     expect(html).toMatch(/<main id="main"/);
@@ -109,7 +111,7 @@ describe("console loading", () => {
 
   it("is static and hidden from assistive tech, with one status line", () => {
     expect(html).not.toMatch(/animate-|spinner/);
-    expect(html).toMatch(/^<span role="status" class="sr-only">Loading<\/span><div aria-hidden="true">/);
+    expect(html).toMatch(/^<span role="status" class="sr-only">Loading this page<\/span><div aria-hidden="true">/);
     expect(count(html, 'role="status"')).toBe(1);
     expect(html).not.toMatch(/<main/); // the layout owns main#main
   });

@@ -24,8 +24,9 @@ vi.mock("@/lib/auth/session", async (importActual) => ({
 vi.mock("@/components/SiteNav", () => ({ SiteNav: () => <nav data-testid="site-nav" /> }));
 
 import { AuthShell } from "@/components/AuthShell";
+import { SignupForm } from "@/components/SignupForm";
 import LoginPage from "./(site)/login/page";
-import SignupPage from "./(site)/signup/page";
+import SignupPage, { generateMetadata as signupMetadata } from "./(site)/signup/page";
 import Onboarding from "./dashboard/onboarding/page";
 
 const params = (sp: Record<string, string> = {}) => ({ searchParams: Promise.resolve(sp) }) as never;
@@ -62,6 +63,26 @@ describe("the auth pages render through AuthShell", () => {
       const out = html(await SignupPage(params(sp)));
       expect(out).toMatch(/<h1[^>]*>Create your account<\/h1>/);
     }
+  });
+
+  // The h1 is only the label; the field the form acts on is the prop. Pin it for every variant.
+  it("sign up: SignupForm receives initialRole creator for role=creator, learner otherwise", async () => {
+    const initialRole = async (sp: Record<string, string>) => {
+      const forms = elementsOfType(await SignupPage(params(sp)), SignupForm);
+      expect(forms).toHaveLength(1);
+      return (forms[0].props as { initialRole: string }).initialRole;
+    };
+    expect(await initialRole({ role: "creator" })).toBe("creator");
+    expect(await initialRole({})).toBe("learner");
+    expect(await initialRole({ role: "admin" })).toBe("learner");
+    expect(await initialRole({ next: "/library" })).toBe("learner");
+  });
+
+  it("sign up: the tab title agrees with the heading", async () => {
+    const title = async (sp: Record<string, string>) => ((await signupMetadata(params(sp))) as { title: string }).title;
+    expect(await title({ role: "creator" })).toBe("Open your store");
+    expect(await title({})).toBe("Create your account");
+    expect(await title({ role: "admin" })).toBe("Create your account");
   });
 
   it("sign up: role=creator opens a store, and the footer links to log in", async () => {

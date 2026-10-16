@@ -41,7 +41,7 @@ function StepRow() {
 export default function ConsoleLoading() {
   return (
     <>
-      <span role="status" className="sr-only">Loading</span>
+      <span role="status" className="sr-only">Loading this page</span>
       <div aria-hidden="true">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
           <div>

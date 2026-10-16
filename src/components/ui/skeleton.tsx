@@ -23,9 +23,8 @@ export function Skeleton({
   return (
     <div
       aria-hidden="true"
-
       style={style}
-      className={["rounded bg-line", className].filter(Boolean).join(" ")}
+      className={["rounded-control bg-line", className].filter(Boolean).join(" ")}
     />
   );
 }
@@ -44,7 +43,7 @@ export function SkeletonText({
         <div
           key={i}
           className={[
-            "h-3 rounded bg-line",
+            "h-3 rounded-control bg-line",
             // Last line is slightly shorter to look natural
             i === lines - 1 && lines > 1 ? "w-3/4" : "w-full",
           ]
@@ -67,7 +66,6 @@ export function SkeletonAvatar({
   return (
     <div
       aria-hidden="true"
-
       style={{ width: `${size}px`, height: `${size}px` }}
       className={["shrink-0 rounded-full bg-line", className].filter(Boolean).join(" ")}
     />

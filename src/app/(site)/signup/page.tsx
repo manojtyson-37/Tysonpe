@@ -5,7 +5,11 @@ import { AuthShell } from "@/components/AuthShell";
 import { SignupForm } from "@/components/SignupForm";
 import { getCurrentUser, safeNext } from "@/lib/auth/session";
 
-export const metadata: Metadata = { title: "Create your account" };
+// The marketing CTA links here with role=creator, whose heading is "Open your store": the tab title says the same.
+export async function generateMetadata({ searchParams }: PageProps<"/signup">): Promise<Metadata> {
+  const sp = await searchParams;
+  return { title: sp.role === "creator" ? "Open your store" : "Create your account" };
+}
 
 export default async function SignupPage({ searchParams }: PageProps<"/signup">) {
   const sp = await searchParams;

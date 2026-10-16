@@ -30,7 +30,8 @@ describe("DASH_NAV_ITEMS", () => {
 
   it("every href is a page under the (console) group, so no link 404s", () => {
     for (const item of DASH_NAV_ITEMS) {
-      const dir = item.href === "/dashboard" ? "" : `/${item.href.slice("/dashboard/".length)}`;
+      // Overview sits in its own (overview) group so its loading skeleton does not cover the other console pages.
+      const dir = item.href === "/dashboard" ? "/(overview)" : `/${item.href.slice("/dashboard/".length)}`;
       expect(existsSync(`src/app/dashboard/(console)${dir}/page.tsx`), item.href).toBe(true);
     }
   });

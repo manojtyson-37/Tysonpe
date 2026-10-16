@@ -26,6 +26,13 @@ describe("Skeleton", () => {
     expect(html).toContain("h-4");
   });
 
+  it("uses the radius token, not Tailwind's default rounded", () => {
+    for (const html of [render(<Skeleton />), render(<SkeletonText />)]) {
+      expect(html).toContain("rounded-control");
+      expect(html).not.toMatch(/class="[^"]*\brounded\b(?!-)/);
+    }
+  });
+
   it("no animate-pulse (anti-slop constraint)", () => {
     const html = render(<Skeleton />);
     expect(html).not.toContain("animate-pulse");
