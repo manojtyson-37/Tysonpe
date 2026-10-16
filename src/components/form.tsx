@@ -161,7 +161,7 @@ function useFieldA11y(
   const errId = `${id}-err`;
   const messageId = error ? errId : hint ? hintId : undefined;
   const describedBy = join(extraDescribedBy, messageId) || undefined;
-  const invalid = error ? true : undefined;
+  const invalid = error ? true : callerInvalid === true || callerInvalid === "true" ? true : undefined;
   return {
     id,
     hintId,
