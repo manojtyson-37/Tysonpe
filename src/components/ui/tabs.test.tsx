@@ -12,6 +12,7 @@ import {
   indicatorTransition,
   isKeyboardClick,
   isLinkActive,
+  linkItemBase,
   nextIndex,
   nextKeyboardDriven,
   tabId,
@@ -209,6 +210,46 @@ describe("Tabs (link mode)", () => {
   it("renders when pathname is unavailable", () => {
     mockPath = null;
     expect(renderToStaticMarkup(<Tabs ariaLabel="Dashboard" items={items} />)).not.toContain("aria-current");
+  });
+});
+
+describe("Tabs (link mode, vertical)", () => {
+  const items = [
+    { href: "/dashboard", label: "Overview", match: "exact" as const },
+    { href: "/dashboard/orders", label: "Orders" },
+  ];
+
+  it("stacks full-width rows, aligns labels to the start and keeps the 44px row", () => {
+    mockPath = "/dashboard/orders";
+    const html = renderToStaticMarkup(<Tabs ariaLabel="Dashboard" orientation="vertical" items={items} />);
+    expect(html).toMatch(/^<nav [^>]*class="[^"]*flex-col[^"]*items-stretch/);
+    expect(tagAttrs(html, "a").every((a) => a.class.includes("justify-start") && a.class.includes("min-h-11"))).toBe(true);
+    expect(html).not.toContain("justify-center");
+  });
+
+  it("the active row is semibold where idle rows are medium, and still carries aria-current", () => {
+    mockPath = "/dashboard/orders";
+    const [overview, orders] = tagAttrs(renderToStaticMarkup(<Tabs ariaLabel="Dashboard" orientation="vertical" items={items} />), "a");
+    expect(orders["aria-current"]).toBe("page");
+    expect(orders.class).toContain("font-semibold");
+    expect(orders.class).not.toContain("font-medium");
+    expect(overview["aria-current"]).toBeUndefined();
+    expect(overview.class).toContain("font-medium");
+    expect(overview.class).not.toContain("font-semibold");
+  });
+
+  it("horizontal (the default) is unchanged: centred labels, medium weight even when active", () => {
+    mockPath = "/dashboard/orders";
+    const html = renderToStaticMarkup(<Tabs ariaLabel="Dashboard" items={items} />);
+    expect(html).not.toContain("flex-col");
+    expect(html).not.toContain("font-semibold");
+    expect(tagAttrs(html, "a").every((a) => a.class.includes("justify-center"))).toBe(true);
+  });
+
+  it("linkItemBase swaps the weight rather than stacking two", () => {
+    expect(linkItemBase(true, true)).toContain("font-semibold");
+    expect(linkItemBase(true, true)).not.toContain("font-medium");
+    expect(linkItemBase(false, true)).toContain("font-medium");
   });
 });
 

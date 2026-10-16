@@ -11,6 +11,15 @@ export type SiteNavItem =
 export type SiteNavUser = { creator: object | null } | null;
 
 /**
+ * The storefront the nav links to: the signed-in creator's own handle, else the demo handle (which is empty on a
+ * deployment with no demo creator). A creator must never be sent to the demo storefront instead of their own, so the
+ * handle wins over the fallback whenever there is one. `demoHandle` is a parameter to keep this module free of imports.
+ */
+export function storefrontHandleFor(user: { creator: { handle: string } | null } | null | undefined, demoHandle: string): string {
+  return user?.creator?.handle ?? demoHandle;
+}
+
+/**
  * Nav items in desktop order. `storefrontHandle` is the signed-in creator's handle, else the demo handle; empty hides
  * the sample-storefront link (a deployment without a demo creator).
  */

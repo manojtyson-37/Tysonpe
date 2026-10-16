@@ -12,6 +12,24 @@ export function nextFocusIndex(current: number, count: number, shift: boolean): 
   return shift ? (current - 1 + count) % count : (current + 1) % count;
 }
 
+/**
+ * Whether a Tab press must be handled by the trap rather than left to the browser. True when focus is outside the
+ * trap's focusable list (`index` -1) or on the element Tab would leave through: the last one, or with Shift the first.
+ * Inside the list the native Tab order already stays in the panel, so this is false there. An empty list (count 0) is
+ * always an edge, so focus is pulled back onto the panel itself.
+ */
+export function tabAtEdge(index: number, count: number, shift: boolean): boolean {
+  return index === -1 || (shift ? index === 0 : index === count - 1);
+}
+
+/**
+ * Whether an Escape keydown is not ours to act on: another handler already used it (a native control such as an open
+ * select called preventDefault), or an IME is composing and Escape only cancels the composition.
+ */
+export function escapeAlreadyHandled(event: { defaultPrevented: boolean; isComposing: boolean }): boolean {
+  return event.defaultPrevented || event.isComposing;
+}
+
 type BodyLike = { style: { overflow: string; paddingRight: string } };
 
 const scrollLocks = new WeakMap<object, { count: number; overflow: string; paddingRight: string }>();

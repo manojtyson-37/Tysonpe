@@ -1,8 +1,7 @@
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { readFileSync } from "node:fs";
-import { DESKTOP_QUERY, MobileMenu, MobileMenuView, menuPanelId } from "./MobileMenu";
+import { MobileMenu, MobileMenuView } from "./MobileMenu";
 import { SiteNavView } from "./SiteNavView";
 import { siteNavLinks, type SiteNavUser } from "./site-nav-links";
 import * as dialogModule from "./ui/dialog";
@@ -15,11 +14,19 @@ function tagAttrs(html: string, tag: string): Record<string, string>[] {
   );
 }
 
-/** Every element in a returned React tree (host or component) matching `test`, without rendering it. */
+/**
+ * Every element in a returned React tree (host or component) matching `test`, without mounting it. Function components
+ * with no hooks (SheetView, the menu body) are called so their output is searched too.
+ */
 function findElements(node: ReactNode, test: (el: ReactElement<Record<string, unknown>>) => boolean): ReactElement<Record<string, unknown>>[] {
   if (Array.isArray(node)) return node.flatMap((child) => findElements(child, test));
   if (!isValidElement<Record<string, unknown>>(node)) return [];
-  return [...(test(node) ? [node] : []), ...findElements(node.props.children as ReactNode, test)];
+  const own = test(node) ? [node] : [];
+  if (typeof node.type === "function") {
+    const render = node.type as (props: Record<string, unknown>) => ReactNode;
+    return [...own, ...findElements(render(node.props), test)];
+  }
+  return [...own, ...findElements(node.props.children as ReactNode, test)];
 }
 
 const noop = () => {};
@@ -35,12 +42,6 @@ function panel(user: SiteNavUser, open = true) {
     <MobileMenuView panelId="p1" titleId="t1" open={open} items={items} logoutAction={noop} onClose={noop} />,
   );
 }
-
-describe("menuPanelId", () => {
-  it("derives a stable panel id from the useId value", () => {
-    expect(menuPanelId("abc")).toBe("abc-panel");
-  });
-});
 
 describe("MobileMenu trigger (closed state, as rendered on the server)", () => {
   const items = siteNavLinks({ user: null, storefrontHandle: "demo" });
@@ -83,6 +84,7 @@ describe("MobileMenuView panel", () => {
 
   it("ties to the trigger: the trigger's aria-controls is the panel id", () => {
     const trigger = renderToStaticMarkup(<MobileMenu items={[]} logoutAction={noop} />);
+    expect(trigger).toMatch(/aria-controls="[^"]+-panel"/);
     const controls = tagAttrs(trigger, "button")[0]["aria-controls"];
     const html = renderToStaticMarkup(
       <MobileMenuView panelId={controls} titleId="t" open items={[]} logoutAction={noop} onClose={noop} />,
@@ -198,15 +200,7 @@ describe("MobileMenuView panel", () => {
 });
 
 describe("desktop/mobile switch", () => {
-  // Tailwind's `lg` is 64rem by default; the test fails if the theme ever overrides it, because then the media query
-  // below would no longer be the same width as the `lg:` utilities.
-  const LG_PX = 64 * 16;
-
-  it("DESKTOP_QUERY is the lg breakpoint, so the sheet closes exactly when the desktop links appear", () => {
-    expect(readFileSync("src/app/globals.css", "utf8")).not.toMatch(/--breakpoint-/);
-    expect(DESKTOP_QUERY).toBe(`(min-width: ${LG_PX}px)`);
-  });
-
+  // The DESKTOP_QUERY width pin lives in ui/sheet.test.tsx, next to the constant it guards.
   it("the nav, the trigger and the sheet all switch at lg and none at md", () => {
     const items = siteNavLinks({ user: { creator: {} }, storefrontHandle: "demo" });
     const markup = [

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { footerGroups, siteNavLinks } from "./site-nav-links";
+import { footerGroups, siteNavLinks, storefrontHandleFor } from "./site-nav-links";
 
 const pairs = (items: ReturnType<typeof siteNavLinks>) =>
   items.map((i) => [i.kind, i.label, "href" in i ? i.href : null]);
@@ -68,5 +68,31 @@ describe("footerGroups", () => {
   it("omits the sample storefront when there is no demo handle", () => {
     const hrefs = footerGroups({ storefrontHandle: "" }).flatMap((g) => g.links.map((l) => l.href));
     expect(hrefs.some((h) => h.startsWith("/c/"))).toBe(false);
+  });
+});
+
+describe("storefrontHandleFor", () => {
+  it("a signed-in creator gets their own handle, never the demo one", () => {
+    expect(storefrontHandleFor({ creator: { handle: "asha" } }, "demo")).toBe("asha");
+  });
+
+  it.each([
+    ["logged out", null],
+    ["logged in without a creator profile", { creator: null }],
+    ["an unresolved user", undefined],
+  ] as const)("%s: falls back to the demo handle", (_name, user) => {
+    expect(storefrontHandleFor(user, "demo")).toBe("demo");
+  });
+
+  it("with no demo creator the fallback is empty, which hides the sample storefront link", () => {
+    const handle = storefrontHandleFor(null, "");
+    expect(handle).toBe("");
+    expect(siteNavLinks({ user: null, storefrontHandle: handle }).some((i) => i.kind === "link" && i.key === "storefront")).toBe(false);
+  });
+
+  it("feeds the nav so a creator's Sample storefront link is their own page", () => {
+    const user = { creator: { handle: "asha" } };
+    const items = siteNavLinks({ user, storefrontHandle: storefrontHandleFor(user, "demo") });
+    expect(items.find((i) => i.key === "storefront")).toMatchObject({ href: "/c/asha" });
   });
 });

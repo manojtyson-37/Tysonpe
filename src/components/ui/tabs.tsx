@@ -4,7 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useId, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { MotionConfig, m } from "framer-motion";
+import { isLinkActive, type TabMatch } from "./link-active";
 import { OverlayMotion } from "./motion";
+
+// The active-link rule lives in ./link-active (pure, so non-client modules can share it); re-exported for existing imports.
+export { isLinkActive };
+export type { TabMatch };
 
 /* ------------------------------------------------------------------ pure helpers */
 
@@ -59,16 +64,6 @@ export function isKeyboardClick(event: { detail: number }): boolean {
 export function nextKeyboardDriven(source: "key" | "click", event?: { detail: number }): boolean {
   if (source === "key") return true;
   return event ? isKeyboardClick(event) : false;
-}
-
-export type TabMatch = "exact" | "prefix";
-
-/** Whether `pathname` is "inside" `href`. `prefix` (default) respects segment boundaries: /a matches /a/b but not /ab. */
-export function isLinkActive(pathname: string, href: string, match: TabMatch = "prefix"): boolean {
-  const target = href.split(/[?#]/)[0] || "/";
-  if (match === "exact") return pathname === target;
-  if (target === "/") return pathname === "/";
-  return pathname === target || pathname.startsWith(`${target}/`);
 }
 
 /** Stable DOM ids that tie a tab to its panel. Used by `Tabs` and by `TabPanel`. */
@@ -135,6 +130,16 @@ const ITEM_TONE = {
   idle: "text-muted hover:text-ink",
 };
 
+/**
+ * Link-mode item base. Vertical lists align labels to the start, and the active item swaps `font-medium` for
+ * `font-semibold` (replaced, not stacked, so the heavier weight cannot lose a cascade tie).
+ */
+export function linkItemBase(vertical: boolean, active: boolean): string {
+  if (!vertical) return ITEM_BASE;
+  const base = ITEM_BASE.replace("justify-center", "justify-start");
+  return active ? base.replace("font-medium", "font-semibold") : base;
+}
+
 type Variant = "tabs" | "segmented";
 
 // Tabs: the active item gets a tone-step pill on the canvas. Segmented: a recessed track with a raised hairline thumb.
@@ -187,7 +192,14 @@ export type StateTabItem = { value: string; label: ReactNode };
 
 type CommonProps = { ariaLabel: string; className?: string };
 
-export type LinkTabsProps = CommonProps & { items: LinkTabItem[] };
+export type LinkTabsProps = CommonProps & {
+  items: LinkTabItem[];
+  /**
+   * `vertical` stacks the links in a full-width column for a sidebar: labels align to the start, and the active link
+   * gains weight as well as tone (ink on the surface-2 pill, semibold), so the state never rests on colour alone.
+   */
+  orientation?: "horizontal" | "vertical";
+};
 
 export type StateTabsProps = CommonProps & {
   items: StateTabItem[];
@@ -214,7 +226,8 @@ export function Tabs(props: TabsProps) {
   return isStateTabs(props) ? <StateTabs {...props} /> : <LinkTabs {...props} />;
 }
 
-function LinkTabs({ items, ariaLabel, className }: LinkTabsProps) {
+function LinkTabs({ items, ariaLabel, className, orientation = "horizontal" }: LinkTabsProps) {
+  const vertical = orientation === "vertical";
   const pathname = usePathname() ?? "";
   const uid = useId();
   const layoutId = `${uid}-indicator`;
@@ -223,7 +236,10 @@ function LinkTabs({ items, ariaLabel, className }: LinkTabsProps) {
   const [keyboardDriven, setKeyboardDriven] = useState(false);
   return (
     <Motion>
-      <nav aria-label={ariaLabel} className={[LIST_CLASS.tabs, className].filter(Boolean).join(" ")}>
+      <nav
+        aria-label={ariaLabel}
+        className={[vertical ? "flex flex-col items-stretch gap-0.5" : LIST_CLASS.tabs, className].filter(Boolean).join(" ")}
+      >
         {items.map((item) => {
           const active = item.current ?? isLinkActive(pathname, item.href, item.match);
           return (
@@ -232,7 +248,7 @@ function LinkTabs({ items, ariaLabel, className }: LinkTabsProps) {
               href={item.href}
               aria-current={active ? "page" : undefined}
               onClick={(event) => setKeyboardDriven(nextKeyboardDriven("click", event))}
-              className={`${ITEM_BASE} ${active ? ITEM_TONE.active : ITEM_TONE.idle}`}
+              className={`${linkItemBase(vertical, active)} ${active ? ITEM_TONE.active : ITEM_TONE.idle}`}
             >
               {active && <Indicator layoutId={layoutId} variant="tabs" keyboardDriven={keyboardDriven} />}
               <span className="relative">{item.label}</span>
