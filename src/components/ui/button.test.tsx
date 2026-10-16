@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Button, ButtonLink, buttonClass } from "./button";
@@ -33,29 +34,50 @@ describe("Button", () => {
     expect(html).toContain('class="btn btn-danger btn-sm w-full"');
   });
 
-  it("renders the icon slot before the label, hidden from assistive tech", () => {
+  it("renders the icon slot before the label", () => {
     const html = renderToStaticMarkup(<Button icon={<IconPlus />}>New product</Button>);
     expect(html.indexOf("<svg")).toBeGreaterThan(-1);
     expect(html.indexOf("<svg")).toBeLessThan(html.indexOf("New product"));
-    expect(html).toContain('aria-hidden="true"');
   });
 
-  it("when loading: aria-busy, disabled, spinner shown, label kept so width does not change", () => {
+  it("when loading: busy and aria-disabled but still focusable, spinner shown, label stays in the accessibility tree", () => {
     const html = renderToStaticMarkup(<Button loading icon={<IconPlus />}>Pay now</Button>);
     expect(html).toContain('aria-busy="true"');
-    expect(html).toContain("disabled");
+    expect(html).toContain('aria-disabled="true"');
+    // No disabled attribute: a disabled button would drop keyboard focus to <body>.
+    expect(html).not.toMatch(/\sdisabled(=|\s|>)/);
     expect(html).toContain("animate-spin");
     expect(html).toContain("Pay now");
-    expect(html).toContain("invisible");
-    // Icon and label stay in layout (invisible) so the width is unchanged; one spinner overlays them.
+    // opacity-0 keeps the label in layout (width unchanged) and in the accessibility tree; `invisible` would remove both.
+    expect(html).toContain("opacity-0");
+    expect(html).not.toContain("invisible");
     expect(html.match(/animate-spin/g)).toHaveLength(1);
     expect(html.match(/<svg/g)).toHaveLength(2);
   });
 
+  it("blocks activation while loading (preventDefault, user handler not called) and passes clicks through otherwise", () => {
+    const calls: string[] = [];
+    const onClick = () => calls.push("click");
+    const click = (props: Parameters<typeof Button>[0]) => {
+      const el = Button(props) as ReactElement<{ onClick: (e: { preventDefault: () => void }) => void }>;
+      el.props.onClick({ preventDefault: () => calls.push("prevented") });
+    };
+    click({ loading: true, onClick, children: "Pay" });
+    expect(calls).toEqual(["prevented"]);
+    calls.length = 0;
+    click({ onClick, children: "Pay" });
+    expect(calls).toEqual(["click"]);
+  });
+
+  it("keeps the real disabled attribute for the disabled prop, even while loading", () => {
+    expect(renderToStaticMarkup(<Button loading disabled>Pay</Button>)).toMatch(/\sdisabled(=|\s|>)/);
+  });
+
   it("is disabled but not busy when only disabled", () => {
     const html = renderToStaticMarkup(<Button disabled>Save</Button>);
-    expect(html).toContain("disabled");
+    expect(html).toMatch(/\sdisabled(=|\s|>)/);
     expect(html).not.toContain("aria-busy");
+    expect(html).not.toContain("aria-disabled");
     expect(html).not.toContain("animate-spin");
   });
 });

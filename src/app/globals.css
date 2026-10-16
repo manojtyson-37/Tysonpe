@@ -207,6 +207,8 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
     transition-duration: var(--dur-fast);
     transition-timing-function: var(--ease-standard);
   }
+  /* Loading: not `disabled` (keeps keyboard focus); inert to the pointer, drawn at full opacity. */
+  .btn[aria-busy="true"] { pointer-events: none; opacity: 1; }
   .btn:active:not(:disabled) { transform: scale(var(--scale-press-lg)); }
   .btn-primary { @apply bg-brand text-brand-ink hover:bg-brand/85; }
   .btn-secondary { @apply border border-line-strong bg-surface text-ink hover:bg-surface-2; }

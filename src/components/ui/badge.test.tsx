@@ -16,6 +16,12 @@ describe("Badge", () => {
     );
   });
 
+  it("appends a className passthrough after the tone class", () => {
+    expect(renderToStaticMarkup(<Badge tone="good" className="ml-2">x</Badge>)).toBe(
+      '<span class="badge badge-good ml-2">x</span>',
+    );
+  });
+
   it("defaults to neutral with no dot", () => {
     const html = renderToStaticMarkup(<Badge>Draft</Badge>);
     expect(html).toContain("badge-muted");

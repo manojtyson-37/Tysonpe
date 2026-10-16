@@ -11,9 +11,19 @@ const TONE_CLASS: Record<BadgeTone, string> = {
 };
 
 /** Full-radius label with a semantic soft fill. Use sparingly: not a decoration beside titles. */
-export function Badge({ tone = "neutral", dot = false, children }: { tone?: BadgeTone; dot?: boolean; children: ReactNode }) {
+export function Badge({
+  tone = "neutral",
+  dot = false,
+  className,
+  children,
+}: {
+  tone?: BadgeTone;
+  dot?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
   return (
-    <span className={`badge ${TONE_CLASS[tone]}`}>
+    <span className={["badge", TONE_CLASS[tone], className].filter(Boolean).join(" ")}>
       {dot && <span aria-hidden="true" className="mr-1.5 size-1.5 rounded-full bg-current" />}
       {children}
     </span>

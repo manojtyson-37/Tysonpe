@@ -6,6 +6,7 @@ export type SurfacePadding = "sm" | "md" | "lg";
 
 // default: white card on the paper canvas. inset: recessed band. paper: canvas colour inside a tinted band.
 // interactive: card with the single hover recipe (border and tone shift). No resting shadow in any tone.
+// `interactive` only styles hover: it must wrap or contain a link or button, which supplies the focus and activation.
 const TONE_CLASS: Record<SurfaceTone, string> = {
   default: "card",
   inset: "rounded-card bg-surface-2",

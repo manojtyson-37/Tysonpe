@@ -45,7 +45,10 @@ function Spinner() {
 
 export type ButtonProps = Look &
   Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & {
-    /** Shows a spinner, sets aria-busy and blocks clicks. The label stays in layout so the width does not change. */
+    /**
+     * Shows a spinner, sets aria-busy/aria-disabled and blocks activation. The button stays focusable (no `disabled`
+     * attribute) and the label stays in layout and in the accessibility tree, so the width and the name do not change.
+     */
     loading?: boolean;
     children: ReactNode;
   };
@@ -58,21 +61,33 @@ export function Button({
   type = "button",
   className,
   disabled,
+  onClick,
   children,
   ...rest
 }: ButtonProps) {
-  const cls = [buttonClass({ variant, size }), loading && "disabled:opacity-100", className].filter(Boolean).join(" ");
+  const cls = [buttonClass({ variant, size }), className].filter(Boolean).join(" ");
+  // Loading blocks activation without `disabled`, so keyboard focus is not dropped to <body>.
+  // preventDefault also stops a type=submit button from submitting its form.
+  const handleClick: ButtonHTMLAttributes<HTMLButtonElement>["onClick"] = (event) => {
+    if (loading) {
+      event.preventDefault();
+      return;
+    }
+    onClick?.(event);
+  };
   return (
     <button
       type={type}
       className={cls}
-      disabled={disabled || loading}
+      disabled={disabled}
       aria-busy={loading || undefined}
+      aria-disabled={loading || undefined}
+      onClick={handleClick}
       {...rest}
     >
       {loading ? (
         <>
-          <span className="invisible inline-flex items-center justify-center gap-2">
+          <span className="inline-flex items-center justify-center gap-2 opacity-0">
             {icon}
             {children}
           </span>
