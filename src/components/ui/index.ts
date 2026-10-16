@@ -12,3 +12,5 @@ export { Progress } from "./progress";
 export type { ProgressTone } from "./progress";
 export { Avatar } from "./avatar";
 export type { AvatarSize } from "./avatar";
+export { Table, Th, Tr, Td, MoneyCell, DateCell, RowActions, EmptyRow } from "./table";
+export type { TableProps } from "./table";
