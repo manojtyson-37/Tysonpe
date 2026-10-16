@@ -116,7 +116,14 @@ export function SubmitButton({
       size={size ?? look.size}
       className={look.className}
     >
-      {pending ? pendingText : children}
+      {children}
+      {/*
+        The visible label never changes, so the button keeps its width and a screen reader does not re-read
+        the whole control. The pending text is announced once from a polite live region instead.
+      */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {pending ? pendingText : ""}
+      </span>
     </Button>
   );
 }
@@ -136,20 +143,32 @@ type FieldChrome = {
   error?: ReactNode;
 };
 
-function useFieldA11y(idProp: string | undefined, hint: ReactNode, error: ReactNode, extraDescribedBy?: string) {
+/**
+ * One id drives label[for], aria-describedby and aria-invalid. A caller's own `aria-invalid` and
+ * `aria-describedby` are merged in rather than dropped: the control is invalid if either the field has an
+ * `error` or the caller says so, and both the caller's description ids and ours are announced.
+ */
+function useFieldA11y(
+  idProp: string | undefined,
+  hint: ReactNode,
+  error: ReactNode,
+  extraDescribedBy?: string,
+  callerInvalid?: ComponentProps<"input">["aria-invalid"],
+) {
   const uid = useId();
   const id = idProp ?? uid;
   const hintId = `${id}-hint`;
   const errId = `${id}-err`;
   const messageId = error ? errId : hint ? hintId : undefined;
   const describedBy = join(extraDescribedBy, messageId) || undefined;
+  const invalid = error ? true : undefined;
   return {
     id,
     hintId,
     errId,
     control: {
       id,
-      "aria-invalid": error ? (true as const) : undefined,
+      "aria-invalid": invalid,
       "aria-describedby": describedBy,
     },
   };
@@ -196,7 +215,7 @@ export type InputProps = Omit<ComponentProps<"input">, "prefix"> & FieldChrome;
 
 /** `className` lands on the wrapper; the control keeps the `.input` token look (44px tall on touch). */
 export function Input({ label, hint, error, id: idProp, className, ...rest }: InputProps) {
-  const a = useFieldA11y(idProp, hint, error, rest["aria-describedby"]);
+  const a = useFieldA11y(idProp, hint, error, rest["aria-describedby"], rest["aria-invalid"]);
   return (
     <FieldFrame id={a.id} hintId={a.hintId} errId={a.errId} label={label} hint={hint} error={error} className={className}>
       <input {...rest} {...a.control} className="input" />
@@ -207,7 +226,7 @@ export function Input({ label, hint, error, id: idProp, className, ...rest }: In
 export type TextareaProps = ComponentProps<"textarea"> & FieldChrome;
 
 export function Textarea({ label, hint, error, id: idProp, className, rows = 4, ...rest }: TextareaProps) {
-  const a = useFieldA11y(idProp, hint, error, rest["aria-describedby"]);
+  const a = useFieldA11y(idProp, hint, error, rest["aria-describedby"], rest["aria-invalid"]);
   return (
     <FieldFrame id={a.id} hintId={a.hintId} errId={a.errId} label={label} hint={hint} error={error} className={className}>
       <textarea {...rest} {...a.control} rows={rows} className="input" />
@@ -219,14 +238,17 @@ export type SelectProps = ComponentProps<"select"> & FieldChrome;
 
 /** A real <select> (native menu, keyboard and mobile pickers) with the browser arrow swapped for the icon chevron. */
 export function Select({ label, hint, error, id: idProp, className, children, ...rest }: SelectProps) {
-  const a = useFieldA11y(idProp, hint, error, rest["aria-describedby"]);
+  const a = useFieldA11y(idProp, hint, error, rest["aria-describedby"], rest["aria-invalid"]);
   return (
     <FieldFrame id={a.id} hintId={a.hintId} errId={a.errId} label={label} hint={hint} error={error} className={className}>
       <div className="relative">
-        <select {...rest} {...a.control} className="input appearance-none pr-10">
+        <select {...rest} {...a.control} className="peer input appearance-none pr-10">
           {children}
         </select>
-        <IconChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
+        <IconChevronDown
+          size={16}
+          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted peer-disabled:opacity-50"
+        />
       </div>
     </FieldFrame>
   );
@@ -244,7 +266,7 @@ const ADDON = "flex items-center whitespace-nowrap bg-surface-2 px-3 text-sm tex
 
 /** One bordered control with attached prefix/suffix text. The group draws the border and focus state for its input. */
 export function InputGroup({ label, hint, error, id: idProp, className, prefix, suffix, ...rest }: InputGroupProps) {
-  const a = useFieldA11y(idProp, hint, error, rest["aria-describedby"]);
+  const a = useFieldA11y(idProp, hint, error, rest["aria-describedby"], rest["aria-invalid"]);
   return (
     <FieldFrame id={a.id} hintId={a.hintId} errId={a.errId} label={label} hint={hint} error={error} className={className}>
       <div
@@ -253,13 +275,15 @@ export function InputGroup({ label, hint, error, id: idProp, className, prefix, 
           "transition-colors duration-(--dur-fast) ease-(--ease-standard)",
           "focus-within:border-ink has-[[aria-invalid=true]]:border-bad",
           "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ink",
+          // The group owns the border and background, so the disabled look is drawn here, matching `.input`.
+          "has-[:disabled]:cursor-not-allowed has-[:disabled]:bg-surface-2 has-[:disabled]:text-muted",
         )}
       >
         {prefix ? <span className={join(ADDON, "border-r border-line")}>{prefix}</span> : null}
         <input
           {...rest}
           {...a.control}
-          className="min-w-0 flex-1 bg-transparent px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/70 focus-visible:outline-none pointer-coarse:min-h-11"
+          className="min-w-0 flex-1 bg-transparent px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/70 focus-visible:outline-none disabled:cursor-not-allowed disabled:text-muted pointer-coarse:min-h-11"
         />
         {suffix ? <span className={join(ADDON, "border-l border-line")}>{suffix}</span> : null}
       </div>
@@ -271,10 +295,13 @@ export type CheckboxProps = Omit<ComponentProps<"input">, "type" | "prefix"> & F
 
 /** Native checkbox, 20px box, whole row is the click target (44px on touch). */
 export function Checkbox({ label, hint, error, id: idProp, className, ...rest }: CheckboxProps) {
-  const a = useFieldA11y(idProp, hint, error, rest["aria-describedby"]);
+  const a = useFieldA11y(idProp, hint, error, rest["aria-describedby"], rest["aria-invalid"]);
   return (
     <div className={className}>
-      <label htmlFor={a.id} className="flex cursor-pointer items-start gap-3 py-1.5 pointer-coarse:py-3">
+      <label
+        htmlFor={a.id}
+        className="flex cursor-pointer items-start gap-3 py-1.5 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60 pointer-coarse:py-3"
+      >
         <input
           {...rest}
           {...a.control}
@@ -292,19 +319,23 @@ export type SwitchProps = Omit<ComponentProps<"input">, "type" | "role" | "prefi
 
 /** A native checkbox with role="switch"; the track and thumb are drawn from `:checked` through peer classes. */
 export function Switch({ label, hint, error, id: idProp, className, ...rest }: SwitchProps) {
-  const a = useFieldA11y(idProp, hint, error, rest["aria-describedby"]);
+  const a = useFieldA11y(idProp, hint, error, rest["aria-describedby"], rest["aria-invalid"]);
   return (
     <div className={className}>
-      <label htmlFor={a.id} className="flex cursor-pointer items-start gap-3 py-1.5 pointer-coarse:py-2.5">
+      <label
+        htmlFor={a.id}
+        className="flex cursor-pointer items-start gap-3 py-1.5 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60 pointer-coarse:py-2.5"
+      >
         <input {...rest} {...a.control} type="checkbox" role="switch" className="peer sr-only" />
         <span
           aria-hidden="true"
           className={join(
-            "relative mt-px inline-block h-6 w-11 shrink-0 rounded-full bg-line-strong",
+            "relative mt-px inline-block h-6 w-11 shrink-0 rounded-full bg-muted",
             "transition-colors duration-(--dur-fast) ease-(--ease-standard)",
             "peer-checked:bg-ink peer-disabled:opacity-50",
             "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink",
             "after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-surface",
+            "after:border after:border-line",
             "after:transition-transform after:duration-(--dur-fast) after:ease-(--ease-standard)",
             "peer-checked:after:translate-x-5",
           )}
@@ -347,7 +378,8 @@ export function RadioCard({ title, description, trailing, children, className, .
       <span
         className={join(
           "flex items-start justify-between gap-3 rounded-card border border-line bg-surface py-4 pl-11 pr-4",
-          "transition-colors duration-(--dur-fast) ease-(--ease-standard) hover:border-line-strong",
+          "transition-colors duration-(--dur-fast) ease-(--ease-standard)",
+          "peer-enabled:hover:border-line-strong",
           "peer-checked:border-ink peer-checked:bg-surface-2",
           "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink",
           "peer-disabled:cursor-not-allowed peer-disabled:opacity-50",
@@ -363,7 +395,7 @@ export function RadioCard({ title, description, trailing, children, className, .
       <span
         aria-hidden="true"
         className={join(
-          "absolute left-4 top-[1.125rem] size-4 rounded-full border border-line-strong bg-surface",
+          "absolute left-4 top-[1.125rem] size-4 rounded-full border border-muted bg-surface",
           "transition-colors duration-(--dur-fast) ease-(--ease-standard)",
           "peer-checked:border-[5px] peer-checked:border-ink peer-disabled:opacity-50",
         )}
@@ -404,9 +436,11 @@ export function ColorField({
           disabled={disabled}
           aria-label="Pick a colour"
           onChange={(e) => {
-            setPicker(e.target.value);
-            setText(e.target.value);
-            onChange?.(e.target.value);
+            // <input type="color"> reports uppercase in some browsers; one casing reaches state and the caller.
+            const hex = e.target.value.toLowerCase();
+            setPicker(hex);
+            setText(hex);
+            onChange?.(hex);
           }}
           className="h-10 w-12 shrink-0 cursor-pointer rounded-control border border-line-strong bg-surface p-1 pointer-coarse:h-11 pointer-coarse:w-14"
         />
@@ -423,11 +457,12 @@ export function ColorField({
           autoComplete="off"
           autoCapitalize="off"
           onChange={(e) => {
+            // Typing keeps the user's casing in the box; what leaves the field is always lowercase.
             const v = e.target.value;
             setText(v);
             if (isHexColor(v)) {
               setPicker(v.toLowerCase());
-              onChange?.(v);
+              onChange?.(v.toLowerCase());
             }
           }}
           className="input w-32 tabular-nums"

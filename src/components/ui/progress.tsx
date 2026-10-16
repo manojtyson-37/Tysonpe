@@ -38,7 +38,7 @@ export function Progress({
         aria-valuemin={0}
         aria-valuemax={safeMax || 100}
         aria-valuetext={text}
-        className="h-1.5 flex-1 overflow-hidden rounded-full bg-line"
+        className="h-1.5 flex-1 overflow-hidden rounded-full bg-line-strong"
       >
         <div className={`h-full rounded-full ${FILL_CLASS[tone]}`} style={{ width: `${pct}%` }} />
       </div>

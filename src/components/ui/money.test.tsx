@@ -17,6 +17,35 @@ describe("Money", () => {
     expect(formatINR(49900)).toBe("₹499");
   });
 
+  it("prints an em dash for a non-finite amount so formatINR never sees NaN", () => {
+    for (const bad of [NaN, Infinity, -Infinity]) {
+      const html = render(<Money paise={bad} />);
+      expect(html).toContain("\u2014");
+      expect(html).not.toContain("NaN");
+      expect(html).not.toContain("Infinity");
+      expect(html).not.toContain("₹");
+    }
+  });
+
+  it("a non-finite amount is not treated as Free", () => {
+    expect(render(<Money paise={NaN} free />)).not.toContain("Free");
+  });
+
+  it("Price treats a non-finite amount as free: the dash shows, the period and GST note are dropped", () => {
+    // Price has no compare-at prop, so "free" here means no period and no tax note beside the amount.
+    for (const bad of [NaN, Infinity]) {
+      const html = render(<Price paise={bad} period="month" gstNote="incl. GST" />);
+      expect(html).toContain("\u2014");
+      expect(html).not.toContain("₹");
+      expect(html).not.toContain("month");
+      expect(html).not.toContain("incl. GST");
+    }
+    // Control: the same props with a real amount keep both.
+    const real = render(<Price paise={50000} period="month" gstNote="incl. GST" />);
+    expect(real).toContain("/ month");
+    expect(real).toContain("incl. GST");
+  });
+
   it("is re-exported through the ui barrel and Price through the index", () => {
     expect(MoneyFromUi).toBe(Money);
     expect(PriceFromIndex).toBe(Price);

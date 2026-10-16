@@ -4,14 +4,82 @@ import { renderToStaticMarkup } from "react-dom/server";
 let mockPath: string | null = "/dashboard/orders/123";
 vi.mock("next/navigation", () => ({ usePathname: () => mockPath }));
 
-import { SegmentedControl, TabPanel, Tabs, indicatorTransition, isLinkActive, nextIndex, tabId, tabPanelId } from "./tabs";
+import {
+  SegmentedControl,
+  TabPanel,
+  Tabs,
+  hasSelectionModifier,
+  indicatorTransition,
+  isKeyboardClick,
+  isLinkActive,
+  nextIndex,
+  nextKeyboardDriven,
+  tabId,
+  tabPanelId,
+} from "./tabs";
 
-/** Attributes of every `<tag ...>` in the markup, so assertions do not depend on attribute order. */
+/**
+ * Attributes of every `<tag ...>` in the markup, so assertions do not depend on attribute order. The tag body
+ * is matched as a run of quoted strings and non-`>` characters, so a `>` inside an attribute value (a Tailwind
+ * arbitrary variant such as `has-[[aria-invalid=true]]`, or a label containing one) does not end the tag early.
+ */
 function tagAttrs(html: string, tag: string): Record<string, string>[] {
-  return [...html.matchAll(new RegExp(`<${tag}\\s([^>]*)>`, "g"))].map((match) =>
+  return [...html.matchAll(new RegExp(`<${tag}\\s((?:"[^"]*"|'[^']*'|[^>"'])*)>`, "g"))].map((match) =>
     Object.fromEntries([...match[1].matchAll(/([\w-]+)="([^"]*)"/g)].map((attr) => [attr[1], attr[2]])),
   );
 }
+
+describe("tagAttrs", () => {
+  it("does not end a tag at a > inside an attribute value", () => {
+    const attrs = tagAttrs('<button class="has-[[aria-invalid=true]]>x" data-k="v">hi</button>', "button");
+    expect(attrs).toHaveLength(1);
+    expect(attrs[0]["data-k"]).toBe("v");
+  });
+});
+
+describe("hasSelectionModifier", () => {
+  it("is false for a bare arrow press", () => {
+    expect(hasSelectionModifier({})).toBe(false);
+    expect(hasSelectionModifier({ altKey: false, ctrlKey: false, metaKey: false })).toBe(false);
+  });
+
+  it("is true when alt, ctrl or meta is held, so browser and OS shortcuts are left alone", () => {
+    expect(hasSelectionModifier({ altKey: true })).toBe(true);
+    expect(hasSelectionModifier({ ctrlKey: true })).toBe(true);
+    expect(hasSelectionModifier({ metaKey: true })).toBe(true);
+  });
+
+  it("ignores shift, which does not carry a browser arrow shortcut", () => {
+    expect(hasSelectionModifier({ altKey: false, ctrlKey: false, metaKey: false })).toBe(false);
+  });
+});
+
+describe("isKeyboardClick", () => {
+  it("treats detail 0 as Enter or Space on the focused button", () => {
+    expect(isKeyboardClick({ detail: 0 })).toBe(true);
+  });
+
+  it("treats a real pointer click (detail 1 or more) as not keyboard", () => {
+    expect(isKeyboardClick({ detail: 1 })).toBe(false);
+    expect(isKeyboardClick({ detail: 2 })).toBe(false);
+  });
+});
+
+describe("nextKeyboardDriven", () => {
+  it("always snaps for an arrow or Home/End move", () => {
+    expect(nextKeyboardDriven("key")).toBe(true);
+    expect(nextKeyboardDriven("key", { detail: 1 })).toBe(true);
+  });
+
+  it("snaps a keyboard-activated click and slides a pointer click", () => {
+    expect(nextKeyboardDriven("click", { detail: 0 })).toBe(true);
+    expect(nextKeyboardDriven("click", { detail: 1 })).toBe(false);
+  });
+
+  it("slides when a click carries no detail at all", () => {
+    expect(nextKeyboardDriven("click")).toBe(false);
+  });
+});
 
 describe("nextIndex", () => {
   it("moves forward with ArrowRight and ArrowDown, wrapping at the end", () => {

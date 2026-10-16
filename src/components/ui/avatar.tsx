@@ -1,3 +1,5 @@
+import { AvatarImage } from "./avatar-image";
+
 export type AvatarSize = "sm" | "md" | "lg" | "xl";
 
 const SIZE_CLASS: Record<AvatarSize, string> = {
@@ -8,8 +10,9 @@ const SIZE_CLASS: Record<AvatarSize, string> = {
 };
 
 /**
- * Letter tile (ink on paper, flat) with an optional photo. `size` is a named step, or a pixel number for
+ * Letter tile (brand fill, flat) with an optional photo. `size` is a named step, or a pixel number for
  * call sites that need an exact box. The tile is decorative: the name is always printed beside it.
+ * The letter is always drawn; a photo layers over it, so a photo that fails to load falls back to the letter.
  */
 export function Avatar({
   name,
@@ -27,10 +30,11 @@ export function Avatar({
 }) {
   const sized =
     typeof size === "number"
-      ? { className: "", style: { width: size, height: size, fontSize: size * 0.4 } }
+      ? // 12px floor: below that the letter is unreadable and the tile should read as a plain swatch.
+        { className: "", style: { width: size, height: size, fontSize: Math.max(12, size * 0.4) } }
       : { className: SIZE_CLASS[size], style: undefined };
   const cls = [
-    "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-control bg-brand text-brand-ink font-semibold",
+    "relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-control bg-brand text-brand-ink font-semibold",
     sized.className,
     className,
   ]
@@ -38,12 +42,8 @@ export function Avatar({
     .join(" ");
   return (
     <span aria-hidden={src && alt ? undefined : true} style={sized.style} className={cls}>
-      {src ? (
-        // eslint-disable-next-line @next/next/no-img-element -- remote creator photos have no known size or host
-        <img src={src} alt={alt ?? ""} className="size-full object-cover" />
-      ) : (
-        name.trim().charAt(0).toUpperCase()
-      )}
+      {name.trim().charAt(0).toUpperCase()}
+      {src ? <AvatarImage src={src} alt={alt ?? ""} /> : null}
     </span>
   );
 }

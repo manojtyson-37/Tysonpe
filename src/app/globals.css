@@ -234,7 +234,11 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
     transition-timing-function: var(--ease-standard);
   }
   .input[aria-invalid="true"] { border-color: var(--bad); }
-  /* Touch: inputs, selects and textareas are at least 44px tall. Desktop keeps the compact drawn size. */
+  /*
+    Touch: inputs, selects and textareas are at least 44px tall (WCAG 2.5.8 target size). Desktop keeps the
+    compact drawn size. Controls that do not carry `.input` — the bare input inside InputGroup, the colour
+    swatch — reach the same floor with the `pointer-coarse:min-h-11` utility at their call site.
+  */
   @media (pointer: coarse) {
     .input { min-height: 44px; }
   }

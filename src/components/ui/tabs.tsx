@@ -36,6 +36,31 @@ export function nextIndex(current: number, key: string, count: number, arrows: A
   }
 }
 
+/**
+ * Modifier-held arrows are browser and OS shortcuts (back/forward, Spaces, word jumps), so the tablist must
+ * leave them alone rather than swallowing them to move the selection.
+ */
+export function hasSelectionModifier(event: { altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }): boolean {
+  return Boolean(event.altKey || event.ctrlKey || event.metaKey);
+}
+
+/**
+ * A click event with `detail === 0` came from Enter or Space on the focused button, not from a pointer:
+ * browsers only set a click count for real pointer clicks.
+ */
+export function isKeyboardClick(event: { detail: number }): boolean {
+  return event.detail === 0;
+}
+
+/**
+ * Whether the indicator should snap rather than slide after a selection change. Keyboard-driven changes snap,
+ * because an indicator chasing arrow-key presses lags behind the focus ring.
+ */
+export function nextKeyboardDriven(source: "key" | "click", event?: { detail: number }): boolean {
+  if (source === "key") return true;
+  return event ? isKeyboardClick(event) : false;
+}
+
 export type TabMatch = "exact" | "prefix";
 
 /** Whether `pathname` is "inside" `href`. `prefix` (default) respects segment boundaries: /a matches /a/b but not /ab. */
@@ -83,15 +108,16 @@ function useRovingSelection(values: string[], value: string, onChange: (value: s
     type: "button" as const,
     tabIndex: index === tabStop ? 0 : -1,
     onClick: (event: MouseEvent<HTMLButtonElement>) => {
-      // A click with detail 0 is Enter or Space on the focused button, not a pointer.
-      setKeyboardDriven(event.detail === 0);
+      setKeyboardDriven(nextKeyboardDriven("click", event));
       onChange(values[index]);
     },
     onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => {
+      // Leave Alt/Ctrl/Meta-held arrows to the browser and OS.
+      if (hasSelectionModifier(event)) return;
       const next = nextIndex(index, event.key, values.length, arrows);
       if (next === index) return;
       event.preventDefault();
-      setKeyboardDriven(true);
+      setKeyboardDriven(nextKeyboardDriven("key"));
       refs.current[next]?.focus();
       onChange(values[next]);
     },
@@ -192,6 +218,9 @@ function LinkTabs({ items, ariaLabel, className }: LinkTabsProps) {
   const pathname = usePathname() ?? "";
   const uid = useId();
   const layoutId = `${uid}-indicator`;
+  // A link tab navigates, so the indicator's next move happens on the new pathname. Remember how the last
+  // activation was made so a keyboard-activated tab snaps, matching the state-mode tablist.
+  const [keyboardDriven, setKeyboardDriven] = useState(false);
   return (
     <Motion>
       <nav aria-label={ariaLabel} className={[LIST_CLASS.tabs, className].filter(Boolean).join(" ")}>
@@ -202,9 +231,10 @@ function LinkTabs({ items, ariaLabel, className }: LinkTabsProps) {
               key={item.href}
               href={item.href}
               aria-current={active ? "page" : undefined}
+              onClick={(event) => setKeyboardDriven(nextKeyboardDriven("click", event))}
               className={`${ITEM_BASE} ${active ? ITEM_TONE.active : ITEM_TONE.idle}`}
             >
-              {active && <Indicator layoutId={layoutId} variant="tabs" />}
+              {active && <Indicator layoutId={layoutId} variant="tabs" keyboardDriven={keyboardDriven} />}
               <span className="relative">{item.label}</span>
             </Link>
           );

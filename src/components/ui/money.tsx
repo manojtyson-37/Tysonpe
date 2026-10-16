@@ -37,7 +37,8 @@ function signFor(paise: number, sign: MoneySign | undefined): string {
 
 /**
  * The only way to print a rupee amount. All formatting goes through formatINR (output is test-pinned);
- * the sign is added here from the absolute value so a hyphen can never leak in.
+ * the sign is added here from the absolute value so a hyphen can never leak in. A non-finite amount (NaN from
+ * a bad parse, Infinity from a divide) never reaches formatINR: it prints as an em dash rather than "₹NaN".
  */
 export function Money({
   paise,
@@ -58,7 +59,11 @@ export function Money({
   mono?: boolean;
   className?: string;
 }) {
-  const text = free && paise === 0 ? "Free" : signFor(paise, sign) + formatINR(Math.abs(paise));
+  const text = !Number.isFinite(paise)
+    ? "\u2014"
+    : free && paise === 0
+      ? "Free"
+      : signFor(paise, sign) + formatINR(Math.abs(paise));
   const cls = ["tabular-nums whitespace-nowrap", mono && "font-mono", SIZE_CLASS[size], TONE_CLASS[tone], className]
     .filter(Boolean)
     .join(" ");
@@ -81,7 +86,7 @@ export function Price({
   size?: MoneySize;
   className?: string;
 }) {
-  const isFree = paise === 0;
+  const isFree = paise === 0 || !Number.isFinite(paise);
   return (
     <span className={["inline-flex flex-wrap items-baseline gap-x-1.5", className].filter(Boolean).join(" ")}>
       <Money paise={paise} free size={size} />

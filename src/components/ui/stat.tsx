@@ -56,8 +56,9 @@ export function StatStrip({ items, className }: { items: StatStripItem[]; classN
     .join(" ");
   return (
     <div className={cls}>
-      {items.map((item) => (
-        <Stat key={item.label} {...item} className="sm:px-6 sm:first:pl-0" />
+      {/* Index key: a strip may legitimately repeat a label (two "Net" columns for two periods). */}
+      {items.map((item, i) => (
+        <Stat key={i} {...item} className="sm:px-6 sm:first:pl-0" />
       ))}
     </div>
   );

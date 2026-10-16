@@ -60,4 +60,11 @@ describe("Progress", () => {
   it("is re-exported through the ui barrel", () => {
     expect(ProgressFromUi).toBe(Progress);
   });
+
+  it("draws the empty track in the stronger hairline so the bar reads at 3:1", () => {
+    const html = render(<Progress value={0} label="Course completion" />);
+    const track = html.match(/<div role="progressbar"[^>]*>/)?.[0] ?? "";
+    expect(track).toContain("bg-line-strong");
+    expect(track).not.toMatch(/\bbg-line\b(?!-)/);
+  });
 });

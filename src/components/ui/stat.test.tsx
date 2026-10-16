@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MetricList, MetricRow, Stat, StatStrip } from "./stat";
 import { Stat as StatFromUi, StatStrip as StripFromIndex, MetricRow as RowFromUi } from "@/components/ui";
@@ -64,6 +64,27 @@ describe("StatStrip", () => {
   });
 });
 
+describe("StatStrip keys", () => {
+  it("renders every item even when two share a label, without a duplicate-key warning", () => {
+    // React reports a repeated key via console.error but still renders, so the warning is what pins the index key.
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const html = render(
+      <StatStrip
+        items={[
+          { label: "Net", value: "₹100" },
+          { label: "Net", value: "₹200" },
+        ]}
+      />,
+    );
+    expect(html.match(/t-label">Net</g)).toHaveLength(2);
+    expect(html).toContain(">₹100<");
+    expect(html).toContain(">₹200<");
+    const warned = error.mock.calls.some((call) => String(call[0]).includes("same key"));
+    error.mockRestore();
+    expect(warned).toBe(false);
+  });
+});
+
 describe("MetricRow", () => {
   it("renders dt label and dd value in a dl list", () => {
     const html = render(
@@ -78,14 +99,28 @@ describe("MetricRow", () => {
   });
 
   it("renders sub as a second dd under the label", () => {
-    const html = render(<MetricRow label="GST" value="₹76" sub="Included in price" />);
+    const html = render(
+      <MetricList>
+        <MetricRow label="GST" value="₹76" sub="Included in price" />
+      </MetricList>,
+    );
     expect(html).toContain('<dd class="col-start-1 row-start-2 text-xs text-muted">Included in price</dd>');
   });
 
   it("strong emphasises label and value", () => {
-    const html = render(<MetricRow label="You receive" value="₹900" strong />);
+    const html = render(
+      <MetricList>
+        <MetricRow label="You receive" value="₹900" strong />
+      </MetricList>,
+    );
     expect(html).toContain('<dt class="font-semibold text-ink">You receive</dt>');
     expect(html).toContain("font-semibold text-ink");
-    expect(render(<MetricRow label="x" value="y" />)).not.toContain("font-semibold");
+    expect(
+      render(
+        <MetricList>
+          <MetricRow label="x" value="y" />
+        </MetricList>,
+      ),
+    ).not.toContain("font-semibold");
   });
 });

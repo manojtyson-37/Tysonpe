@@ -19,6 +19,16 @@ describe("Avatar", () => {
     expect(render(<Avatar name="   " />)).toContain("></span>");
   });
 
+  it("numeric size floors the font at 12px so a small tile stays readable", () => {
+    // 20 * 0.4 is 8px, below the floor; 80 * 0.4 is 32px and is used as-is.
+    expect(render(<Avatar name="A" size={20} />)).toContain("font-size:12px");
+    expect(render(<Avatar name="A" size={24} />)).toContain("font-size:12px");
+    // Exactly at the floor: 30 * 0.4 is 12px.
+    expect(render(<Avatar name="A" size={30} />)).toContain("font-size:12px");
+    expect(render(<Avatar name="A" size={20} />)).not.toContain("font-size:8px");
+    expect(render(<Avatar name="A" size={40} />)).toContain("font-size:16px");
+  });
+
   it.each([
     ["sm", "size-8 text-sm"],
     ["md", "size-10 text-base"],
@@ -40,15 +50,30 @@ describe("Avatar", () => {
     expect(html).not.toContain("size-10");
   });
 
-  it("renders an image instead of the letter when src is given", () => {
+  it("layers the image over the letter so a failed photo falls back to it", () => {
     const html = render(<Avatar name="Meera" src="/a.png" />);
-    expect(html).toContain('<img src="/a.png" alt=""');
-    expect(html).toContain("object-cover");
-    expect(html).not.toContain(">M<");
+    // The letter is always rendered, directly followed by the photo that covers it.
+    expect(html).toContain(">M<img ");
+    const img = html.match(/<img\b[^>]*>/)?.[0] ?? "";
+    expect(img).toContain('src="/a.png"');
+    expect(img).toContain('alt=""');
+    expect(img).toMatch(/class="[^"]*\babsolute\b[^"]*\binset-0\b[^"]*"/);
+    expect(img).toContain("size-full");
+    expect(img).toContain("object-cover");
+    // The tile is the positioning context for the absolute photo.
+    expect(html.match(/<span\b[^>]*>/)?.[0]).toMatch(/class="relative /);
+  });
+
+  it("renders no img at all without a src", () => {
+    expect(render(<Avatar name="Meera" />)).not.toContain("<img");
   });
 
   it("uses the alt text for the image when provided", () => {
-    expect(render(<Avatar name="Meera" src="/a.png" alt="Meera Rao" />)).toContain('alt="Meera Rao"');
+    const html = render(<Avatar name="Meera" src="/a.png" alt="Meera Rao" />);
+    expect(html).toContain('alt="Meera Rao"');
+    // With alt text the tile is meaningful, so it is no longer hidden from assistive tech.
+    expect(html).not.toContain("aria-hidden");
+    expect(render(<Avatar name="Meera" src="/a.png" />)).toContain("aria-hidden");
   });
 
   it("has no gradient and appends a className passthrough", () => {

@@ -75,6 +75,63 @@ describe("Input", () => {
   });
 });
 
+describe("field a11y merging", () => {
+  it("keeps a caller's aria-invalid when the field has no error of its own", () => {
+    const html = render(<Input label="Email" aria-invalid name="email" />);
+    expect(attr(html, "input", "aria-invalid")).toBe("true");
+  });
+
+  it("accepts the string form of aria-invalid", () => {
+    const html = render(<Input label="Email" aria-invalid="true" name="email" />);
+    expect(attr(html, "input", "aria-invalid")).toBe("true");
+  });
+
+  it("leaves aria-invalid off when neither the caller nor the field says invalid", () => {
+    const html = render(<Input label="Email" name="email" />);
+    expect(attr(html, "input", "aria-invalid")).toBeUndefined();
+  });
+
+  it("an error still wins and is described by the message", () => {
+    const html = render(<Input id="e" label="Email" error="Required." name="email" />);
+    expect(attr(html, "input", "aria-invalid")).toBe("true");
+    expect(attr(html, "input", "aria-describedby")).toBe("e-err");
+  });
+
+  it("merges a caller's aria-describedby ahead of the field's own message id", () => {
+    const html = render(<Input id="e" label="Email" hint="Work address." aria-describedby="outside" name="email" />);
+    expect(attr(html, "input", "aria-describedby")).toBe("outside e-hint");
+  });
+});
+
+describe("field a11y merging across every control", () => {
+  const controls: [string, string, (p: Record<string, unknown>) => React.ReactElement][] = [
+    ["Input", "input", (p) => <Input id="f" name="f" label="L" {...p} />],
+    ["Textarea", "textarea", (p) => <Textarea id="f" name="f" label="L" {...p} />],
+    ["Select", "select", (p) => <Select id="f" name="f" label="L" {...p}><option>a</option></Select>],
+    ["InputGroup", "input", (p) => <InputGroup id="f" name="f" label="L" prefix="x" {...p} />],
+    ["Checkbox", "input", (p) => <Checkbox id="f" name="f" label="L" {...p} />],
+    ["Switch", "input", (p) => <Switch id="f" name="f" label="L" {...p} />],
+  ];
+
+  it.each(controls)("%s honours a caller's aria-invalid without an error", (_n, tag, make) => {
+    expect(attr(render(make({ "aria-invalid": true })), tag, "aria-invalid")).toBe("true");
+    expect(attr(render(make({ "aria-invalid": "true" })), tag, "aria-invalid")).toBe("true");
+    expect(attr(render(make({ "aria-invalid": false })), tag, "aria-invalid")).toBeUndefined();
+    expect(attr(render(make({})), tag, "aria-invalid")).toBeUndefined();
+  });
+
+  it.each(controls)("%s lets the field's error force aria-invalid over a caller's false", (_n, tag, make) => {
+    const html = render(make({ error: "Bad.", "aria-invalid": false }));
+    expect(attr(html, tag, "aria-invalid")).toBe("true");
+  });
+
+  it.each(controls)("%s joins a caller's aria-describedby with the hint or error id", (_n, tag, make) => {
+    expect(attr(render(make({ hint: "H", "aria-describedby": "x" })), tag, "aria-describedby")).toBe("x f-hint");
+    expect(attr(render(make({ error: "E", "aria-describedby": "x" })), tag, "aria-describedby")).toBe("x f-err");
+    expect(attr(render(make({ "aria-describedby": "x" })), tag, "aria-describedby")).toBe("x");
+  });
+});
+
 describe("Textarea", () => {
   it("wires label, rows, hint and error like Input", () => {
     const html = render(<Textarea id="bio" name="bio" label="Bio" rows={6} error="Required." />);
@@ -106,7 +163,10 @@ describe("Select", () => {
     expect(attr(html, "label", "for")).toBe("role");
     expect(html).toContain("<select");
     expect(html).toContain('<option value="a">A</option>');
-    expect(attr(html, "select", "class")).toMatch(/^input appearance-none /);
+    // `.input` token look with the native arrow stripped, plus the `peer` marker the chevron's peer-disabled needs.
+    const tokens = (attr(html, "select", "class") ?? "").split(" ");
+    expect(tokens).toEqual(expect.arrayContaining(["peer", "input", "appearance-none"]));
+    expect(html).toContain("peer-disabled:opacity-50");
     expect(html).toContain("<svg");
     expect(html).toContain('aria-hidden="true"');
     expect(html).toContain("pointer-events-none");
@@ -133,7 +193,9 @@ describe("InputGroup", () => {
   it("omits the addon it was not given", () => {
     const html = render(<InputGroup id="amt" name="amt" label="Amount" prefix="₹" />);
     expect(html).toContain("₹");
-    expect(html.match(/bg-surface-2/g)).toHaveLength(1);
+    // Count addon spans by their edge border, not by colour: the wrapper also carries has-[:disabled]:bg-surface-2.
+    expect(html.match(/<span class="[^"]*\bborder-r border-line\b[^"]*">/g)).toHaveLength(1);
+    expect(html).not.toContain("border-l border-line");
   });
 
   it("marks the group and input invalid and links the error", () => {
@@ -259,6 +321,14 @@ describe("ColorField", () => {
     expect(picker).toContain("aria-label=");
   });
 
+  it("lowercases the picker value from an uppercase default while the text keeps the caller's casing", () => {
+    const html = render(<ColorField id="b" name="b" label="B" defaultValue="#5B3DF5" />);
+    const picker = html.match(/<input\b[^>]*type="color"[^>]*>/)?.[0] ?? "";
+    expect(picker).toContain('value="#5b3df5"');
+    const text = html.match(/<input\b[^>]*type="text"[^>]*>/)?.[0] ?? "";
+    expect(text).toContain('value="#5B3DF5"');
+  });
+
   it("falls back to a valid picker value for a non-hex default", () => {
     const html = render(<ColorField id="c" name="c" label="C" defaultValue="red" />);
     expect(html).toMatch(/type="color"[^>]*value="#000000"|value="#000000"[^>]*type="color"/);
@@ -319,6 +389,18 @@ describe("SubmitButton", () => {
   it("accepts variant and size props directly", () => {
     const html = render(<SubmitButton variant="secondary" size="sm" className="w-full">Go</SubmitButton>);
     expect(html).toContain('class="btn btn-secondary btn-sm w-full"');
+  });
+
+  it("keeps the visible label and carries the pending text in a polite live region", () => {
+    // Outside a form action useFormStatus reports not-pending, so the region is present but empty: the
+    // label never swaps, so the button keeps its width and the control is not re-announced.
+    const html = render(<SubmitButton pendingText="Creating order…">Pay now</SubmitButton>);
+    expect(html).toContain("Pay now");
+    expect(html).toContain('role="status"');
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain("sr-only");
+    expect(html).not.toContain("Creating order…");
+    expect(html).not.toContain("opacity-0");
   });
 });
 
