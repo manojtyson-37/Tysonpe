@@ -1,17 +1,12 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { formatINR } from "@/lib/money";
+import { formatDate } from "@/lib/format";
+
+// StatusBadge moved to ui/badge.tsx; the primitives are re-exported so existing imports keep working.
+export * from "./ui/index";
 
 export const Money = ({ paise }: { paise: number }) => <>{formatINR(paise)}</>;
-
-const statusStyle: Record<string, string> = {
-  paid: "badge-good", published: "badge-good", active: "badge-good",
-  created: "badge-warn", draft: "badge-muted", failed: "badge-bad",
-  refunded: "badge-bad", inactive: "badge-muted",
-};
-export const StatusBadge = ({ status }: { status: string }) => (
-  <span className={`badge ${statusStyle[status] ?? "badge-muted"}`}>{status}</span>
-);
 
 export const TYPE_LABEL: Record<string, string> = {
   course: "Course", membership: "Membership", webinar: "Live webinar",
@@ -50,5 +45,4 @@ export function Stat({ label, value, sub }: { label: string; value: ReactNode; s
   );
 }
 
-export const dateFmt = (d: Date | null | undefined) =>
-  d ? new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric" }).format(d) : "—";
+export const dateFmt = (d: Date | null | undefined) => formatDate(d);

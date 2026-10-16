@@ -201,6 +201,7 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
 
   /* Buttons: 8px, press scale, explicit transition properties (never `transition: all`). */
   .btn {
+    position: relative;
     @apply inline-flex items-center justify-center gap-2 rounded-control px-4 py-2.5 text-sm font-semibold disabled:opacity-50 disabled:pointer-events-none;
     transition-property: background-color, border-color, color, opacity, transform;
     transition-duration: var(--dur-fast);
@@ -214,6 +215,15 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
   .btn-sm { @apply px-3 py-1.5 text-sm; }
   .btn-sm:active:not(:disabled) { transform: scale(var(--scale-press)); }
   .btn-lg { @apply px-6 py-3.5 text-base; }
+  /* Touch: keep the drawn size, extend the hit area to 44px with an invisible pseudo-element. Desktop is untouched. */
+  @media (pointer: coarse) {
+    .btn::after {
+      content: "";
+      position: absolute;
+      inset-inline: 0;
+      inset-block: min(0px, calc((100% - 44px) / 2));
+    }
+  }
 
   .input {
     @apply w-full rounded-control border border-line-strong bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/70 focus:border-ink;
