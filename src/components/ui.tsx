@@ -1,12 +1,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { formatINR } from "@/lib/money";
 import { formatDate } from "@/lib/format";
 
-// StatusBadge moved to ui/badge.tsx; the primitives are re-exported so existing imports keep working.
+// StatusBadge, Money and Stat moved to ui/*; the primitives are re-exported so existing imports keep working.
 export * from "./ui/index";
-
-export const Money = ({ paise }: { paise: number }) => <>{formatINR(paise)}</>;
 
 export const TYPE_LABEL: Record<string, string> = {
   course: "Course", membership: "Membership", webinar: "Live webinar",
@@ -31,16 +28,6 @@ export function Empty({ title, body, cta }: { title: string; body: string; cta?:
       <p className="text-lg font-semibold">{title}</p>
       <p className="mt-1 max-w-sm text-sm text-muted">{body}</p>
       {cta && <Link href={cta.href} className="btn btn-primary mt-5">{cta.label}</Link>}
-    </div>
-  );
-}
-
-export function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: string }) {
-  return (
-    <div className="card p-5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
-      <p className="mt-2 text-2xl font-bold tabular-nums sm:text-3xl">{value}</p>
-      {sub && <p className="mt-1 text-xs text-muted">{sub}</p>}
     </div>
   );
 }

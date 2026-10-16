@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { readableOn } from "@/lib/color";
+import { Avatar as UiAvatar } from "@/components/ui/avatar";
 
 /** Scopes a creator's brand colour to their storefront subtree. */
 export function BrandScope({ color, children }: { color: string; children: ReactNode }) {
@@ -7,14 +8,7 @@ export function BrandScope({ color, children }: { color: string; children: React
   return <div style={style}>{children}</div>;
 }
 
+/** Storefront avatar: delegates to the ui primitive; `size` stays a pixel number for existing call sites. */
 export function Avatar({ name, size = 56 }: { name: string; size?: number }) {
-  return (
-    <span
-      aria-hidden
-      style={{ width: size, height: size, fontSize: size * 0.4 }}
-      className="inline-flex shrink-0 items-center justify-center rounded-2xl bg-brand font-display font-extrabold text-brand-ink"
-    >
-      {name.trim().charAt(0).toUpperCase()}
-    </span>
-  );
+  return <UiAvatar name={name} size={size} />;
 }
