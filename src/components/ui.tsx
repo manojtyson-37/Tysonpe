@@ -1,35 +1,14 @@
-import Link from "next/link";
-import type { ReactNode } from "react";
 import { formatDate } from "@/lib/format";
 
-// StatusBadge, Money and Stat moved to ui/*; the primitives are re-exported so existing imports keep working.
+// All primitives (Button, Badge, Surface, Money, Stat, Progress, Avatar, Table,
+// Tabs, Dialog, Toaster/toast, Callout, EmptyState, PageHeader, Disclosure,
+// Skeleton, BarChart, Sparkline …) are defined in ui/* and re-exported here
+// so existing imports of "@/components/ui" keep working.
 export * from "./ui/index";
 
 export const TYPE_LABEL: Record<string, string> = {
   course: "Course", membership: "Membership", webinar: "Live webinar",
   download: "Digital download", consultation: "1:1 consultation",
 };
-
-export function PageHeader({ title, sub, action }: { title: string; sub?: string; action?: ReactNode }) {
-  return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h1 className="text-2xl font-bold sm:text-3xl">{title}</h1>
-        {sub && <p className="mt-1 text-sm text-muted">{sub}</p>}
-      </div>
-      {action}
-    </div>
-  );
-}
-
-export function Empty({ title, body, cta }: { title: string; body: string; cta?: { href: string; label: string } }) {
-  return (
-    <div className="card flex flex-col items-center px-6 py-14 text-center">
-      <p className="text-lg font-semibold">{title}</p>
-      <p className="mt-1 max-w-sm text-sm text-muted">{body}</p>
-      {cta && <Link href={cta.href} className="btn btn-primary mt-5">{cta.label}</Link>}
-    </div>
-  );
-}
 
 export const dateFmt = (d: Date | null | undefined) => formatDate(d);
