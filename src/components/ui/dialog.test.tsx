@@ -6,9 +6,13 @@ import {
   DialogView,
   confirmReducer,
   dialogMotion,
+  dialogMotionPlan,
+  isTopDialog,
   lockBodyScroll,
   nextFocusIndex,
   originFromRects,
+  popDialog,
+  pushDialog,
 } from "./dialog";
 
 /** Attributes of every `<tag ...>` in the markup, so assertions do not depend on attribute order. */
@@ -75,16 +79,69 @@ describe("dialogMotion", () => {
     expect((backdrop.exit as { transition: { duration: number } }).transition.duration).toBe(0.16);
   });
 
-  it("has no motion at all under reduced motion: no initial state and instant exits", () => {
+  it("has no motion at all under reduced motion: no initial state and no exit, so removal never waits on a frame", () => {
     const { panel, backdrop } = dialogMotion(true);
     for (const part of [panel, backdrop]) {
       expect(part.initial).toBe(false);
-      expect((part.exit as { transition: { duration: number } }).transition.duration).toBe(0);
+      expect(part).not.toHaveProperty("exit");
       expect(part.transition).toEqual({ duration: 0 });
     }
-    expect(panel.exit).not.toHaveProperty("y");
-    expect(panel.exit).not.toHaveProperty("scale");
-    expect(panel.exit).not.toHaveProperty("filter");
+  });
+});
+
+describe("dialogMotionPlan", () => {
+  it("animates and loads the features chunk in the normal case", () => {
+    const plan = dialogMotionPlan(false, false);
+    expect(plan.load).toBe(true);
+    expect(plan.motion).toEqual(dialogMotion(false));
+  });
+
+  it("skips the chunk under reduced motion and uses the instant variant", () => {
+    const plan = dialogMotionPlan(true, false);
+    expect(plan.load).toBe(false);
+    expect(plan.motion).toEqual(dialogMotion(true));
+  });
+
+  it("drops all motion props when the features failed to load, so the open dialog is never stuck at opacity 0", () => {
+    for (const reduced of [false, true]) {
+      const plan = dialogMotionPlan(reduced, true);
+      expect(plan.load).toBe(false);
+      expect(plan.motion).toBeUndefined();
+    }
+  });
+});
+
+describe("dialog stack", () => {
+  it("makes the most recently opened dialog the top", () => {
+    let stack = pushDialog([], "a");
+    expect(isTopDialog(stack, "a")).toBe(true);
+    stack = pushDialog(stack, "b");
+    expect(isTopDialog(stack, "b")).toBe(true);
+    expect(isTopDialog(stack, "a")).toBe(false);
+  });
+
+  it("hands the top back to the dialog underneath when the top closes", () => {
+    const stack = popDialog(pushDialog(pushDialog([], "a"), "b"), "b");
+    expect(stack).toEqual(["a"]);
+    expect(isTopDialog(stack, "a")).toBe(true);
+  });
+
+  it("pops a dialog from the middle without disturbing the top, and ignores unknown ids", () => {
+    const stack = pushDialog(pushDialog(pushDialog([], "a"), "b"), "c");
+    expect(popDialog(stack, "b")).toEqual(["a", "c"]);
+    expect(popDialog(stack, "zzz")).toEqual(["a", "b", "c"]);
+  });
+
+  it("has no top when empty, and pushing an id twice keeps one entry", () => {
+    expect(isTopDialog([], "a")).toBe(false);
+    expect(pushDialog(pushDialog([], "a"), "a")).toEqual(["a"]);
+  });
+
+  it("does not mutate the stack it was given", () => {
+    const stack = Object.freeze(["a"]);
+    expect(pushDialog(stack, "b")).toEqual(["a", "b"]);
+    expect(popDialog(stack, "a")).toEqual([]);
+    expect(stack).toEqual(["a"]);
   });
 });
 

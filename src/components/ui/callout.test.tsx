@@ -22,6 +22,13 @@ describe("Callout", () => {
     expect(renderToStaticMarkup(<Callout tone="bad">x</Callout>)).toContain("bg-bad-soft");
   });
 
+  it("gives every tone the same 1px border, so no tone is a pixel taller or wider than another", () => {
+    for (const tone of ["info", "good", "warn", "bad"] as const) {
+      const html = renderToStaticMarkup(<Callout tone={tone}>x</Callout>);
+      expect(html.match(/class="([^"]*)"/)?.[1].split(" ")).toContain("border");
+    }
+  });
+
   it("uses the card radius with a decorative icon and no gradient, shadow or emoji", () => {
     const html = renderToStaticMarkup(<Callout tone="warn">x</Callout>);
     expect(html).toContain("rounded-card");

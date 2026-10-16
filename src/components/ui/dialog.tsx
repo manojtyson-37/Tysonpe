@@ -1,17 +1,24 @@
 "use client";
 
 import {
+  useCallback,
+  useEffect,
   useEffectEvent,
   useId,
   useLayoutEffect,
   useRef,
+  useState,
   useSyncExternalStore,
   type ReactNode,
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, LazyMotion, m, useMotionValue, useReducedMotion, type MotionValue } from "framer-motion";
+import { AnimatePresence, m, useMotionValue, useReducedMotion, type MotionValue } from "framer-motion";
 import { buttonClass } from "./button";
+import { OverlayMotion } from "./motion";
+
+// Kept as an export of this module for existing imports; the implementation lives in ./motion.
+export { OverlayMotion };
 
 /* ------------------------------------------------------------------ pure helpers */
 
@@ -51,16 +58,14 @@ const SETTLED = { opacity: 1, y: 0, scale: 1, filter: "blur(0px)" };
 /**
  * Enter and exit for the dialog panel and its backdrop. Enter 220ms on --ease-overlay: 8px rise, 4px blur, scale from
  * 0.96 (the panel is large, so the start scale stays shallow). Exit 160ms and subtler. Under reduced motion there is
- * no travel, no blur, no scale and no fade: the dialog appears and disappears at once. (`MotionConfig
+ * no travel, no blur, no scale, no fade and no exit: the dialog appears and disappears at once. (`MotionConfig
  * reducedMotion="user"` is not enough here, because it still fades opacity.)
  */
 export function dialogMotion(reduced: boolean) {
   if (reduced) {
-    const still = {
-      initial: false as const,
-      transition: { duration: 0 },
-      exit: { opacity: 0, transition: { duration: 0 } },
-    };
+    // No `exit` on purpose: an exit animation, even of zero length, waits on a frame, and a dialog that is closed
+    // must be gone at once (and must not hang when frames are throttled, e.g. in a hidden tab).
+    const still = { initial: false as const, transition: { duration: 0 } };
     return { panel: { ...still, animate: SETTLED }, backdrop: { ...still, animate: { opacity: 1 } } };
   }
   const exitTransition = { duration: 0.16, ease: EASE_STANDARD };
@@ -79,6 +84,38 @@ export function dialogMotion(reduced: boolean) {
     },
   };
 }
+
+export type DialogMotionPlan = { load: boolean; motion: ReturnType<typeof dialogMotion> | undefined };
+
+/**
+ * What the Dialog does about motion. Normal: animate and load the features chunk. Reduced motion: the instant variant,
+ * no chunk. Features failed to load (`featuresFailed`): no motion props at all, because `initial: opacity 0` with no
+ * features to animate it would leave an open dialog invisible.
+ */
+export function dialogMotionPlan(reduced: boolean, featuresFailed: boolean): DialogMotionPlan {
+  if (featuresFailed) return { load: false, motion: undefined };
+  return { load: !reduced, motion: dialogMotion(reduced) };
+}
+
+export type DialogStack = readonly string[];
+
+/** Opens `id` on top of the stack (moving it to the top if it was already in it). */
+export function pushDialog(stack: DialogStack, id: string): DialogStack {
+  return [...stack.filter((entry) => entry !== id), id];
+}
+
+/** Removes `id` wherever it sits, so the dialog underneath becomes the top again. */
+export function popDialog(stack: DialogStack, id: string): DialogStack {
+  return stack.includes(id) ? stack.filter((entry) => entry !== id) : stack;
+}
+
+/** True only for the most recently opened dialog: the one that owns Escape and Tab. */
+export function isTopDialog(stack: DialogStack, id: string): boolean {
+  return stack.length > 0 && stack[stack.length - 1] === id;
+}
+
+// Every open Dialog listens on `document`; only the top of this stack acts, so Esc closes one dialog and Tab is trapped once.
+let openDialogs: DialogStack = [];
 
 type BodyLike = { style: { overflow: string; paddingRight: string } };
 
@@ -137,16 +174,6 @@ const FOCUSABLE =
 
 function focusableWithin(root: HTMLElement): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => el.getClientRects().length > 0);
-}
-
-/* ------------------------------------------------------------------ motion root */
-
-// One shared async loader: the ~50KB of animation features load when an overlay first needs them, not with the page.
-const loadFeatures = () => import("framer-motion").then((mod) => mod.domMax);
-
-/** Loads framer-motion features for overlays (Dialog, Toaster). Keep the loader import here, in one place. */
-export function OverlayMotion({ children }: { children: ReactNode }) {
-  return <LazyMotion features={loadFeatures}>{children}</LazyMotion>;
 }
 
 /* ------------------------------------------------------------------ Dialog */
@@ -241,9 +268,15 @@ export type DialogProps = {
 
 const subscribeNever = () => () => {};
 
+/** If an exit animation never reports back (frames throttled, features still loading), the scroll lock lets go anyway. */
+const EXIT_FALLBACK_MS = 400;
+
 /**
  * Modal dialog in a portal. Focus is trapped (Tab cycles), Escape and the backdrop close, focus returns to the
  * opener, the page cannot scroll behind it, and it is labelled by `title` and described by the body.
+ *
+ * Nothing is mounted until the first `open`, so a page with many closed dialogs (one per table row) pays no cost.
+ * Nested dialogs stack: only the top one reacts to Escape and Tab.
  */
 export function Dialog({ open, onClose, title, description, children, footer, className, initialFocusRef, returnFocusRef }: DialogProps) {
   const uid = useId();
@@ -251,11 +284,30 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
   const descriptionId = `${uid}-desc`;
   // Portals need `document`: false on the server and during hydration, true afterwards.
   const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
+  const [hasOpened, setHasOpened] = useState(open);
+  if (open && !hasOpened) setHasOpened(true);
+  const [featuresFailed, setFeaturesFailed] = useState(false);
   const reduced = useReducedMotion() ?? false;
+  const plan = dialogMotionPlan(reduced, featuresFailed);
   const panelRef = useRef<HTMLDivElement>(null);
   const originX = useMotionValue(0.5);
   const originY = useMotionValue(0.5);
   const close = useEffectEvent(onClose);
+
+  // The scroll lock outlives `open` until the panel has left the screen, so the page never scrolls behind a visible panel.
+  const unlockRef = useRef<(() => void) | null>(null);
+  const fallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const focusTargetRef = useRef<HTMLElement | null>(null);
+  const focusReturnedRef = useRef(true);
+
+  const releaseScroll = useCallback(() => {
+    if (fallbackRef.current) clearTimeout(fallbackRef.current);
+    fallbackRef.current = null;
+    unlockRef.current?.();
+    unlockRef.current = null;
+  }, []);
+
+  useEffect(() => releaseScroll, [releaseScroll]);
 
   useLayoutEffect(() => {
     const panel = panelRef.current;
@@ -268,13 +320,19 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
     originX.set(origin.x);
     originY.set(origin.y);
 
-    const unlock = lockBodyScroll(document.body, window.innerWidth - document.documentElement.clientWidth);
+    releaseScroll();
+    unlockRef.current = lockBodyScroll(document.body, window.innerWidth - document.documentElement.clientWidth);
 
     const first = initialFocusRef?.current ?? focusableWithin(panel)[0] ?? panel;
     first.focus({ preventScroll: true });
 
+    openDialogs = pushDialog(openDialogs, uid);
+
     const onKeyDown = (event: KeyboardEvent) => {
+      if (!isTopDialog(openDialogs, uid)) return;
       if (event.key === "Escape") {
+        // Someone else already used this Escape (a menu, a native control), or an IME is composing: leave it alone.
+        if (event.defaultPrevented || event.isComposing) return;
         event.preventDefault();
         close();
         return;
@@ -291,15 +349,29 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
 
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      unlock();
+      openDialogs = popDialog(openDialogs, uid);
+      // Same path for Escape, Cancel and the backdrop: focus goes back to the opener at once, not after the exit animation.
+      focusTargetRef.current = trigger;
       if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+      focusReturnedRef.current = !trigger || document.activeElement === trigger;
+      fallbackRef.current = setTimeout(releaseScroll, EXIT_FALLBACK_MS);
     };
-  }, [open, mounted, initialFocusRef, returnFocusRef, originX, originY]);
+  }, [open, mounted, uid, initialFocusRef, returnFocusRef, originX, originY, releaseScroll]);
 
-  if (!mounted) return null;
+  const handleExitComplete = () => {
+    releaseScroll();
+    // Safety net: if focusing the opener did not stick and focus fell to the page, put it back now the panel is gone.
+    const target = focusTargetRef.current;
+    if (!focusReturnedRef.current && target?.isConnected && (!document.activeElement || document.activeElement === document.body)) {
+      target.focus({ preventScroll: true });
+    }
+    focusReturnedRef.current = true;
+  };
+
+  if (!mounted || !hasOpened) return null;
   return createPortal(
-    <OverlayMotion>
-      <AnimatePresence>
+    <OverlayMotion enabled={plan.load} onLoadError={() => setFeaturesFailed(true)}>
+      <AnimatePresence onExitComplete={handleExitComplete}>
         {open && (
           <DialogView
             key="dialog"
@@ -311,7 +383,7 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
             className={className}
             panelRef={panelRef}
             onBackdropClick={onClose}
-            motion={dialogMotion(reduced)}
+            motion={plan.motion}
             origin={{ x: originX, y: originY }}
           >
             {children}

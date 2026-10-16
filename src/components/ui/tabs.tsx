@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useId, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
-import { LazyMotion, MotionConfig, m } from "framer-motion";
+import { MotionConfig, m } from "framer-motion";
+import { OverlayMotion } from "./motion";
 
 /* ------------------------------------------------------------------ pure helpers */
 
@@ -99,10 +100,6 @@ function useRovingSelection(values: string[], value: string, onChange: (value: s
   return { selectedIndex, keyboardDriven, getItemProps };
 }
 
-// One shared async loader: first paint never depends on it (initial={false}), so the ~50KB of layout features
-// load after hydration instead of blocking it.
-const loadFeatures = () => import("framer-motion").then((mod) => mod.domMax);
-
 const ITEM_BASE =
   "relative inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-control px-3.5 text-sm font-medium " +
   "transition-[color,scale] duration-(--dur-fast) ease-(--ease-standard) active:scale-(--scale-press)";
@@ -127,10 +124,12 @@ const LIST_CLASS: Record<Variant, string> = {
 
 function Motion({ children }: { children: ReactNode }) {
   // reducedMotion="user" turns layout (transform) animations into instant jumps under prefers-reduced-motion.
+  // The features come from the shared loader (a separate chunk); the indicator uses initial={false}, so first paint
+  // never waits on it and a failed load only means the indicator jumps instead of sliding.
   return (
-    <LazyMotion features={loadFeatures}>
+    <OverlayMotion>
       <MotionConfig reducedMotion="user">{children}</MotionConfig>
-    </LazyMotion>
+    </OverlayMotion>
   );
 }
 

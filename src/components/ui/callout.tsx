@@ -5,9 +5,9 @@ export type CalloutTone = "info" | "good" | "warn" | "bad";
 
 const TONE_CLASS: Record<CalloutTone, string> = {
   info: "border border-line bg-surface-2 text-ink",
-  good: "bg-good-soft text-good",
-  warn: "bg-warn-soft text-ink",
-  bad: "bg-bad-soft text-bad",
+  good: "border border-current/15 bg-good-soft text-good",
+  warn: "border border-current/15 bg-warn-soft text-ink",
+  bad: "border border-current/15 bg-bad-soft text-bad",
 };
 
 const TONE_ICON: Record<CalloutTone, (props: IconProps) => ReactNode> = {
@@ -18,7 +18,7 @@ const TONE_ICON: Record<CalloutTone, (props: IconProps) => ReactNode> = {
 };
 
 /**
- * An in-flow message: a one-step tone fill at card radius, no shadow. Only the `bad` tone is `role="alert"`
+ * An in-flow message: a one-step tone fill and a 1px hairline in every tone (so tones never differ in size) at card radius, no shadow. Only the `bad` tone is `role="alert"`
  * (it interrupts); the others are plain content. `action` is a trailing slot for a link or button.
  */
 export function Callout({
