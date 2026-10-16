@@ -38,6 +38,9 @@ export function Progress({
         aria-valuemin={0}
         aria-valuemax={safeMax || 100}
         aria-valuetext={text}
+        // Track is line-strong, not line: the fill reads against it (ink 10.4:1, emerald 2.99:1), and the
+        // value is always printed beside the bar. The track against the surface is only 1.77:1, the same
+        // project-wide line-strong question as .input borders; that is one token decision, not patched here.
         className="h-1.5 flex-1 overflow-hidden rounded-full bg-line-strong"
       >
         <div className={`h-full rounded-full ${FILL_CLASS[tone]}`} style={{ width: `${pct}%` }} />

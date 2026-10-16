@@ -40,7 +40,7 @@ export function nextIndex(current: number, key: string, count: number, arrows: A
  * Modifier-held arrows are browser and OS shortcuts (back/forward, Spaces, word jumps), so the tablist must
  * leave them alone rather than swallowing them to move the selection.
  */
-export function hasSelectionModifier(event: { altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }): boolean {
+export function hasSelectionModifier(event: { altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean }): boolean {
   return Boolean(event.altKey || event.ctrlKey || event.metaKey);
 }
 

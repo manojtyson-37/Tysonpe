@@ -109,22 +109,25 @@ export function SubmitButton({
   const { pending } = useFormStatus();
   const look = legacyButtonLook(className);
   return (
-    <Button
-      type="submit"
-      loading={pending}
-      variant={variant ?? look.variant}
-      size={size ?? look.size}
-      className={look.className}
-    >
-      {children}
+    <>
+      <Button
+        type="submit"
+        loading={pending}
+        variant={variant ?? look.variant}
+        size={size ?? look.size}
+        className={look.className}
+      >
+        {children}
+      </Button>
       {/*
-        The visible label never changes, so the button keeps its width and a screen reader does not re-read
-        the whole control. The pending text is announced once from a polite live region instead.
+        Outside the button on purpose: a button's descendants are presentational, so a live region inside it is
+        never announced, and Button remounts its children when `loading` flips. Always mounted, text swapped in
+        place, so the pending text is announced once and the button's accessible name stays the label.
       */}
       <span role="status" aria-live="polite" className="sr-only">
         {pending ? pendingText : ""}
       </span>
-    </Button>
+    </>
   );
 }
 
@@ -161,7 +164,7 @@ function useFieldA11y(
   const errId = `${id}-err`;
   const messageId = error ? errId : hint ? hintId : undefined;
   const describedBy = join(extraDescribedBy, messageId) || undefined;
-  const invalid = error ? true : callerInvalid === true || callerInvalid === "true" ? true : undefined;
+  const invalid = error ? true : callerInvalid && callerInvalid !== "false" ? callerInvalid : undefined;
   return {
     id,
     hintId,
@@ -409,6 +412,17 @@ export function isHexColor(value: string): boolean {
   return HEX_COLOR.test(value);
 }
 
+/** What a typed hex does: the box keeps the user's casing, everything leaving the field is lowercase. */
+export function colorFromText(value: string): { text: string; picker?: string; emit?: string } {
+  return isHexColor(value) ? { text: value, picker: value.toLowerCase(), emit: value.toLowerCase() } : { text: value };
+}
+
+/** `<input type="color">` reports uppercase in some browsers; one casing reaches state and the caller. */
+export function colorFromPicker(value: string): { text: string; picker: string; emit: string } {
+  const hex = value.toLowerCase();
+  return { text: hex, picker: hex, emit: hex };
+}
+
 export type ColorFieldProps = FieldChrome & {
   id?: string;
   /** Submitted name. Only the hex text input carries it; the native picker is a helper. */
@@ -436,11 +450,10 @@ export function ColorField({
           disabled={disabled}
           aria-label="Pick a colour"
           onChange={(e) => {
-            // <input type="color"> reports uppercase in some browsers; one casing reaches state and the caller.
-            const hex = e.target.value.toLowerCase();
-            setPicker(hex);
-            setText(hex);
-            onChange?.(hex);
+            const next = colorFromPicker(e.target.value);
+            setPicker(next.picker);
+            setText(next.text);
+            onChange?.(next.emit);
           }}
           className="h-10 w-12 shrink-0 cursor-pointer rounded-control border border-line-strong bg-surface p-1 pointer-coarse:h-11 pointer-coarse:w-14"
         />
@@ -457,13 +470,10 @@ export function ColorField({
           autoComplete="off"
           autoCapitalize="off"
           onChange={(e) => {
-            // Typing keeps the user's casing in the box; what leaves the field is always lowercase.
-            const v = e.target.value;
-            setText(v);
-            if (isHexColor(v)) {
-              setPicker(v.toLowerCase());
-              onChange?.(v.toLowerCase());
-            }
+            const next = colorFromText(e.target.value);
+            setText(next.text);
+            if (next.picker !== undefined) setPicker(next.picker);
+            if (next.emit !== undefined) onChange?.(next.emit);
           }}
           className="input w-32 tabular-nums"
         />

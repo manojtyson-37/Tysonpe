@@ -50,7 +50,7 @@ describe("hasSelectionModifier", () => {
   });
 
   it("ignores shift, which does not carry a browser arrow shortcut", () => {
-    expect(hasSelectionModifier({ altKey: false, ctrlKey: false, metaKey: false })).toBe(false);
+    expect(hasSelectionModifier({ shiftKey: true })).toBe(false);
   });
 });
 

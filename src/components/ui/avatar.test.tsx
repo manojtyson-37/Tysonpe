@@ -53,7 +53,7 @@ describe("Avatar", () => {
   it("layers the image over the letter so a failed photo falls back to it", () => {
     const html = render(<Avatar name="Meera" src="/a.png" />);
     // The letter is always rendered, directly followed by the photo that covers it.
-    expect(html).toContain(">M<img ");
+    expect(html).toContain('<span aria-hidden="true">M</span><img ');
     const img = html.match(/<img\b[^>]*>/)?.[0] ?? "";
     expect(img).toContain('src="/a.png"');
     expect(img).toContain('alt=""');
@@ -72,8 +72,11 @@ describe("Avatar", () => {
     const html = render(<Avatar name="Meera" src="/a.png" alt="Meera Rao" />);
     expect(html).toContain('alt="Meera Rao"');
     // With alt text the tile is meaningful, so it is no longer hidden from assistive tech.
-    expect(html).not.toContain("aria-hidden");
-    expect(render(<Avatar name="Meera" src="/a.png" />)).toContain("aria-hidden");
+    const tile = (h: string) => h.match(/<span\b[^>]*class="relative [^>]*>/)?.[0] ?? "";
+    expect(tile(html)).not.toContain("aria-hidden");
+    expect(tile(render(<Avatar name="Meera" src="/a.png" />))).toContain("aria-hidden");
+    // The letter is decorative either way: it never reaches assistive tech beside the photo's alt text.
+    expect(html).toContain('<span aria-hidden="true">M</span>');
   });
 
   it("has no gradient and appends a className passthrough", () => {

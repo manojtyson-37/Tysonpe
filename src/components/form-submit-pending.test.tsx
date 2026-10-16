@@ -47,6 +47,19 @@ describe("SubmitButton pending announcement", () => {
     expect(html.match(/Creating order…/g)).toHaveLength(1);
   });
 
+  it("the live region is a sibling after the button, never inside it (button descendants are presentational)", () => {
+    for (const pending of [false, true]) {
+      mockPending = pending;
+      const html = render(<SubmitButton pendingText="Creating order…">Pay now</SubmitButton>);
+      expect(html.indexOf("</button>")).toBeGreaterThan(-1);
+      expect(html.indexOf("</button>")).toBeLessThan(html.indexOf('role="status"'));
+      // The button's own accessible name is the label alone, in both states.
+      const button = html.match(/<button\b[\s\S]*<\/button>/)?.[0] ?? "";
+      expect(button).toContain("Pay now");
+      expect(button).not.toContain("Creating order…");
+    }
+  });
+
   it("the label text is identical in both states, so the button keeps its width", () => {
     const labelOf = (html: string) => html.replace(/<span\b[^>]*role="status"[^>]*>[^<]*<\/span>/, "").match(/Pay now/g);
     const idle = render(<SubmitButton>Pay now</SubmitButton>);

@@ -16,10 +16,10 @@ describe("EmptyState", () => {
     const html = render(<EmptyState title="Empty" />);
     // The title is itself a <p>; only the body paragraph (muted, max-w-sm) must be absent.
     expect(html.match(/<p\b/g)).toHaveLength(1);
-    expect(html).not.toContain("max-w-sm");
+    expect(html).not.toContain("mt-1 max-w-sm text-sm text-muted");
     const withBody = render(<EmptyState title="Empty" body="Nothing here." />);
     expect(withBody.match(/<p\b/g)).toHaveLength(2);
-    expect(withBody).toContain("max-w-sm");
+    expect(withBody).toContain('class="mt-1 max-w-sm text-sm text-muted"');
   });
 
   it("renders the icon slot when provided", () => {

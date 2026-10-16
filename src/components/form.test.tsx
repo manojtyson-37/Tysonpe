@@ -11,6 +11,8 @@ import {
   SubmitButton,
   Switch,
   Textarea,
+  colorFromPicker,
+  colorFromText,
   isHexColor,
   legacyButtonLook,
 } from "./form";
@@ -120,6 +122,12 @@ describe("field a11y merging across every control", () => {
     expect(attr(render(make({})), tag, "aria-invalid")).toBeUndefined();
   });
 
+  it.each(controls)("%s passes the ARIA token values grammar and spelling through", (_n, tag, make) => {
+    expect(attr(render(make({ "aria-invalid": "grammar" })), tag, "aria-invalid")).toBe("grammar");
+    expect(attr(render(make({ "aria-invalid": "spelling" })), tag, "aria-invalid")).toBe("spelling");
+    expect(attr(render(make({ "aria-invalid": "false" })), tag, "aria-invalid")).toBeUndefined();
+  });
+
   it.each(controls)("%s lets the field's error force aria-invalid over a caller's false", (_n, tag, make) => {
     const html = render(make({ error: "Bad.", "aria-invalid": false }));
     expect(attr(html, tag, "aria-invalid")).toBe("true");
@@ -194,8 +202,8 @@ describe("InputGroup", () => {
     const html = render(<InputGroup id="amt" name="amt" label="Amount" prefix="₹" />);
     expect(html).toContain("₹");
     // Count addon spans by their edge border, not by colour: the wrapper also carries has-[:disabled]:bg-surface-2.
-    expect(html.match(/<span class="[^"]*\bborder-r border-line\b[^"]*">/g)).toHaveLength(1);
-    expect(html).not.toContain("border-l border-line");
+    expect(html.match(/<span class="[^"]*\bborder-r border-line(?![-\w])[^"]*">/g)).toHaveLength(1);
+    expect(html).not.toMatch(/border-l border-line(?![-\w])/);
   });
 
   it("marks the group and input invalid and links the error", () => {
@@ -390,18 +398,6 @@ describe("SubmitButton", () => {
     const html = render(<SubmitButton variant="secondary" size="sm" className="w-full">Go</SubmitButton>);
     expect(html).toContain('class="btn btn-secondary btn-sm w-full"');
   });
-
-  it("keeps the visible label and carries the pending text in a polite live region", () => {
-    // Outside a form action useFormStatus reports not-pending, so the region is present but empty: the
-    // label never swaps, so the button keeps its width and the control is not re-announced.
-    const html = render(<SubmitButton pendingText="Creating order…">Pay now</SubmitButton>);
-    expect(html).toContain("Pay now");
-    expect(html).toContain('role="status"');
-    expect(html).toContain('aria-live="polite"');
-    expect(html).toContain("sr-only");
-    expect(html).not.toContain("Creating order…");
-    expect(html).not.toContain("opacity-0");
-  });
 });
 
 describe("Field (context-free usage)", () => {
@@ -430,5 +426,21 @@ describe("Field (context-free usage)", () => {
 
   it("applies defaultValue", () => {
     expect(render(<Field name="n" label="N" defaultValue="Asha" />)).toContain('value="Asha"');
+  });
+});
+
+describe("ColorField casing helpers", () => {
+  it("typing a full uppercase hex keeps the user's casing in the box but emits lowercase", () => {
+    expect(colorFromText("#ABCDEF")).toEqual({ text: "#ABCDEF", picker: "#abcdef", emit: "#abcdef" });
+  });
+
+  it("does not move the picker or emit while the typed value is not yet a full hex colour", () => {
+    expect(colorFromText("#ABC")).toEqual({ text: "#ABC" });
+    expect(colorFromText("")).toEqual({ text: "" });
+    expect(colorFromText("#ABCDEFG")).toEqual({ text: "#ABCDEFG" });
+  });
+
+  it("an uppercase value from the native picker is lowercased everywhere, box included", () => {
+    expect(colorFromPicker("#5B3DF5")).toEqual({ text: "#5b3df5", picker: "#5b3df5", emit: "#5b3df5" });
   });
 });

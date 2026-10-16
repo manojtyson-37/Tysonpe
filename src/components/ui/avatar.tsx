@@ -42,7 +42,7 @@ export function Avatar({
     .join(" ");
   return (
     <span aria-hidden={src && alt ? undefined : true} style={sized.style} className={cls}>
-      {name.trim().charAt(0).toUpperCase()}
+      <span aria-hidden="true">{name.trim().charAt(0).toUpperCase()}</span>
       {src ? <AvatarImage src={src} alt={alt ?? ""} /> : null}
     </span>
   );

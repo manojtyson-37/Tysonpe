@@ -61,7 +61,7 @@ describe("Progress", () => {
     expect(ProgressFromUi).toBe(Progress);
   });
 
-  it("draws the empty track in the stronger hairline so the bar reads at 3:1", () => {
+  it("draws the empty track in line-strong (not the fainter line) so the fill has something to read against", () => {
     const html = render(<Progress value={0} label="Course completion" />);
     const track = html.match(/<div role="progressbar"[^>]*>/)?.[0] ?? "";
     expect(track).toContain("bg-line-strong");
