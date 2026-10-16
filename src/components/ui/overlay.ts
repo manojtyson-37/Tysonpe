@@ -1,4 +1,4 @@
-// DOM-level overlay helpers shared by Dialog and the mobile menu sheet. No React, no framer-motion: importing this
+// DOM-level overlay helpers shared by Dialog and Sheet. No React, no framer-motion: importing this
 // module never loads the animation library.
 
 /**
@@ -28,6 +28,56 @@ export function tabAtEdge(index: number, count: number, shift: boolean): boolean
  */
 export function escapeAlreadyHandled(event: { defaultPrevented: boolean; isComposing: boolean }): boolean {
   return event.defaultPrevented || event.isComposing;
+}
+
+export type OverlayStack = readonly string[];
+
+/** Opens `id` on top of the stack (moving it to the top if it was already in it). */
+export function pushOverlay(stack: OverlayStack, id: string): OverlayStack {
+  return [...stack.filter((entry) => entry !== id), id];
+}
+
+/** Removes `id` wherever it sits, so the overlay underneath becomes the top again. */
+export function popOverlay(stack: OverlayStack, id: string): OverlayStack {
+  return stack.includes(id) ? stack.filter((entry) => entry !== id) : stack;
+}
+
+/** True only for the most recently opened overlay: the one that owns Escape and Tab. */
+export function isTopOverlay(stack: OverlayStack, id: string): boolean {
+  return stack.length > 0 && stack[stack.length - 1] === id;
+}
+
+// Every open Dialog and Sheet listens on `document`; only the top of this one shared stack acts, so Escape closes one
+// overlay and Tab is trapped once, whichever kind is on top. (Module state, like the scroll-lock registry below.)
+let openOverlays: OverlayStack = [];
+
+/** Puts `id` on top of the shared stack. Returns an idempotent function that takes it off again. */
+export function registerOverlay(id: string): () => void {
+  openOverlays = pushOverlay(openOverlays, id);
+  return () => {
+    openOverlays = popOverlay(openOverlays, id);
+  };
+}
+
+/** Whether `id` is the top of the shared stack right now, read at event time. */
+export function isActiveOverlay(id: string): boolean {
+  return isTopOverlay(openOverlays, id);
+}
+
+export type OverlayKeyIntent = "close" | "trap" | "ignore";
+
+/**
+ * What an overlay's document keydown handler does with a key. An overlay that is not on top ignores everything, so a
+ * dialog over a sheet owns Escape and Tab and the sheet underneath neither closes nor steals focus. The top overlay
+ * closes on a first-hand Escape (see `escapeAlreadyHandled`) and traps Tab.
+ */
+export function overlayKey(
+  isTop: boolean,
+  event: { key: string; defaultPrevented: boolean; isComposing: boolean },
+): OverlayKeyIntent {
+  if (!isTop) return "ignore";
+  if (event.key === "Escape") return escapeAlreadyHandled(event) ? "ignore" : "close";
+  return event.key === "Tab" ? "trap" : "ignore";
 }
 
 type BodyLike = { style: { overflow: string; paddingRight: string } };

@@ -16,13 +16,29 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, m, useMotionValue, useReducedMotion, type MotionValue } from "framer-motion";
 import { buttonClass } from "./button";
 import { OverlayMotion } from "./motion";
-import { dialogFocusStep, focusableWithin, lockBodyScroll, nextFocusIndex } from "./overlay";
+import {
+  dialogFocusStep,
+  focusableWithin,
+  isActiveOverlay,
+  isTopOverlay,
+  lockBodyScroll,
+  nextFocusIndex,
+  overlayKey,
+  popOverlay,
+  pushOverlay,
+  registerOverlay,
+  tabAtEdge,
+  type OverlayStack,
+} from "./overlay";
 export type { DialogFocusStep } from "./overlay";
 
 // Kept as an export of this module for existing imports; the implementation lives in ./motion.
 export { OverlayMotion };
 // The overlay helpers moved to ./overlay (so a sheet can use them without loading framer-motion); same names here.
 export { dialogFocusStep, lockBodyScroll, nextFocusIndex };
+// The open-overlay stack moved to ./overlay so a Sheet shares it with Dialog; the dialog names stay as aliases.
+export { isTopOverlay as isTopDialog, popOverlay as popDialog, pushOverlay as pushDialog };
+export type DialogStack = OverlayStack;
 
 /* ------------------------------------------------------------------ pure helpers */
 
@@ -89,26 +105,6 @@ export function dialogMotionPlan(reduced: boolean, featuresFailed: boolean): Dia
   if (featuresFailed) return { load: false, motion: undefined };
   return { load: !reduced, motion: dialogMotion(reduced) };
 }
-
-export type DialogStack = readonly string[];
-
-/** Opens `id` on top of the stack (moving it to the top if it was already in it). */
-export function pushDialog(stack: DialogStack, id: string): DialogStack {
-  return [...stack.filter((entry) => entry !== id), id];
-}
-
-/** Removes `id` wherever it sits, so the dialog underneath becomes the top again. */
-export function popDialog(stack: DialogStack, id: string): DialogStack {
-  return stack.includes(id) ? stack.filter((entry) => entry !== id) : stack;
-}
-
-/** True only for the most recently opened dialog: the one that owns Escape and Tab. */
-export function isTopDialog(stack: DialogStack, id: string): boolean {
-  return stack.length > 0 && stack[stack.length - 1] === id;
-}
-
-// Every open Dialog listens on `document`; only the top of this stack acts, so Esc closes one dialog and Tab is trapped once.
-let openDialogs: DialogStack = [];
 
 export type ConfirmState = { open: boolean; submit: boolean };
 export type ConfirmAction = "open" | "confirm" | "cancel" | "submitted";
@@ -231,7 +227,7 @@ const EXIT_FALLBACK_MS = 400;
  * opener, the page cannot scroll behind it, and it is labelled by `title` and described by the body.
  *
  * Nothing is mounted until the first `open`, so a page with many closed dialogs (one per table row) pays no cost.
- * Nested dialogs stack: only the top one reacts to Escape and Tab.
+ * Nested dialogs, and a dialog over a sheet, stack: only the top one reacts to Escape and Tab.
  */
 export function Dialog({ open, onClose, title, description, children, footer, className, initialFocusRef, returnFocusRef }: DialogProps) {
   const uid = useId();
@@ -288,22 +284,21 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
     const first = initialFocusRef?.current ?? focusableWithin(panel)[0] ?? panel;
     first.focus({ preventScroll: true });
 
-    openDialogs = pushDialog(openDialogs, uid);
+    const unregister = registerOverlay(uid);
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!isTopDialog(openDialogs, uid)) return;
-      if (event.key === "Escape") {
-        // Someone else already used this Escape (a menu, a native control), or an IME is composing: leave it alone.
-        if (event.defaultPrevented || event.isComposing) return;
+      // Only the top of the shared overlay stack (dialogs and sheets) acts. An Escape someone else already used (a menu,
+      // a native control) or an IME composition is left alone.
+      const intent = overlayKey(isActiveOverlay(uid), event);
+      if (intent === "ignore") return;
+      if (intent === "close") {
         event.preventDefault();
         close();
         return;
       }
-      if (event.key !== "Tab") return;
       const nodes = focusableWithin(panel);
       const index = nodes.findIndex((node) => node === document.activeElement);
-      const atEdge = index === -1 || (event.shiftKey ? index === 0 : index === nodes.length - 1);
-      if (!atEdge) return; // inside the list, native Tab order already stays in the panel
+      if (!tabAtEdge(index, nodes.length, event.shiftKey)) return; // inside the list, native Tab order already stays in the panel
       event.preventDefault();
       (nodes[nextFocusIndex(index, nodes.length, event.shiftKey)] ?? panel).focus();
     };
@@ -311,7 +306,7 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
 
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      openDialogs = popDialog(openDialogs, uid);
+      unregister();
       // Focus is NOT returned here: see dialogFocusStep. The effect below does it, after React has restored focus.
       fallbackRef.current = setTimeout(releaseScroll, EXIT_FALLBACK_MS);
     };

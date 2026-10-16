@@ -2,6 +2,7 @@ import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MobileMenu, MobileMenuView } from "./MobileMenu";
+import { Sheet, type SheetProps } from "./ui/sheet";
 import { SiteNavView } from "./SiteNavView";
 import { siteNavLinks, type SiteNavUser } from "./site-nav-links";
 import * as dialogModule from "./ui/dialog";
@@ -128,7 +129,7 @@ describe("MobileMenuView panel", () => {
   });
 
   it("has a flat ink backdrop that is hidden from assistive tech", () => {
-    const [backdrop] = tagAttrs(panel(null), "div").filter((a) => "data-menu-backdrop" in a);
+    const [backdrop] = tagAttrs(panel(null), "div").filter((a) => "data-sheet-backdrop" in a);
     expect(backdrop.class).toContain("bg-ink/40");
     expect(backdrop["aria-hidden"]).toBe("true");
   });
@@ -136,7 +137,7 @@ describe("MobileMenuView panel", () => {
   it("is a navigation landmark and is hidden from lg up", () => {
     const html = panel(null);
     expect(html).toMatch(/<nav [^>]*aria-label="Mobile"/);
-    const [root] = tagAttrs(html, "div").filter((a) => "data-menu-root" in a);
+    const [root] = tagAttrs(html, "div").filter((a) => "data-sheet-root" in a);
     expect(root.class).toContain("lg:hidden");
   });
 
@@ -179,7 +180,7 @@ describe("MobileMenuView panel", () => {
     for (const link of links) expect(link.props.onClick, String(link.props.href)).toBe(onClose);
 
     const closeButton = findElements(tree, (el) => el.props["aria-label"] === "Close menu");
-    const backdrop = findElements(tree, (el) => "data-menu-backdrop" in el.props);
+    const backdrop = findElements(tree, (el) => "data-sheet-backdrop" in el.props);
     expect(closeButton).toHaveLength(1);
     expect(backdrop).toHaveLength(1);
     for (const el of [...closeButton, ...backdrop]) expect(el.props.onClick).toBe(onClose);
@@ -246,5 +247,17 @@ describe("overlay helpers shared with Dialog", () => {
     b();
     expect(body.style.overflow).toBe("");
     expect(body.style.paddingRight).toBe("");
+  });
+});
+
+describe("MobileMenu wiring", () => {
+  it("hands the sheet's close function to the menu body as onClose, so following a link or logging out closes the menu", () => {
+    const items = siteNavLinks({ user: null, storefrontHandle: "demo" });
+    const sheet = MobileMenu({ items, logoutAction: noop });
+    expect(sheet.type).toBe(Sheet);
+    const close = vi.fn();
+    const bodyElement = (sheet.props as SheetProps).children(close) as ReactElement<{ items: unknown; onClose?: () => void }>;
+    expect(bodyElement.props.onClose).toBe(close);
+    expect(bodyElement.props.items).toBe(items);
   });
 });

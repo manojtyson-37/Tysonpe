@@ -5,10 +5,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 let mockPath: string | null = "/dashboard/orders/42";
 vi.mock("next/navigation", () => ({ usePathname: () => mockPath }));
 
-import { DashDrawer, DashDrawerBody } from "./DashDrawer";
+import { DashDrawer, DashDrawerBody, type DashDrawerBodyProps } from "./DashDrawer";
 import { DashNav } from "./DashNav";
 import { DASH_NAV_ITEMS, isDashNavActive } from "./dash-nav-links";
-import { SheetView } from "./ui/sheet";
+import { Sheet, SheetView, type SheetProps } from "./ui/sheet";
 
 function tagAttrs(html: string, tag: string): Record<string, string>[] {
   return [...html.matchAll(new RegExp(`<${tag}\\s((?:"[^"]*"|'[^']*'|[^>"'])*)>`, "g"))].map((match) =>
@@ -206,5 +206,19 @@ describe("the drawer panel", () => {
     expect(dialog.class).toContain("left-0");
     expect(dialog.class).toContain("translate-x-0");
     expect(html).not.toMatch(/\bmd:/);
+  });
+});
+
+describe("DashDrawer wiring", () => {
+  it("hands the sheet's close function to the drawer body as onNavigate, so following a link closes the drawer", () => {
+    mockPath = "/dashboard";
+    const sheet = DashDrawer({ creatorName: "Asha Rao", storefrontHref: "/c/asha", logoutAction: noop });
+    expect(sheet.type).toBe(Sheet);
+    const renderBody = (sheet.props as SheetProps).children;
+    const close = vi.fn();
+    const bodyElement = renderBody(close) as ReactElement<DashDrawerBodyProps>;
+    expect(bodyElement.type).toBe(DashDrawerBody);
+    expect(bodyElement.props.onNavigate).toBe(close);
+    expect(bodyElement.props.pathname).toBe("/dashboard");
   });
 });

@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { escapeAlreadyHandled, tabAtEdge } from "./overlay";
+import {
+  escapeAlreadyHandled,
+  isActiveOverlay,
+  isTopOverlay,
+  overlayKey,
+  popOverlay,
+  pushOverlay,
+  registerOverlay,
+  tabAtEdge,
+} from "./overlay";
 
 describe("tabAtEdge", () => {
   // [index of focus in the trap's focusable list, list length, shift held, expected]
@@ -30,5 +39,93 @@ describe("escapeAlreadyHandled", () => {
   ];
   it.each(cases)("%s", (_name, event, expected) => {
     expect(escapeAlreadyHandled(event)).toBe(expected);
+  });
+});
+
+describe("overlay stack (a sheet and a dialog share it)", () => {
+  it("a dialog opened over a sheet is the only top; closing it hands the top back to the sheet", () => {
+    let stack = pushOverlay([], "sheet");
+    expect(isTopOverlay(stack, "sheet")).toBe(true);
+    stack = pushOverlay(stack, "dialog");
+    expect(isTopOverlay(stack, "dialog")).toBe(true);
+    expect(isTopOverlay(stack, "sheet")).toBe(false);
+    stack = popOverlay(stack, "dialog");
+    expect(stack).toEqual(["sheet"]);
+    expect(isTopOverlay(stack, "sheet")).toBe(true);
+  });
+
+  it("a sheet opened over a dialog is the only top", () => {
+    const stack = pushOverlay(pushOverlay([], "dialog"), "sheet");
+    expect(isTopOverlay(stack, "sheet")).toBe(true);
+    expect(isTopOverlay(stack, "dialog")).toBe(false);
+  });
+
+  it("closing the sheet underneath leaves the dialog on top", () => {
+    const stack = popOverlay(pushOverlay(pushOverlay([], "sheet"), "dialog"), "sheet");
+    expect(stack).toEqual(["dialog"]);
+    expect(isTopOverlay(stack, "dialog")).toBe(true);
+  });
+
+  it("has no top when empty, ignores unknown ids, keeps one entry per id and never mutates its input", () => {
+    expect(isTopOverlay([], "a")).toBe(false);
+    expect(popOverlay(["a"], "zzz")).toEqual(["a"]);
+    expect(pushOverlay(pushOverlay([], "a"), "a")).toEqual(["a"]);
+    const frozen = Object.freeze(["a"]);
+    expect(pushOverlay(frozen, "b")).toEqual(["a", "b"]);
+    expect(popOverlay(frozen, "a")).toEqual([]);
+    expect(frozen).toEqual(["a"]);
+  });
+});
+
+describe("overlay registry (the module-level stack a Sheet and a Dialog both register in)", () => {
+  it("only the most recently registered overlay is active, and unregistering restores the one underneath", () => {
+    const unregisterSheet = registerOverlay("reg-sheet");
+    expect(isActiveOverlay("reg-sheet")).toBe(true);
+    const unregisterDialog = registerOverlay("reg-dialog");
+    expect(isActiveOverlay("reg-dialog")).toBe(true);
+    expect(isActiveOverlay("reg-sheet")).toBe(false);
+    unregisterDialog();
+    expect(isActiveOverlay("reg-sheet")).toBe(true);
+    unregisterSheet();
+    expect(isActiveOverlay("reg-sheet")).toBe(false);
+  });
+
+  it("unregistering twice, or out of order, never disturbs the others", () => {
+    const unregisterA = registerOverlay("reg-a");
+    const unregisterB = registerOverlay("reg-b");
+    unregisterA();
+    unregisterA();
+    expect(isActiveOverlay("reg-b")).toBe(true);
+    unregisterB();
+    expect(isActiveOverlay("reg-b")).toBe(false);
+  });
+});
+
+describe("overlayKey (who handles a keydown)", () => {
+  const key = (k: string, extra: { defaultPrevented?: boolean; isComposing?: boolean } = {}) => ({
+    key: k,
+    defaultPrevented: false,
+    isComposing: false,
+    ...extra,
+  });
+
+  it("an overlay that is not on top ignores Escape and Tab, so the one above it owns them", () => {
+    expect(overlayKey(false, key("Escape"))).toBe("ignore");
+    expect(overlayKey(false, key("Tab"))).toBe("ignore");
+  });
+
+  it("the top overlay closes on Escape and traps Tab", () => {
+    expect(overlayKey(true, key("Escape"))).toBe("close");
+    expect(overlayKey(true, key("Tab"))).toBe("trap");
+  });
+
+  it("the top overlay leaves an Escape that something else already used, or an IME composition, alone", () => {
+    expect(overlayKey(true, key("Escape", { defaultPrevented: true }))).toBe("ignore");
+    expect(overlayKey(true, key("Escape", { isComposing: true }))).toBe("ignore");
+  });
+
+  it("any other key is nobody's business", () => {
+    expect(overlayKey(true, key("Enter"))).toBe("ignore");
+    expect(overlayKey(true, key("a"))).toBe("ignore");
   });
 });

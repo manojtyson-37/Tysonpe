@@ -6,10 +6,12 @@ import { IconX } from "../icons";
 import { buttonClass } from "./button";
 import {
   dialogFocusStep,
-  escapeAlreadyHandled,
   focusableWithin,
+  isActiveOverlay,
   lockBodyScroll,
   nextFocusIndex,
+  overlayKey,
+  registerOverlay,
   tabAtEdge,
 } from "./overlay";
 
@@ -65,14 +67,14 @@ export function SheetView({
   const edge = SIDE_CLASS[side];
   return (
     <div
-      data-menu-root=""
+      data-sheet-root=""
       className={[
         "fixed inset-0 z-[60] overflow-hidden lg:hidden",
         open ? "visible" : "pointer-events-none invisible transition-[visibility] duration-(--dur-exit)",
       ].join(" ")}
     >
       <div
-        data-menu-backdrop=""
+        data-sheet-backdrop=""
         aria-hidden="true"
         onClick={onClose}
         className={[
@@ -152,16 +154,18 @@ export function Sheet({ title, closeLabel, triggerLabel, triggerIcon, triggerCla
     if (!open || !panel) return;
 
     const unlock = lockBodyScroll(document.body, window.innerWidth - document.documentElement.clientWidth);
+    const unregister = registerOverlay(uid);
     closeRef.current?.focus({ preventScroll: true });
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        if (escapeAlreadyHandled(event)) return;
+      // Only the top of the shared overlay stack acts: with a Dialog open over this sheet, Escape and Tab are the dialog's.
+      const intent = overlayKey(isActiveOverlay(uid), event);
+      if (intent === "ignore") return;
+      if (intent === "close") {
         event.preventDefault();
         setOpen(false);
         return;
       }
-      if (event.key !== "Tab") return;
       const nodes = focusableWithin(panel);
       const index = nodes.findIndex((node) => node === document.activeElement);
       if (!tabAtEdge(index, nodes.length, event.shiftKey)) return; // inside the list, native Tab order already stays in the panel
@@ -180,9 +184,10 @@ export function Sheet({ title, closeLabel, triggerLabel, triggerIcon, triggerCla
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       query.removeEventListener("change", onViewport);
+      unregister();
       unlock();
     };
-  }, [open, mounted]);
+  }, [open, mounted, uid]);
 
   // Focus goes back to the trigger from an effect BODY on the real open -> closed transition, never from the cleanup
   // above: React restores the previously focused element after the mutation phase, where cleanups run, so a focus call

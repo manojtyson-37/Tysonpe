@@ -83,8 +83,8 @@ describe("SheetView", () => {
 
   it("is hidden from lg up and has an aria-hidden ink backdrop", () => {
     const html = view();
-    const root = tagAttrs(html, "div").find((a) => "data-menu-root" in a)!;
-    const backdrop = tagAttrs(html, "div").find((a) => "data-menu-backdrop" in a)!;
+    const root = tagAttrs(html, "div").find((a) => "data-sheet-root" in a)!;
+    const backdrop = tagAttrs(html, "div").find((a) => "data-sheet-backdrop" in a)!;
     expect(root.class).toContain("lg:hidden");
     expect(backdrop.class).toContain("bg-ink/40");
     expect(backdrop["aria-hidden"]).toBe("true");
@@ -154,11 +154,38 @@ describe("desktop/mobile switch", () => {
 describe("one overlay implementation", () => {
   it("the sheet takes its trap and escape decisions and its scroll lock from overlay.ts, not a private copy", () => {
     const source = readFileSync("src/components/ui/sheet.tsx", "utf8");
-    for (const name of ["lockBodyScroll", "tabAtEdge", "escapeAlreadyHandled", "nextFocusIndex", "dialogFocusStep", "focusableWithin"]) {
+    for (const name of ["lockBodyScroll", "tabAtEdge", "overlayKey", "nextFocusIndex", "dialogFocusStep", "focusableWithin"]) {
       expect(source, name).toMatch(new RegExp(`\\b${name}\\(`));
       expect(Object.keys(overlay)).toContain(name);
     }
     expect(source).not.toMatch(/body\.style\.overflow|\.defaultPrevented|isComposing/);
+    expect(source).toMatch(/matchMedia\(DESKTOP_QUERY\)/);
+  });
+
+  it("the sheet and the dialog register in the one shared overlay stack and let overlayKey decide who handles a key", () => {
+    for (const file of ["sheet", "dialog"]) {
+      const source = readFileSync(`src/components/ui/${file}.tsx`, "utf8");
+      expect(source, file).toMatch(/registerOverlay\(/);
+      // the handler's decision comes from the shared stack, not from a local flag or a private list
+      expect(source, file).toMatch(/overlayKey\(isActiveOverlay\(\w+\), event\)/);
+      expect(source, file).not.toMatch(/let openDialogs|const openDialogs|\.defaultPrevented|isComposing/);
+    }
+  });
+
+  it("the sheet's keydown handler decides first, and returns before doing anything when it is not on top", () => {
+    const source = readFileSync("src/components/ui/sheet.tsx", "utf8");
+    const start = source.indexOf("const onKeyDown");
+    const end = source.indexOf('document.addEventListener("keydown"');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const handler = source.slice(start, end);
+    const decision = handler.indexOf("overlayKey(isActiveOverlay(uid), event)");
+    const bail = handler.indexOf('if (intent === "ignore") return;');
+    expect(decision).toBeGreaterThan(-1);
+    expect(bail).toBeGreaterThan(decision);
+    // nothing with a side effect runs before the bail
+    expect(handler.slice(0, bail)).not.toMatch(/preventDefault|setOpen|\.focus\(/);
+    expect(handler.slice(bail)).toMatch(/preventDefault/);
   });
 
   it("focus returns from the layout-effect body, never from a cleanup", () => {
