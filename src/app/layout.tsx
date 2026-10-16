@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import { Toaster } from "@/components/ui";
 import "./globals.css";
 
 const sans = Plus_Jakarta_Sans({
@@ -26,7 +27,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${sans.variable} ${display.variable} ${mono.variable} h-full`}>
-      <body className="min-h-full flex flex-col font-sans antialiased">{children}</body>
+      <body className="min-h-full flex flex-col font-sans antialiased">
+        {children}
+        <Toaster />
+      </body>
     </html>
   );
 }
