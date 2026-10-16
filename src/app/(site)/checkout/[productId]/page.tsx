@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { startCheckout } from "@/app/actions/checkout";
-import { ActionForm, FormError, SubmitButton } from "@/components/form";
-import { Money } from "@/components/ui";
+import { ActionForm, FormError, Input, SubmitButton } from "@/components/form";
+import { IconArrowLeft } from "@/components/icons";
+import { Button, Callout, MetricList, MetricRow, Money, PageHeader, Surface } from "@/components/ui";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { priceOrder } from "@/lib/money";
@@ -48,56 +49,78 @@ export default async function CheckoutPage({ params, searchParams }: PageProps<"
   if (coupon && priced.discountPaise > 0) couponNote = { ok: true, text: `${coupon.code} applied. You save ` };
 
   const action = startCheckout.bind(null, product.id);
+  const isFree = priced.totalPaise === 0;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
-      <h1 className="text-3xl font-bold">Checkout</h1>
-      <div className="mt-8 grid gap-8 md:grid-cols-[1fr_360px]">
-        <div className="space-y-6">
-          <section className="card p-6">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Your order</h2>
-            <p className="mt-3 text-lg font-bold">{product.title}</p>
+      <PageHeader title="Checkout" />
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
+        <div className="space-y-5">
+          <Surface as="section" aria-labelledby="order-heading" padding="lg">
+            <h2 id="order-heading" className="t-label">Your order</h2>
+            <p className="mt-2 text-lg font-semibold">{product.title}</p>
             <p className="text-sm text-muted">by {product.creator.displayName}</p>
-          </section>
+            <MetricList className="mt-4 border-t border-line">
+              <MetricRow label="Price" value={<Money paise={priced.subtotalPaise} free />} />
+              {priced.discountPaise > 0 && (
+                <MetricRow
+                  label="Discount"
+                  sub={coupon ? coupon.code : undefined}
+                  value={<Money paise={priced.discountPaise} sign="−" tone="good" />}
+                />
+              )}
+              <MetricRow label="Total" value={<Money paise={priced.totalPaise} free />} strong />
+              {priced.gstPaise > 0 && (
+                <MetricRow label={`Includes GST (${product.gstRatePct}%)`} value={<Money paise={priced.gstPaise} />} />
+              )}
+            </MetricList>
+          </Surface>
 
-          <section className="card p-6">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Have a coupon?</h2>
-            <form method="get" className="mt-3 flex gap-2">
-              <input name="coupon" defaultValue={code} placeholder="ENTER CODE" aria-label="Coupon code" className="input uppercase" autoComplete="off" />
-              <button className="btn btn-secondary" type="submit">Apply</button>
+          <Surface as="section" aria-labelledby="coupon-heading" padding="lg">
+            <h2 id="coupon-heading" className="t-label">Coupon</h2>
+            <form method="get" className="mt-3 flex items-end gap-2">
+              <Input
+                name="coupon"
+                label="Coupon code"
+                defaultValue={code}
+                placeholder="Enter code"
+                autoComplete="off"
+                className="min-w-0 flex-1 [&_input]:uppercase"
+              />
+              <Button type="submit" variant="secondary" className="pointer-coarse:min-h-11">Apply</Button>
             </form>
             {couponNote && (
-              <p role="status" className={`mt-2 text-sm font-medium ${couponNote.ok ? "text-good" : "text-bad"}`}>
-                {couponNote.text}{couponNote.ok && <Money paise={priced.discountPaise} />}
-              </p>
+              <Callout tone={couponNote.ok ? "good" : "bad"} className="mt-3">
+                {couponNote.text}
+                {couponNote.ok && <Money paise={priced.discountPaise} />}
+                {couponNote.ok && "."}
+              </Callout>
             )}
-          </section>
+          </Surface>
         </div>
 
-        <aside>
-          <div className="card p-6">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Summary</h2>
-            <dl className="mt-4 space-y-2 text-sm">
-              <div className="flex justify-between"><dt>Price</dt><dd><Money paise={priced.subtotalPaise} /></dd></div>
-              {priced.discountPaise > 0 && (
-                <div className="flex justify-between text-good"><dt>Discount</dt><dd>−<Money paise={priced.discountPaise} /></dd></div>
-              )}
-              <div className="flex justify-between border-t border-line pt-3 text-base font-bold">
-                <dt>Total</dt><dd><Money paise={priced.totalPaise} /></dd>
-              </div>
-              {priced.gstPaise > 0 && (
-                <div className="flex justify-between text-xs text-muted"><dt>Includes GST ({product.gstRatePct}%)</dt><dd><Money paise={priced.gstPaise} /></dd></div>
-              )}
-            </dl>
+        <aside aria-label="Order total">
+          <Surface padding="lg">
+            <p className="t-label">Total</p>
+            <p className="mt-1.5">
+              <Money paise={priced.totalPaise} free size="xl" />
+            </p>
+            {!isFree && <p className="mt-1 text-sm text-muted">You choose how to pay on the next step.</p>}
             <ActionForm action={action} className="mt-5 space-y-3">
               <input type="hidden" name="coupon" value={coupon ? coupon.code : ""} />
               <FormError />
               <SubmitButton pendingText="Creating order…" className="btn btn-primary btn-lg w-full">
-                {priced.totalPaise === 0 ? "Get access" : "Continue to payment"}
+                {isFree ? "Get access" : "Continue to payment"}
               </SubmitButton>
             </ActionForm>
-            <Link href={`/c/${product.creator.handle}/${product.slug}`} className="mt-3 block text-center text-sm text-muted hover:text-ink">Back to product</Link>
-          </div>
+            <Link
+              href={`/c/${product.creator.handle}/${product.slug}`}
+              className="mt-3 flex items-center justify-center gap-1.5 text-sm text-muted transition-colors hover:text-ink pointer-coarse:min-h-11"
+            >
+              <IconArrowLeft size={16} />
+              Back to product
+            </Link>
+          </Surface>
         </aside>
       </div>
     </div>
