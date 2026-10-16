@@ -2,23 +2,29 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useId, useRef, type KeyboardEvent, type ReactNode } from "react";
-import { LazyMotion, MotionConfig, domMax, m } from "framer-motion";
+import { useId, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { LazyMotion, MotionConfig, m } from "framer-motion";
 
 /* ------------------------------------------------------------------ pure helpers */
 
+/** Which arrow keys move the selection. A horizontal tablist uses `horizontal` so Up/Down keep scrolling the page. */
+export type ArrowKeys = "horizontal" | "all";
+
 /**
  * Roving-focus target for a tab or segment list. Arrow keys wrap around, Home and End jump to the ends, any other
- * key (or an empty list) returns `current` unchanged so callers can tell nothing moved.
+ * key (or an empty list) returns `current` unchanged so callers can tell nothing moved. With `arrows="horizontal"`
+ * ArrowUp and ArrowDown are ignored too.
  */
-export function nextIndex(current: number, key: string, count: number): number {
+export function nextIndex(current: number, key: string, count: number, arrows: ArrowKeys = "all"): number {
   if (count <= 0) return current;
   switch (key) {
-    case "ArrowRight":
     case "ArrowDown":
+      return arrows === "all" ? (current + 1) % count : current;
+    case "ArrowUp":
+      return arrows === "all" ? (current - 1 + count) % count : current;
+    case "ArrowRight":
       return (current + 1) % count;
     case "ArrowLeft":
-    case "ArrowUp":
       return (current - 1 + count) % count;
     case "Home":
       return 0;
@@ -49,8 +55,53 @@ export function tabPanelId(base: string, value: string): string {
 
 /* ------------------------------------------------------------------ shared pieces */
 
-// 200ms with --ease-out (cubic-bezier .25,1,.5,1): the same values as --dur-base and --ease-out in globals.css.
-const INDICATOR_TRANSITION = { duration: 0.2, ease: [0.25, 1, 0.5, 1] as [number, number, number, number] };
+/**
+ * How the sliding indicator travels. Keyboard-initiated changes snap (no motion on keyboard actions); pointer changes
+ * slide for 200ms with --ease-out (cubic-bezier .25,1,.5,1), the same values as --dur-base and --ease-out in globals.css.
+ */
+export function indicatorTransition(keyboardDriven: boolean) {
+  return keyboardDriven ? { duration: 0 } : { duration: 0.2, ease: [0.25, 1, 0.5, 1] as [number, number, number, number] };
+}
+
+/**
+ * Roving tabindex + arrow-key selection shared by the state-mode tablist and the segmented radiogroup. Spread
+ * `getItemProps(index)` onto each item button. `keyboardDriven` is true when the last selection change came from the
+ * keyboard (arrows, Home/End, Enter/Space) and false after a pointer click, so the indicator can snap or slide.
+ */
+function useRovingSelection(values: string[], value: string, onChange: (value: string) => void, arrows: ArrowKeys) {
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [keyboardDriven, setKeyboardDriven] = useState(false);
+  const selectedIndex = values.indexOf(value);
+  // If `value` matches nothing, keep the first item reachable by keyboard.
+  const tabStop = selectedIndex === -1 ? 0 : selectedIndex;
+
+  const getItemProps = (index: number) => ({
+    ref: (el: HTMLButtonElement | null) => {
+      refs.current[index] = el;
+    },
+    type: "button" as const,
+    tabIndex: index === tabStop ? 0 : -1,
+    onClick: (event: MouseEvent<HTMLButtonElement>) => {
+      // A click with detail 0 is Enter or Space on the focused button, not a pointer.
+      setKeyboardDriven(event.detail === 0);
+      onChange(values[index]);
+    },
+    onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => {
+      const next = nextIndex(index, event.key, values.length, arrows);
+      if (next === index) return;
+      event.preventDefault();
+      setKeyboardDriven(true);
+      refs.current[next]?.focus();
+      onChange(values[next]);
+    },
+  });
+
+  return { selectedIndex, keyboardDriven, getItemProps };
+}
+
+// One shared async loader: first paint never depends on it (initial={false}), so the ~50KB of layout features
+// load after hydration instead of blocking it.
+const loadFeatures = () => import("framer-motion").then((mod) => mod.domMax);
 
 const ITEM_BASE =
   "relative inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-control px-3.5 text-sm font-medium " +
@@ -77,15 +128,23 @@ const LIST_CLASS: Record<Variant, string> = {
 function Motion({ children }: { children: ReactNode }) {
   // reducedMotion="user" turns layout (transform) animations into instant jumps under prefers-reduced-motion.
   return (
-    <LazyMotion features={domMax}>
+    <LazyMotion features={loadFeatures}>
       <MotionConfig reducedMotion="user">{children}</MotionConfig>
     </LazyMotion>
   );
 }
 
-function Indicator({ layoutId, variant }: { layoutId: string; variant: Variant }) {
+function Indicator({ layoutId, variant, keyboardDriven = false }: { layoutId: string; variant: Variant; keyboardDriven?: boolean }) {
   // initial={false}: the first paint is the final state, so there is no entrance animation.
-  return <m.span layoutId={layoutId} initial={false} transition={INDICATOR_TRANSITION} className={INDICATOR_CLASS[variant]} aria-hidden="true" />;
+  return (
+    <m.span
+      layoutId={layoutId}
+      initial={false}
+      transition={indicatorTransition(keyboardDriven)}
+      className={INDICATOR_CLASS[variant]}
+      aria-hidden="true"
+    />
+  );
 }
 
 /* ------------------------------------------------------------------ Tabs */
@@ -159,18 +218,13 @@ function LinkTabs({ items, ariaLabel, className }: LinkTabsProps) {
 function StateTabs({ items, value, onChange, id, ariaLabel, className }: StateTabsProps) {
   const uid = useId();
   const layoutId = `${uid}-indicator`;
-  const refs = useRef<(HTMLButtonElement | null)[]>([]);
-  const selectedIndex = items.findIndex((i) => i.value === value);
-  // If `value` matches nothing, keep the first tab reachable by keyboard.
-  const tabStop = selectedIndex === -1 ? 0 : selectedIndex;
-
-  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    const next = nextIndex(index, event.key, items.length);
-    if (next === index) return;
-    event.preventDefault();
-    refs.current[next]?.focus();
-    onChange(items[next].value);
-  };
+  // Horizontal tablist: Up/Down are left to the page so vertical scrolling is not hijacked.
+  const { selectedIndex, keyboardDriven, getItemProps } = useRovingSelection(
+    items.map((i) => i.value),
+    value,
+    onChange,
+    "horizontal",
+  );
 
   return (
     <Motion>
@@ -180,20 +234,14 @@ function StateTabs({ items, value, onChange, id, ariaLabel, className }: StateTa
           return (
             <button
               key={item.value}
-              ref={(el) => {
-                refs.current[index] = el;
-              }}
-              type="button"
+              {...getItemProps(index)}
               role="tab"
               id={tabId(id, item.value)}
               aria-selected={selected}
               aria-controls={tabPanelId(id, item.value)}
-              tabIndex={index === tabStop ? 0 : -1}
-              onClick={() => onChange(item.value)}
-              onKeyDown={(event) => onKeyDown(event, index)}
               className={`${ITEM_BASE} ${selected ? ITEM_TONE.active : ITEM_TONE.idle}`}
             >
-              {selected && <Indicator layoutId={layoutId} variant="tabs" />}
+              {selected && <Indicator layoutId={layoutId} variant="tabs" keyboardDriven={keyboardDriven} />}
               <span className="relative">{item.label}</span>
             </button>
           );
@@ -251,17 +299,12 @@ export type SegmentedControlProps = {
 export function SegmentedControl({ options, value, onChange, ariaLabel, className }: SegmentedControlProps) {
   const uid = useId();
   const layoutId = `${uid}-indicator`;
-  const refs = useRef<(HTMLButtonElement | null)[]>([]);
-  const selectedIndex = options.findIndex((o) => o.value === value);
-  const tabStop = selectedIndex === -1 ? 0 : selectedIndex;
-
-  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    const next = nextIndex(index, event.key, options.length);
-    if (next === index) return;
-    event.preventDefault();
-    refs.current[next]?.focus();
-    onChange(options[next].value);
-  };
+  const { selectedIndex, keyboardDriven, getItemProps } = useRovingSelection(
+    options.map((o) => o.value),
+    value,
+    onChange,
+    "all",
+  );
 
   return (
     <Motion>
@@ -271,18 +314,12 @@ export function SegmentedControl({ options, value, onChange, ariaLabel, classNam
           return (
             <button
               key={option.value}
-              ref={(el) => {
-                refs.current[index] = el;
-              }}
-              type="button"
+              {...getItemProps(index)}
               role="radio"
               aria-checked={selected}
-              tabIndex={index === tabStop ? 0 : -1}
-              onClick={() => onChange(option.value)}
-              onKeyDown={(event) => onKeyDown(event, index)}
               className={`${ITEM_BASE} ${selected ? ITEM_TONE.active : ITEM_TONE.idle}`}
             >
-              {selected && <Indicator layoutId={layoutId} variant="segmented" />}
+              {selected && <Indicator layoutId={layoutId} variant="segmented" keyboardDriven={keyboardDriven} />}
               <span className="relative">{option.label}</span>
             </button>
           );
