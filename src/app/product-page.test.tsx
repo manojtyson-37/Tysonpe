@@ -23,10 +23,10 @@ const findEnrollment = vi.hoisted(() => vi.fn<(args: unknown) => Promise<unknown
 vi.mock("@/lib/db", () => ({ db: { product: { findFirst }, enrollment: { findUnique: findEnrollment } } }));
 
 import Link from "next/link";
-import { Avatar } from "@/components/Brand";
+import { Avatar, BrandScope } from "@/components/Brand";
 import { ButtonLink, Callout, Price, Surface } from "@/components/ui";
 import { functionProps } from "@/test/rsc-safe";
-import ProductPage from "./(site)/c/[handle]/[slug]/page";
+import ProductPage, { generateMetadata } from "./(site)/c/[handle]/[slug]/page";
 
 const items = (n: number) =>
   Array.from({ length: n }, (_, i) => ({ id: `i${i + 1}`, title: `Lesson title ${i + 1}`, kind: ["video", "pdf", "text", "link", "quiz"][i % 5] }));
@@ -64,6 +64,7 @@ async function render(): Promise<string> {
 const count = (html: string, needle: string) => html.split(needle).length - 1;
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 const aside = (html: string) => html.slice(html.indexOf("<aside"), html.indexOf("</aside>"));
+const MONTHLY_LINE = "One payment today. Recurring billing is not live yet.";
 const ctaLinks = (html: string) => [...html.matchAll(/<a [^>]*class="btn [^"]*"[^>]*>/g)].map((m) => m[0]);
 
 describe("product page: variants", () => {
@@ -90,7 +91,8 @@ describe("product page: variants", () => {
     expect(text(html)).not.toContain("GST");
     expect(text(html)).not.toContain("invoice");
     expect(text(html)).not.toContain("test mode");
-    expect(text(html)).toContain("Instant access in your library");
+    expect(text(html)).toContain("In your library straight away");
+    expect(text(html)).not.toContain("as soon as payment completes");
     expect(html).toMatch(/<a [^>]*href="\/checkout\/p1"[^>]*>Get it free<\/a>/);
   });
 
@@ -108,6 +110,26 @@ describe("product page: variants", () => {
     expect(html).not.toContain("/ month");
   });
 
+  it("monthly + paid says plainly that it is one payment, directly under the price and outside the lg-only bullets", async () => {
+    state.product = product({ type: "membership", billing: "monthly", pricePaise: 49900 });
+    const a = aside(await render());
+    expect(text(a)).toContain(MONTHLY_LINE);
+    expect(count(a, MONTHLY_LINE)).toBe(1);
+    // visible at every viewport: it sits before the `hidden lg:block` bullet list, in the same unit as the price
+    expect(a.indexOf(MONTHLY_LINE)).toBeLessThan(a.indexOf("<ul"));
+    expect(a.indexOf("₹499")).toBeLessThan(a.indexOf(MONTHLY_LINE));
+    expect(a.indexOf(MONTHLY_LINE)).toBeLessThan(a.indexOf("<a "));
+    const line = a.match(/<p [^>]*>One payment today[^<]*<\/p>/)?.[0] ?? "";
+    expect(line).not.toMatch(/hidden|lg:block/);
+  });
+
+  it("the recurring-billing line is absent for one-time paid, free, and free monthly", async () => {
+    for (const over of [{ billing: "one_time" }, { pricePaise: 0, billing: "one_time" }, { pricePaise: 0, billing: "monthly" }]) {
+      state.product = product(over);
+      expect(text(await render()), JSON.stringify(over)).not.toContain("Recurring billing");
+    }
+  });
+
   it("owned: Open in your library is the one action, and no checkout link remains", async () => {
     state.user = { id: "u1", creator: null };
     state.enrolled = true;
@@ -116,6 +138,40 @@ describe("product page: variants", () => {
     expect(html).not.toContain("/checkout/");
     expect(ctaLinks(html)).toHaveLength(1);
     expect(ctaLinks(html)[0]).toContain("btn-primary");
+  });
+
+  it("owned: nothing to pay, so the bar is the CTA alone: no price, no GST note, no rupee amount", async () => {
+    state.user = { id: "u1", creator: null };
+    state.enrolled = true;
+    const html = await render();
+    expect(text(aside(html)).trim().startsWith("Open in your library")).toBe(true);
+    expect(aside(html)).not.toContain("₹");
+    expect(text(html)).not.toContain("GST");
+    expect(text(html)).not.toContain("/ month");
+    expect(ctaLinks(html)[0]).toContain("max-lg:grow");
+  });
+
+  it("owned + monthly: still no price and none of the recurring-billing line", async () => {
+    state.user = { id: "u1", creator: null };
+    state.enrolled = true;
+    state.product = product({ billing: "monthly" });
+    const html = await render();
+    expect(html).not.toContain("₹");
+    expect(text(html)).not.toContain(MONTHLY_LINE);
+  });
+
+  it("the owner (creator) keeps the price: it is informational for them", async () => {
+    state.user = { id: "u2", creator: { id: "cr1" } };
+    const html = await render();
+    expect(text(aside(html))).toContain("₹499 incl. 18% GST");
+  });
+
+  it("a GST rate of 0 shows the price and no GST text (checkout hides the row too)", async () => {
+    state.product = product({ gstRatePct: 0 });
+    const html = await render();
+    expect(text(aside(html))).toContain("₹499");
+    expect(text(html)).not.toContain("GST");
+    expect(text(html)).not.toContain("0%");
   });
 
   it("the owner (not enrolled) gets Edit product as a secondary action", async () => {
@@ -131,6 +187,8 @@ describe("product page: variants", () => {
     state.product = product({ status: "draft" });
     await expect(call()).rejects.toThrow("NOT_FOUND");
     state.user = { id: "u3", creator: { id: "other" } };
+    await expect(call()).rejects.toThrow("NOT_FOUND");
+    state.user = { id: "u4", creator: null };
     await expect(call()).rejects.toThrow("NOT_FOUND");
   });
 
@@ -178,7 +236,7 @@ describe("product page: the header block", () => {
     expect(text(await render())).toContain("Digital download · 3 items");
   });
 
-  it("the draft banner and creator link keep their copy, with a touch floor on the link", async () => {
+  it("the creator link names the creator, with a touch floor and a colour-only transition", async () => {
     const html = await render();
     const link = html.match(/<a [^>]*href="\/c\/meera"[^>]*>/)?.[0] ?? "";
     expect(link).toContain("pointer-coarse:min-h-11");
@@ -216,7 +274,9 @@ describe("product page: the curriculum is a ruled list of plain text", () => {
 describe("product page: claims are limited to what is built", () => {
   it("paid lists three honest lines", async () => {
     const t = text(aside(await render()));
-    expect(t).toContain("Instant access in your library");
+    expect(t).toContain("In your library as soon as payment completes");
+    expect(t).not.toContain("Instant access");
+    expect(t).not.toContain("straight away");
     expect(t).toContain("An invoice for every order");
     expect(t).toContain("Payments run in test mode.");
   });
@@ -225,7 +285,7 @@ describe("product page: claims are limited to what is built", () => {
     for (const pricePaise of [49900, 0]) {
       state.product = product({ pricePaise });
       const t = text(await render());
-      for (const word of ["UPI", "netbanking", "cards", "secure", "Secure", "guarantee", "refund", "GST invoice", "Instant access after payment"]) {
+      for (const word of ["UPI", "netbanking", "cards", "secure", "Secure", "guarantee", "refund", "GST invoice", "Instant access after payment", "Instant access"]) {
         expect(t, `${word} @ ${pricePaise}`).not.toContain(word);
       }
     }
@@ -311,6 +371,26 @@ describe("product page: the panel, and the buy bar below lg", () => {
     expect(panel).not.toContain("shadow");
   });
 
+  it("the bar row wraps below lg so the CTA drops to its own line instead of squeezing the GST note", async () => {
+    const html = await render();
+    const panel = aside(html).match(/<div class="([^"]*)"/)?.[1] ?? "";
+    expect(panel.split(" ")).toContain("max-lg:flex-wrap");
+    // price and its GST note stay together as one wrapping unit; the CTA grows to fill the line it lands on
+    expect(aside(html)).toMatch(/<div class="min-w-0"><span class="inline-flex flex-wrap/);
+    expect(ctaLinks(html)[0]).toContain("max-lg:grow");
+  });
+
+  it("the aside is a labelled landmark", async () => {
+    expect(await render()).toMatch(/<aside [^>]*aria-label="Purchase"/);
+  });
+
+  it("paid and unowned: at most one outlined box on the page (the buy panel), within the Taste v2 limit of two", async () => {
+    const html = await render();
+    const boxes = [...html.matchAll(/class="([^"]*)"/g)].filter((m) => m[1].split(" ").some((c) => c === "border" || c === "card"));
+    expect(boxes.length).toBeLessThanOrEqual(1);
+    expect(boxes.length).toBe(1); // positive control: the panel is still the one box, so the filter sees something real
+  });
+
   it("the action keeps its width on the bar and fills the panel from lg", async () => {
     const cta = ctaLinks(await render())[0];
     expect(cta).toContain("shrink-0");
@@ -319,19 +399,29 @@ describe("product page: the panel, and the buy bar below lg", () => {
   });
 });
 
+const refuse = (name: string) => {
+  throw new Error(`${name} silently became client-only`);
+};
+
 describe("product page: renders from a server component", () => {
   it("passes no function prop anywhere", async () => {
     state.user = { id: "u1", creator: null };
     const visited = new Set<unknown>();
-    expect(functionProps(await call(), [Link], { onVisit: (t) => visited.add(t) })).toEqual([]);
-    for (const type of [Link, Avatar, Price, Surface, ButtonLink]) expect(visited.has(type)).toBe(true);
+    expect(functionProps(await call(), [Link], { onVisit: (t) => visited.add(t), onImplicitBoundary: refuse })).toEqual([]);
+    for (const type of [Link, Avatar, BrandScope, Surface, ButtonLink]) expect(visited.has(type)).toBe(true);
+  });
+
+  it("the unowned path walks Price clean too (owned renders no Price)", async () => {
+    const visited = new Set<unknown>();
+    expect(functionProps(await call(), [Link], { onVisit: (t) => visited.add(t), onImplicitBoundary: refuse })).toEqual([]);
+    expect(visited.has(Price)).toBe(true);
   });
 
   it("the draft path (Callout) is walked clean too", async () => {
     state.product = product({ status: "draft" });
     state.user = { id: "u2", creator: { id: "cr1" } };
     const visited = new Set<unknown>();
-    expect(functionProps(await call(), [Link], { onVisit: (t) => visited.add(t) })).toEqual([]);
+    expect(functionProps(await call(), [Link], { onVisit: (t) => visited.add(t), onImplicitBoundary: refuse })).toEqual([]);
     expect(visited.has(Callout)).toBe(true);
   });
 
@@ -373,5 +463,23 @@ describe("product page: the query is pinned", () => {
     state.user = { id: "u1", creator: null };
     await render();
     expect(findEnrollment).toHaveBeenCalledWith({ where: { userId_productId: { userId: "u1", productId: "p1" } } });
+  });
+});
+
+describe("product page: generateMetadata", () => {
+  const meta = () => generateMetadata({ params: Promise.resolve({ handle: "Meera", slug: "bookkeeping" }) } as never);
+
+  it("a published product supplies its title and tagline", async () => {
+    expect(await meta()).toEqual({ title: "Bookkeeping for shop owners", description: "Close your books in an afternoon" });
+  });
+
+  it("a draft returns nothing, so its title cannot leak into <title>", async () => {
+    state.product = product({ status: "draft" });
+    expect(await meta()).toEqual({});
+  });
+
+  it("a missing product returns nothing", async () => {
+    state.product = null;
+    expect(await meta()).toEqual({});
   });
 });

@@ -92,31 +92,44 @@ export default async function ProductPage({ params }: PageProps<"/c/[handle]/[sl
 
           {/* Below lg this is the buy bar: sticky to the bottom edge of the viewport while the content above is in view,
               resting at the end of the column (above the footer) once it is reached. From lg it is the sticky side panel. */}
-          <aside className="sticky bottom-0 z-10 -mx-4 border-t border-line bg-bg px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:-mx-6 sm:px-6 lg:top-24 lg:bottom-auto lg:mx-0 lg:self-start lg:border-t-0 lg:bg-transparent lg:p-0">
+          <aside
+            className="sticky bottom-0 z-10 -mx-4 border-t border-line bg-bg px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:-mx-6 sm:px-6 lg:top-24 lg:bottom-auto lg:mx-0 lg:self-start lg:border-t-0 lg:bg-transparent lg:p-0"
+            aria-label="Purchase"
+          >
+            {/* max-lg:flex-wrap: when price, note and CTA do not fit on one line the CTA drops to its own full-width line
+                (it grows to fill whichever line it lands on) instead of squeezing the GST note into a sliver. */}
             <Surface
               padding="lg"
-              className="flex items-center justify-between gap-4 max-lg:rounded-none max-lg:border-0 max-lg:bg-transparent max-lg:p-0! lg:block"
+              className="flex items-center justify-between gap-x-4 gap-y-3 max-lg:flex-wrap max-lg:rounded-none max-lg:border-0 max-lg:bg-transparent max-lg:p-0! lg:block"
             >
-              <Price
-                paise={product.pricePaise}
-                period={product.billing === "monthly" ? "month" : undefined}
-                gstNote={isPaid ? `incl. ${product.gstRatePct}% GST` : undefined}
-                size="xl"
-                className="min-w-0"
-              />
+              {/* An owner of the product has nothing to pay, so no price for them; the creator keeps it (informational). */}
+              {!owned && (
+                <div className="min-w-0">
+                  <Price
+                    paise={product.pricePaise}
+                    period={product.billing === "monthly" ? "month" : undefined}
+                    gstNote={isPaid && product.gstRatePct > 0 ? `incl. ${product.gstRatePct}% GST` : undefined}
+                    size="xl"
+                  />
+                  {/* billing "monthly" is a label only in v1: checkout takes one payment and never renews. Say so at every viewport. */}
+                  {isPaid && product.billing === "monthly" && (
+                    <p className="t-meta mt-1">One payment today. Recurring billing is not live yet.</p>
+                  )}
+                </div>
+              )}
 
               {owned ? (
-                <ButtonLink href={`/library/${product.id}`} size="lg" className="shrink-0 lg:mt-5 lg:w-full">Open in your library</ButtonLink>
+                <ButtonLink href={`/library/${product.id}`} size="lg" className="shrink-0 max-lg:grow lg:mt-5 lg:w-full">Open in your library</ButtonLink>
               ) : isOwner ? (
-                <ButtonLink href={`/dashboard/products/${product.id}`} variant="secondary" size="lg" className="shrink-0 lg:mt-5 lg:w-full">Edit product</ButtonLink>
+                <ButtonLink href={`/dashboard/products/${product.id}`} variant="secondary" size="lg" className="shrink-0 max-lg:grow lg:mt-5 lg:w-full">Edit product</ButtonLink>
               ) : product.status === "published" ? (
-                <ButtonLink href={`/checkout/${product.id}`} size="lg" className="shrink-0 lg:mt-5 lg:w-full">
+                <ButtonLink href={`/checkout/${product.id}`} size="lg" className="shrink-0 max-lg:grow lg:mt-5 lg:w-full">
                   {isPaid ? "Buy now" : "Get it free"}
                 </ButtonLink>
               ) : null}
 
               <ul className="t-body mt-5 hidden space-y-2 text-muted lg:block">
-                <li>Instant access in your library</li>
+                <li>{isPaid ? "In your library as soon as payment completes" : "In your library straight away"}</li>
                 {isPaid && <li>An invoice for every order</li>}
                 {isPaid && <li className="t-meta">Payments run in test mode.</li>}
               </ul>
