@@ -151,25 +151,46 @@ describe("invoice: print stays working", () => {
   it("keeps the print button, hidden in print, and it is the only client boundary", async () => {
     const html = renderToStaticMarkup(<PrintButton />);
     expect(html).toContain("print:hidden");
+    expect(html).toContain("pointer-coarse:min-h-11"); // btn-sm is 34px (+5 hit area); the coarse floor is 44
     expect(html).toContain("Print / save PDF");
     expect(await render()).toContain("Print / save PDF");
     expect(read(PAGE)).toContain("<PrintButton />");
   });
 
-  it("everything visible on screen prints: nothing on the page is hidden from print except the button", async () => {
+  it("the page tree hides only the print button (and its wrapper) from print; the wrapper drops its padding", async () => {
+    // This inspects the page tree, not the layout: the site header and footer are hidden in their own components.
     const html = await render();
-    expect(html.match(/print:hidden/g)?.length).toBe(1); // only the PrintButton
+    expect(html.match(/print:hidden/g)?.length).toBe(2); // the button's wrapper + the PrintButton itself
+    expect(html).toMatch(/<div class="mb-4 flex justify-end print:hidden"><button /);
+    expect(html).toMatch(/^<div class="[^"]*print:px-0 print:py-0[^"]*">/);
     expect(html).not.toMatch(/(?<!print:)\bhidden\b/);
-    expect(read(PAGE)).not.toMatch(/screen:|print:hidden/);
+    expect(read(PAGE)).not.toMatch(/screen:/);
   });
 });
 
 describe("invoice: copy that claims only what is true", () => {
-  it("states test mode as a fact about the simulation, not as a tax-law claim", async () => {
+  const TEST_MODE = "Payments in test mode are simulated; no real money moved.";
+
+  it("a mock payment states test mode as a fact about the simulation, not as a tax-law claim", async () => {
+    state.order = { ...baseOrder, provider: "mock", providerPaymentId: "mock_pay_1" };
     const html = await render();
-    expect(html).toContain("Payments in test mode are simulated; no real money moved.");
-    expect(html).toContain("Payment reference: pay_abc123 (razorpay). This is a system-generated invoice.");
+    expect(html).toContain(TEST_MODE);
+    expect(html).toContain("Payment reference: mock_pay_1 (mock). This is a system-generated invoice.");
     expect(html).not.toMatch(/tax liability/i);
+  });
+
+  it.each(["razorpay", "easebuzz"])("a real %s payment never claims that no real money moved", async (provider) => {
+    state.order = { ...baseOrder, provider, providerPaymentId: "pay_abc123" };
+    const html = await render();
+    expect(html).not.toMatch(/test mode|simulated|no real money/i);
+    expect(html).toContain(`Payment reference: pay_abc123 (${provider}). This is a system-generated invoice.`);
+  });
+
+  it("a free order says no payment was required, with no test-mode sentence and no `free (free)` reference", async () => {
+    state.order = { ...baseOrder, provider: "free", providerPaymentId: null, totalPaise: 0, gstPaise: 0, subtotalPaise: 0 };
+    const html = await render();
+    expect(html).toContain("No payment was required. This is a system-generated invoice.");
+    expect(html).not.toMatch(/test mode|simulated|no real money|free \(free\)|Payment reference/i);
   });
 });
 

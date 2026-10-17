@@ -7,7 +7,7 @@ import { footerGroups } from "./site-nav-links";
 export function SiteFooter({ storefrontHandle = DEMO_HANDLE }: { storefrontHandle?: string }) {
   const groups = footerGroups({ storefrontHandle });
   return (
-    <footer className="mt-auto overflow-hidden border-t border-line bg-surface-2/60 text-[13px] text-muted">
+    <footer className="mt-auto overflow-hidden border-t border-line bg-surface-2/60 text-[13px] text-muted print:hidden">
       <div className="mx-auto max-w-6xl px-4 pt-12 sm:px-6 sm:pt-16">
         <div className="grid gap-10 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
           <div>

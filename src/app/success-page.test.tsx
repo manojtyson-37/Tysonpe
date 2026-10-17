@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-const state = vi.hoisted(() => ({ order: null as null | Record<string, unknown> }));
+const state = vi.hoisted(() => ({ order: null as null | Record<string, unknown>, where: null as unknown }));
 
 vi.mock("next/navigation", () => ({
   redirect: (to: string) => {
@@ -15,7 +15,15 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/",
 }));
 vi.mock("@/lib/auth/session", () => ({ requireUser: async () => ({ id: "u1", name: "Asha Rao" }) }));
-vi.mock("@/lib/db", () => ({ db: { order: { findFirst: async () => state.order } } }));
+vi.mock("@/lib/db", () => ({ db: {
+    order: {
+      findFirst: async (args: { where: unknown }) => {
+        state.where = args.where;
+        return state.order;
+      },
+    },
+  },
+}));
 
 import { functionProps } from "@/test/rsc-safe";
 import SuccessPage, { metadata } from "./(site)/checkout/success/[orderId]/page";
@@ -33,6 +41,7 @@ const baseOrder = {
 
 beforeEach(() => {
   state.order = { ...baseOrder };
+  state.where = null;
 });
 
 async function renderTree(): Promise<ReactNode> {
@@ -89,6 +98,11 @@ describe("success page: the receipt rows", () => {
     expect(html).toMatch(/<dt[^>]*>Total<\/dt><dd[^>]*><span class="font-semibold">Free<\/span><\/dd>/);
     expect(html).not.toContain("₹");
     expect(html).not.toContain(">Paid<");
+  });
+
+  it("scopes the lookup to this order of the signed-in buyer (a dropped user scope must fail here)", async () => {
+    await render();
+    expect(state.where).toEqual({ id: "o1", userId: "u1" });
   });
 
   it("keeps the access rules: an unpaid order goes back to pay, a missing order is a 404", async () => {

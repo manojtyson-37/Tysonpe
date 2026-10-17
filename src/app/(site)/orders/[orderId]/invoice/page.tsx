@@ -22,8 +22,8 @@ export default async function InvoicePage({ params }: PageProps<"/orders/[orderI
 
   const taxable = order.totalPaise - order.gstPaise;
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-      <div className="mb-4 flex justify-end"><PrintButton /></div>
+    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 print:px-0 print:py-0">
+      <div className="mb-4 flex justify-end print:hidden"><PrintButton /></div>
       <Surface as="article" tone="paper" padding="lg" className="print:border-0 print:p-0">
         <header className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-6">
           <div>
@@ -65,7 +65,10 @@ export default async function InvoicePage({ params }: PageProps<"/orders/[orderI
           <MetricRow label={`GST @ ${order.gstRatePct}% (included)`} value={<Money paise={order.gstPaise} />} />
           <MetricRow label="Total paid" value={<Money paise={order.totalPaise} />} strong />
         </MetricList>
-        <p className="mt-8 text-xs text-muted">Payment reference: {order.providerPaymentId ?? "—"} ({order.provider}). This is a system-generated invoice. Payments in test mode are simulated; no real money moved.</p>
+        <p className="mt-8 text-xs text-muted">
+          {order.provider === "free" ? "No payment was required." : `Payment reference: ${order.providerPaymentId ?? "—"} (${order.provider}).`} This is a system-generated invoice.
+          {order.provider === "mock" && " Payments in test mode are simulated; no real money moved."}
+        </p>
       </Surface>
     </div>
   );

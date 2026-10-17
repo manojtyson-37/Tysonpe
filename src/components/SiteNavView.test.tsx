@@ -14,6 +14,10 @@ describe("SiteNavView", () => {
     expect(html).toMatch(/<nav [^>]*class="[^"]*\bh-14\b[^"]*"[^>]*aria-label="Main"|<nav [^>]*aria-label="Main"[^>]*class="[^"]*\bh-14\b/);
   });
 
+  it("is hidden in print, so a printed invoice or certificate carries no site header", () => {
+    expect(render(null)).toMatch(/^<header [^>]*class="[^"]*\bprint:hidden\b[^"]*"/);
+  });
+
   it("links the wordmark home with an accessible name", () => {
     expect(render(null)).toMatch(/<a [^>]*aria-label="Tysonpe home"[^>]*href="\/"|<a [^>]*href="\/"[^>]*aria-label="Tysonpe home"/);
   });

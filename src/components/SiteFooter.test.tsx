@@ -11,6 +11,10 @@ describe("SiteFooter", () => {
     expect(html).toContain(`© ${new Date().getFullYear()} Tysonpe.`);
   });
 
+  it("is hidden in print, so a printed invoice or certificate carries no site footer", () => {
+    expect(html).toMatch(/^<footer [^>]*class="[^"]*\bprint:hidden\b[^"]*"/);
+  });
+
   it("has named link groups whose targets are real routes (no # placeholders)", () => {
     expect(html).toContain('aria-label="Product"');
     expect(html).toContain('aria-label="Account"');

@@ -1,5 +1,5 @@
 "use client";
 
 export function PrintButton() {
-  return <button type="button" onClick={() => window.print()} className="btn btn-secondary btn-sm print:hidden">Print / save PDF</button>;
+  return <button type="button" onClick={() => window.print()} className="btn btn-secondary btn-sm pointer-coarse:min-h-11 print:hidden">Print / save PDF</button>;
 }
