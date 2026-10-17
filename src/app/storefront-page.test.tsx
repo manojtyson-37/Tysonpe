@@ -15,10 +15,13 @@ vi.mock("next/navigation", () => ({
   },
   usePathname: () => "/",
 }));
-vi.mock("@/lib/db", () => ({ db: { creator: { findUnique: async () => state.creator } } }));
+const findUnique = vi.hoisted(() => vi.fn<(args: unknown) => Promise<unknown>>(async () => state.creator));
+vi.mock("@/lib/db", () => ({ db: { creator: { findUnique } } }));
 
 import Link from "next/link";
 import { AvatarImage } from "@/components/ui/avatar-image";
+import { Avatar } from "@/components/Brand";
+import { Price } from "@/components/ui";
 import { brandRingColor, brandTextColor, contrastRatio, readableOn } from "@/lib/color";
 import { functionProps } from "@/test/rsc-safe";
 import Storefront from "./(site)/c/[handle]/page";
@@ -53,6 +56,7 @@ function creator(count: number, over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   state.creator = creator(4);
+  findUnique.mockClear();
 });
 
 const call = () => Storefront({ params: Promise.resolve({ handle: "meera" }) } as never);
@@ -71,7 +75,6 @@ describe("storefront: 1, 4 and 0 products", () => {
     expect(html).toContain("Product 1");
     expect(html).not.toContain("<ul");
     expect(html).not.toContain("divide-y");
-    expect(html).not.toContain("Newest");
     expect(text(html)).toContain("1 product");
     expect(text(html)).not.toContain("1 products");
   });
@@ -88,8 +91,18 @@ describe("storefront: 1, 4 and 0 products", () => {
     const order = [2, 3, 4].map((n) => html.indexOf(`Product ${n}<`));
     expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(order.every((i) => i > html.indexOf("<ul"))).toBe(true);
-    expect(text(html)).toContain("Newest");
     expect(text(html)).toContain("4 products");
+  });
+
+  it("list rows share the wide row's text inset, so the list and the lead read as one system", async () => {
+    const html = await render();
+    const wide = html.slice(0, html.indexOf("<ul"));
+    const list = html.slice(html.indexOf("<ul"));
+    expect(wide).toContain("p-5");
+    expect(wide).toContain("sm:p-8");
+    expect(count(list, "px-5")).toBe(3);
+    expect(count(list, "sm:px-8")).toBe(3);
+    expect(list).not.toContain("px-3");
   });
 
   it("every product links to its own page", async () => {
@@ -136,6 +149,14 @@ describe("storefront: no card-grid or pill idioms, hover is a border/tone shift"
     const html = await render();
     expect(count(html, "pointer-coarse:min-h-11")).toBe(3);
   });
+
+  it("the community link meets the 44px touch height too", async () => {
+    state.creator = creator(4, { _count: { channels: 2 } });
+    const html = await render();
+    const link = html.match(/<a [^>]*href="\/c\/meera\/community"[^>]*>/)?.[0] ?? "";
+    expect(link).toContain("pointer-coarse:min-h-11");
+    expect(count(html, "pointer-coarse:min-h-11")).toBe(4);
+  });
 });
 
 describe("storefront: type is plain text", () => {
@@ -143,7 +164,7 @@ describe("storefront: type is plain text", () => {
     state.creator = creator(3);
     state.creator.products = [product(1, { type: "webinar" }), product(2, { type: "download" }), product(3, { type: "membership" })];
     const html = await render();
-    expect(html).toMatch(/<p class="t-meta mt-3">Newest · Live webinar<\/p>/);
+    expect(html).toMatch(/<p class="t-meta mt-3">Live webinar<\/p>/);
     expect(html).toMatch(/<p class="t-meta mt-1">Digital download<\/p>/);
     expect(html).toMatch(/<p class="t-meta mt-1">Membership<\/p>/);
     expect(html).not.toContain("rounded-full");
@@ -152,6 +173,12 @@ describe("storefront: type is plain text", () => {
   it("does not invent a label the data cannot back", async () => {
     const t = text(await render());
     for (const word of ["Featured", "Best seller", "Bestseller", "Popular", "Trending"]) expect(t).not.toContain(word);
+  });
+
+  it.each([1, 4])("does not call the lead 'Newest' or 'Latest': createdAt is not a release date (%i products)", async (n) => {
+    state.creator = creator(n);
+    const t = text(await render());
+    for (const word of ["Newest", "Latest", "Newly"]) expect(t).not.toContain(word);
   });
 });
 
@@ -222,14 +249,14 @@ describe("storefront: a light creator colour stays legible", () => {
     expect(brandTextColor(LIGHT)).not.toBe(LIGHT);
   });
 
-  it("the avatar letter clears 4.5:1 on the brand fill, the brand text clears 4.5:1 on white and on the brand tint", () => {
+  it("the avatar letter clears 4.5:1 on the brand fill, the brand text clears 4.5:1 on white and on paper (it is never drawn on the tint here)", () => {
     const ink = readableOn(LIGHT);
     expect(contrastRatio(ink, LIGHT)).toBeGreaterThanOrEqual(4.5);
     // The raw colour would fail as text: the reason the token exists.
     expect(contrastRatio(LIGHT, "#ffffff")).toBeLessThan(3);
     const text = brandTextColor(LIGHT);
     expect(contrastRatio(text, "#ffffff")).toBeGreaterThanOrEqual(4.5);
-    // the band is --brand-soft (12% brand) at 60% over paper; the wide row is white
+    // brand text sits on the white wide row and on the paper canvas; the tinted band holds only ink text and the avatar
     expect(contrastRatio(text, "#fbfaf7")).toBeGreaterThanOrEqual(4.5);
   });
 
@@ -243,6 +270,44 @@ describe("storefront: a light creator colour stays legible", () => {
 describe("storefront: renders from a server component", () => {
   it("passes no function prop anywhere (renderToStaticMarkup would hide one)", async () => {
     state.creator = creator(4, { _count: { channels: 1 } });
-    expect(functionProps(await call(), [Link, AvatarImage])).toEqual([]);
+    const visited = new Set<unknown>();
+    expect(functionProps(await call(), [Link, AvatarImage], { onVisit: (t) => visited.add(t) })).toEqual([]);
+    // the walk really reached the page's components, so "[]" is not an empty walk
+    for (const type of [Link, Avatar, Price]) expect(visited.has(type)).toBe(true);
+  });
+
+  it("positive control: the same walk reports a function prop planted in the page tree", async () => {
+    state.creator = creator(4, { _count: { channels: 1 } });
+    const planted = (
+      <>
+        {await call()}
+        <button onClick={() => {}}>x</button>
+      </>
+    );
+    expect(functionProps(planted, [Link, AvatarImage])).toEqual(["<button>.onClick"]);
+  });
+});
+
+describe("storefront: the public query is pinned", () => {
+  type Args = { where: unknown; include: { products: { where: unknown; orderBy: unknown } } };
+  const lastArgs = async (): Promise<Args> => {
+    await render();
+    expect(findUnique).toHaveBeenCalled();
+    return findUnique.mock.calls[0][0] as Args;
+  };
+
+  it("loads only published products, so a draft never reaches a public page", async () => {
+    const args = await lastArgs();
+    expect(args.include.products.where).toEqual({ status: "published" });
+  });
+
+  it("orders products newest-created first with id as a tiebreak, so the lead is deterministic", async () => {
+    const args = await lastArgs();
+    expect(args.include.products.orderBy).toEqual([{ createdAt: "desc" }, { id: "desc" }]);
+  });
+
+  it("looks the creator up by lower-cased handle", async () => {
+    const args = await lastArgs();
+    expect(args.where).toEqual({ handle: "meera" });
   });
 });

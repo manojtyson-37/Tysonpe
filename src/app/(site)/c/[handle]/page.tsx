@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 async function getCreator(handle: string) {
   return db.creator.findUnique({
     where: { handle: handle.toLowerCase() },
-    include: { products: { where: { status: "published" }, orderBy: { createdAt: "desc" } }, _count: { select: { channels: true } } },
+    include: { products: { where: { status: "published" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] }, _count: { select: { channels: true } } },
   });
 }
 
@@ -23,7 +23,8 @@ export default async function Storefront({ params }: PageProps<"/c/[handle]">) {
   const creator = await getCreator((await params).handle);
   if (!creator) notFound();
 
-  // No featured/priority field exists, so the wide row is the newest published product (the query's first row).
+  // No featured/priority field exists, so the wide row is the most recently created published product (the query's first row;
+  // id breaks createdAt ties so it cannot flip between requests). createdAt is not a release date, so the page does not call it "newest".
   const [lead, ...rest] = creator.products;
   const href = (slug: string) => `/c/${creator.handle}/${slug}`;
   const typeLabel = (type: string) => TYPE_LABEL[type] ?? type;
@@ -55,7 +56,7 @@ export default async function Storefront({ params }: PageProps<"/c/[handle]">) {
               <div className="min-w-0">
                 <h2 className="t-heading break-words">{lead.title}</h2>
                 {lead.tagline && <p className="t-body mt-3 max-w-xl text-muted">{lead.tagline}</p>}
-                <p className="t-meta mt-3">{rest.length > 0 && "Newest \u00b7 "}{typeLabel(lead.type)}</p>
+                <p className="t-meta mt-3">{typeLabel(lead.type)}</p>
               </div>
               <div className="sm:text-right">
                 <Price paise={lead.pricePaise} period={lead.billing === "monthly" ? "month" : undefined} size="xl" className="sm:justify-end" />
@@ -68,7 +69,7 @@ export default async function Storefront({ params }: PageProps<"/c/[handle]">) {
                   <li key={p.id}>
                     <Link
                       href={href(p.slug)}
-                      className={`flex items-start justify-between gap-6 px-3 py-4 hover:bg-surface-2 sm:px-4 sm:py-5 pointer-coarse:min-h-11 ${rowTransition}`}
+                      className={`flex items-start justify-between gap-6 px-5 py-4 hover:bg-surface-2 sm:px-8 sm:py-5 pointer-coarse:min-h-11 ${rowTransition}`}
                     >
                       <div className="min-w-0">
                         <h2 className="text-lg font-semibold break-words">{p.title}</h2>
