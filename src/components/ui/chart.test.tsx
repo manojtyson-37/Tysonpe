@@ -156,13 +156,28 @@ describe("BarChart axes and markup", () => {
     expect(rows[1]).toContain("hidden sm:");
   });
 
-  it("never shows two month labels side by side: 25 Oct..7 Nov, narrow row", () => {
-    const series = Array.from({ length: 14 }, (_, i) => ({ label: i + 25 <= 31 ? `${i + 25} Oct` : `${i + 25 - 31} Nov`, value: 1 }));
+  it("never shows two month labels side by side: 30 Oct..12 Nov, narrow row", () => {
+    const series = Array.from({ length: 14 }, (_, i) => ({ label: i + 30 <= 31 ? `${i + 30} Oct` : `${i + 30 - 31} Nov`, value: 1 }));
     const rows = axisRows(render(<BarChart data={series} label="Revenue" />));
     expect(rows).toHaveLength(2);
-    // Kept: 26 Oct, 28, 30 Oct, 1 Nov, 3 ... 7. "30 Oct" and "1 Nov" would touch, so only the change keeps its month.
-    expect(spans(rows[0])).toEqual(["26 Oct", "28", "30", "1 Nov", "3", "5", "7"]);
-    expect(spans(rows[1])).toEqual(["25 Oct", "26", "27", "28", "29", "30", "31", "1 Nov", "2", "3", "4", "5", "6", "7"]);
+    // Narrow (step 2) keeps indexes 1, 3, ... 13: 31 Oct and 2 Nov are neighbours, so 31 Oct loses its month.
+    expect(spans(rows[0])).toEqual(["31", "2 Nov", "4", "6", "8", "10", "12"]);
+    // Wide keeps all 14: 30 Oct leads and 1 Nov is the change, with 31 between them, so nothing collides.
+    expect(spans(rows[1])).toEqual(["30 Oct", "31", "1 Nov", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]);
+  });
+
+  it("never shows two month labels side by side: a collision on the last kept pair, single axis row", () => {
+    const html = render(<BarChart data={[{ label: "31 Oct", value: 1 }, { label: "1 Nov", value: 2 }]} label="Revenue" />);
+    const rows = axisRows(html);
+    expect(rows).toHaveLength(1);
+    expect(spans(rows[0])).toEqual(["31", "1 Nov"]);
+  });
+
+  it("documented limitation: a run of 3+ month-bearing labels keeps the month only on the last", () => {
+    const monthly = ["1 Aug", "1 Sep", "1 Oct", "1 Nov"].map((label) => ({ label, value: 1 }));
+    const rows = axisRows(render(<BarChart data={monthly} label="Revenue" />));
+    expect(rows).toHaveLength(1);
+    expect(spans(rows[0])).toEqual(["1", "1", "1", "1 Nov"]);
   });
 
   it("never shows two month labels side by side: 31 Oct..14 Nov, wide row thinned to every 2nd", () => {

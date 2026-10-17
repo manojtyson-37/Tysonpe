@@ -86,6 +86,13 @@ function splitLabel(label: string): { day: string; month: string | null } {
  * Axis text for the kept labels: the day, plus the month on the first one and wherever the month changes.
  * Two neighbouring kept labels never both carry a month (they would touch at 320px): the earlier one drops
  * it, so a crossing reads "30, 1 Nov".
+ *
+ * Labels are expected to be a daily "D Mon" series (consecutive days, so a month change is a rare event).
+ * Known behaviour outside that:
+ * - A run of 3+ month-bearing kept labels (e.g. monthly data "1 Aug", "1 Sep", "1 Oct", "1 Nov") drops the
+ *   month on every one but the last, rendering "1", "1", "1", "1 Nov". Accepted: not a supported shape.
+ * - A label that does not parse as "D Mon" is shown whole and resets the month tracking, so the next
+ *   parseable label shows its month again.
  */
 function axisTexts(data: ChartDatum[], keep: boolean[]): (string | null)[] {
   let prevMonth: string | null | undefined;
