@@ -44,7 +44,7 @@ function Fields({ channel, products }: { channel?: Channel; products: ProductOpt
               {products.map((p) => (
                 <li key={p.id}>
                   <label className="flex min-h-10 items-center gap-2 py-2 text-sm">
-                    <input type="checkbox" name="productIds" value={p.id} defaultChecked={channel?.productIds.includes(p.id)} className="size-4 accent-[color:var(--brand-text,#0f172a)]" />
+                    <input type="checkbox" name="productIds" value={p.id} defaultChecked={channel?.productIds.includes(p.id)} className="size-4 accent-[color:var(--brand-text,#16130f)]" />
                     {p.title}
                   </label>
                 </li>

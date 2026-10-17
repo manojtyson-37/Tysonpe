@@ -12,7 +12,7 @@ export function readableOn(hex: string): "#ffffff" | "#16130f" {
 }
 
 type RGB = [number, number, number];
-const INK: RGB = [0x0f, 0x17, 0x2a]; // slate ink, same as --ink
+const INK: RGB = [0x16, 0x13, 0x0f]; // warm ink, same as --ink (#16130f)
 
 function parseHex(hex: string): RGB | null {
   const m = /^#([0-9a-f]{6})$/i.exec(hex);
@@ -64,10 +64,14 @@ export function brandTextColor(hex: string): string {
 }
 
 /**
- * Brand colour usable for non-text UI (focus rings, progress fills): >= 3:1 on white and on the surface-2 track (#f8fafc).
- * Bad input -> ink-mixed default.
+ * Brand colour usable for non-text UI (focus rings, progress fills): >= 3:1 (WCAG 1.4.11) on white, on paper (#fbfaf7)
+ * and on the warm surface-2 track (#f3f0e9). Paper passes with little margin, so it is an explicit constraint: a token
+ * tweak should fail color.test.ts rather than silently regress. Bad input -> ink-mixed default.
  */
 export function brandRingColor(hex: string): string {
   const rgb = parseHex(hex) ?? ([0x4f, 0x46, 0xe5] as RGB);
-  return darkenUntil(rgb, (c) => contrastRatio(c, "#ffffff") >= 3 && contrastRatio(c, "#f8fafc") >= 3);
+  return darkenUntil(
+    rgb,
+    (c) => contrastRatio(c, "#ffffff") >= 3 && contrastRatio(c, "#fbfaf7") >= 3 && contrastRatio(c, "#f3f0e9") >= 3,
+  );
 }

@@ -37,17 +37,25 @@ describe("brandTextColor", () => {
     expect(t).not.toBe("#f59e0b");
     expect(parseInt(t.slice(1, 3), 16)).toBeGreaterThan(parseInt(t.slice(5, 7), 16)); // r > b
   });
-  it("falls back to ink on bad input", () => expect(brandTextColor("nonsense")).toBe("#0f172a"));
+  it("falls back to ink on bad input", () => expect(brandTextColor("nonsense")).toBe("#16130f"));
 });
 
+const PAPER = "#fbfaf7"; // --paper
+const SURFACE_2 = "#f3f0e9"; // --surface-2 (warm; the old slate #f8fafc is gone)
+const RING_BRANDS = [...BRANDS, "#22c55e", "#0ea5e9", "#2dd4bf", "#1e1b4b"];
+
 describe("brandRingColor", () => {
-  it.each(BRANDS)("%s: >= 3:1 on white and on the surface-2 track", (hex) => {
+  it.each(RING_BRANDS)("%s: >= 3:1 on white, paper and the warm surface-2 track", (hex) => {
     const r = brandRingColor(hex);
     expect(contrastRatio(r, "#ffffff")).toBeGreaterThanOrEqual(3);
-    expect(contrastRatio(r, "#f8fafc")).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(r, PAPER)).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(r, SURFACE_2)).toBeGreaterThanOrEqual(3);
   });
   it("is never darker than the text colour (ring is the lighter step)", () => {
-    for (const hex of BRANDS) expect(contrastRatio(brandRingColor(hex), "#ffffff")).toBeLessThanOrEqual(contrastRatio(brandTextColor(hex), "#ffffff") + 0.001);
+    for (const hex of RING_BRANDS) expect(contrastRatio(brandRingColor(hex), "#ffffff")).toBeLessThanOrEqual(contrastRatio(brandTextColor(hex), "#ffffff") + 0.001);
   });
-  it("falls back to a safe colour on bad input", () => expect(contrastRatio(brandRingColor("nonsense"), "#ffffff")).toBeGreaterThanOrEqual(3));
+  it("falls back to a safe colour on bad input", () => {
+    const r = brandRingColor("nonsense");
+    for (const bg of ["#ffffff", PAPER, SURFACE_2]) expect(contrastRatio(r, bg)).toBeGreaterThanOrEqual(3);
+  });
 });

@@ -13,6 +13,18 @@ describe("ConfirmButton", () => {
     );
     expect(html).toBe('<form><button type="submit" class="btn btn-danger btn-sm">Delete</button></form>');
   });
+
+  it("puts aria-label on the trigger button (it names the action for screen readers) and renders no dialog", () => {
+    const html = renderToStaticMarkup(
+      <form>
+        <ConfirmButton message="Delete this coupon?" aria-label="Delete coupon WELCOME10" className="btn">
+          Delete
+        </ConfirmButton>
+      </form>,
+    );
+    expect(html).toBe('<form><button type="submit" class="btn" aria-label="Delete coupon WELCOME10">Delete</button></form>');
+    expect(html).not.toContain("<dialog");
+  });
 });
 
 describe("submitWithSubmitter", () => {
