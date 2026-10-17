@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Script from "next/script";
 import { useState } from "react";
 import { confirmPaymentAction } from "@/app/actions/checkout";
+import { Button, Callout } from "@/components/ui";
 
 type RzpResponse = { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string };
 declare global {
@@ -37,7 +38,7 @@ export function RazorpayButton(props: {
       description: props.title,
       order_id: props.providerOrderId,
       prefill: props.buyer,
-      theme: { color: "#5b3df5" },
+      theme: { color: "#16130f" },
       modal: { ondismiss: () => setBusy(false) },
       handler: async (r: RzpResponse) => {
         const res = await confirmPaymentAction(props.orderId, r.razorpay_payment_id, r.razorpay_signature);
@@ -58,10 +59,10 @@ export function RazorpayButton(props: {
   return (
     <div>
       <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />
-      <button onClick={pay} disabled={busy} className="btn btn-primary btn-lg w-full">
+      <Button size="lg" disabled={busy} onClick={pay} className="w-full">
         {busy ? "Waiting for payment…" : props.label}
-      </button>
-      {error && <p role="alert" className="err mt-2">{error}</p>}
+      </Button>
+      {error && <Callout tone="bad" className="mt-3">{error}</Callout>}
     </div>
   );
 }

@@ -4,9 +4,10 @@ import { startEasebuzzPayment } from "@/app/actions/checkout";
 import { ActionForm, Field, FormError, SubmitButton } from "@/components/form";
 import { DemoPayPageClient } from "@/components/DemoPayPageClient";
 import { RazorpayButton } from "@/components/RazorpayButton";
-import { Money } from "@/components/ui";
+import { Callout, MetricList, MetricRow, Money, PageHeader, Surface } from "@/components/ui";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { formatINR } from "@/lib/money";
 import { isOrderFresh } from "@/lib/orders";
 import { getProvider } from "@/lib/payments";
 import { resolveGateway } from "@/lib/payments/gateways";
@@ -27,34 +28,24 @@ export default async function PayPage({ params, searchParams }: PageProps<"/chec
   const provider = getProvider();
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-12 sm:px-6">
-      <div className="text-center sm:text-left mb-6">
-        <span className="badge badge-brand text-[11px] font-bold uppercase tracking-wider mb-2">
-          Secure Payment
-        </span>
-        <h1 className="text-3xl font-extrabold tracking-tight text-ink font-display">
-          Complete Your Purchase
-        </h1>
-        <p className="text-sm text-muted mt-1">Review your order details and choose your payment method.</p>
-      </div>
+    <div className="mx-auto max-w-xl px-4 py-10 sm:px-6">
+      <PageHeader title="Complete your purchase" sub="Review your order and choose how to pay." />
 
-      <div className="card p-6 sm:p-7 shadow-sm rounded-[24px]">
-        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-5">
-          <div className="space-y-0.5">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Item Description</span>
-            <p className="font-bold text-lg text-ink">{order.product.title}</p>
-          </div>
-          <div className="text-right">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted block">Total Payable</span>
-            <p className="text-3xl font-black text-ink tracking-tight"><Money paise={order.totalPaise} /></p>
-            <span className="text-[10px] text-muted block">Includes 18% GST</span>
-          </div>
-        </div>
+      <Surface as="section" aria-labelledby="pay-order-heading" padding="lg">
+        <h2 id="pay-order-heading" className="t-label">Your order</h2>
+        <p className="mt-2 text-lg font-semibold">{order.product.title}</p>
+        {/* The order's own snapshot: it prints the GST rate it was charged at, not today's product rate. */}
+        <MetricList className="mt-4 border-t border-line">
+          <MetricRow label="Total payable" value={<Money paise={order.totalPaise} size="lg" />} strong />
+          {order.gstPaise > 0 && (
+            <MetricRow label={`Includes GST (${order.gstRatePct}%)`} value={<Money paise={order.gstPaise} />} />
+          )}
+        </MetricList>
 
         {failed && (
-          <p role="alert" className="mt-4 rounded-xl bg-bad-soft px-3.5 py-2.5 text-xs font-semibold text-bad">
+          <Callout tone="bad" className="mt-4">
             The previous payment attempt was declined or cancelled. No funds were debited. You can try again below.
-          </p>
+          </Callout>
         )}
 
         <div className="mt-6">
@@ -66,7 +57,7 @@ export default async function PayPage({ params, searchParams }: PageProps<"/chec
               amountPaise={order.totalPaise}
               title={order.product.title}
               buyer={{ name: user.name, email: user.email }}
-              label={`Pay ${new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(order.totalPaise / 100)}`}
+              label={`Pay ${formatINR(order.totalPaise)}`}
             />
           ) : order.provider === "easebuzz" && provider.name === "easebuzz" ? (
             <ActionForm action={startEasebuzzPayment.bind(null, order.id)} className="space-y-4">
@@ -80,13 +71,13 @@ export default async function PayPage({ params, searchParams }: PageProps<"/chec
                 required
               />
               <FormError />
-              <SubmitButton pendingText="Opening secure payment page…" className="btn btn-primary btn-lg w-full">
+              <SubmitButton pendingText="Opening secure payment page…" size="lg" className="w-full">
                 Pay securely with Easebuzz
               </SubmitButton>
               {process.env.EASEBUZZ_ENV !== "prod" && (
-                <p className="rounded-xl bg-warn-soft px-3.5 py-2.5 text-xs">
+                <Callout tone="info">
                   <strong>Test mode.</strong> Easebuzz sandbox: use a test card on the next page. No real money moves.
-                </p>
+                </Callout>
               )}
             </ActionForm>
           ) : order.provider === "mock" && provider.name === "mock" ? (
@@ -96,13 +87,12 @@ export default async function PayPage({ params, searchParams }: PageProps<"/chec
               productTitle={order.product.title}
               initialGateway={resolveGateway(sp.gw, user.preferredGateway)}
               buyer={{ name: user.name, email: user.email }}
-              failed={failed}
             />
           ) : (
-            <p className="text-sm text-bad">This order was created with a different payment setup. Please start a new checkout.</p>
+            <Callout tone="bad">This order was created with a different payment setup. Please start a new checkout.</Callout>
           )}
         </div>
-      </div>
+      </Surface>
     </div>
   );
 }
