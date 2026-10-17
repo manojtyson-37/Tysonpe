@@ -2,11 +2,11 @@
 
 import { useId, useState } from "react";
 import type { FormState } from "@/app/actions/auth";
+import { KIND_LABEL } from "@/lib/lesson-kinds";
 import { CONTENT_KINDS, DRIP_TYPES, LESSON_KINDS } from "@/lib/validation";
 import { ActionForm, Field, FormError, SavedNote, SubmitButton, useFormValues } from "./form";
 import { Callout } from "./ui/callout";
 
-export const KIND_LABEL: Record<string, string> = { video: "Video", pdf: "PDF", text: "Text", link: "Link", quiz: "Quiz" };
 const DRIP_LABEL: Record<string, string> = {
   none: "Available immediately",
   days_after_enroll: "N days after the learner joins",

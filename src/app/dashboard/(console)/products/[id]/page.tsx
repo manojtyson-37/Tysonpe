@@ -8,12 +8,13 @@ import {
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ActionForm, Field, FormError, Select, SubmitButton } from "@/components/form";
 import { IconArrowDown, IconArrowUp, IconChevronDown, IconExternal } from "@/components/icons";
-import { KIND_LABEL, LessonForm } from "@/components/LessonForm";
+import { LessonForm } from "@/components/LessonForm";
 import { ProductForm } from "@/components/ProductForm";
 import { Badge, Button, ButtonLink, Callout, PageHeader, StatStrip, StatusBadge } from "@/components/ui";
 import { requireCreator } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { istDate } from "@/lib/format";
+import { KIND_LABEL } from "@/lib/lesson-kinds";
 import { getCourseInsights } from "@/lib/learning/insights";
 
 export const metadata: Metadata = { title: "Edit product" };

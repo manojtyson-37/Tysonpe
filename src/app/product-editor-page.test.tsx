@@ -36,7 +36,8 @@ vi.mock("@/app/actions/curriculum", () => mocks.actions);
 
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ActionForm, Field, FormError, Select, SubmitButton } from "@/components/form";
-import { KIND_LABEL, LessonForm } from "@/components/LessonForm";
+import { LessonForm } from "@/components/LessonForm";
+import { KIND_LABEL } from "@/lib/lesson-kinds";
 import { ProductForm } from "@/components/ProductForm";
 import { PageHeader, StatStrip, StatusBadge } from "@/components/ui";
 import { functionProps } from "@/test/rsc-safe";
@@ -282,7 +283,7 @@ describe("editor: lesson rows", () => {
     expect(plain).toContain('<span class="badge badge-muted">Video</span>');
   });
 
-  it("labels the kind Badge with the same names as the Type select (LessonForm's KIND_LABEL), not the raw value", async () => {
+  it("labels the kind Badge with the same names as the Type select (KIND_LABEL, shared with LessonForm), not the raw value", async () => {
     const html = await render();
     expect(summaryOf(html, "Wrap-up")).toContain('<span class="badge badge-muted">Text</span>');
     expect(html).not.toMatch(/<span class="badge badge-muted">(?:video|quiz|text|pdf|link)<\/span>/);
@@ -519,6 +520,8 @@ describe("editor: source hygiene", () => {
     '<span title="Learners who completed this lesson">',
     '"View page ↗"',
     'className="sm:!hidden"',
+    'className="sm:hidden!"',
+    'className="bg-[#fff]!"',
     'className="w-auto!"',
     'className="px-2 sm:py-1.5! text-xs"',
     "className={wide ? 'w-full' : 'w-auto!'}",

@@ -5,7 +5,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 // Spies between ConfirmButton and its two collaborators. Button is the real one (wrapped to record its props); the
 // ConfirmDialog is a stub that records its props and, when `seen.showDialog` is on, prints its confirm label, so the
 // closed dialog (which renders nothing in SSR) can still be asked what it was given. confirmReducer stays real.
-const seen = vi.hoisted(() => ({ button: [] as Array<Record<string, unknown>>, dialog: [] as Array<Record<string, unknown>>, showDialog: false }));
+// `passthrough` hands the props to the REAL ConfirmDialog instead of the stub's null.
+const seen = vi.hoisted(() => ({ button: [] as Array<Record<string, unknown>>, dialog: [] as Array<Record<string, unknown>>, showDialog: false, passthrough: false }));
 vi.mock("@/components/ui/button", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/components/ui/button")>();
   return { ...actual, Button: (props: Parameters<typeof actual.Button>[0]) => (seen.button.push(props), actual.Button(props)) };
@@ -14,8 +15,9 @@ vi.mock("@/components/ui/dialog", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/components/ui/dialog")>();
   return {
     ...actual,
-    ConfirmDialog: (props: Record<string, unknown>) => {
+    ConfirmDialog: (props: Parameters<typeof actual.ConfirmDialog>[0]) => {
       seen.dialog.push(props);
+      if (seen.passthrough) return <actual.ConfirmDialog {...props} />;
       return seen.showDialog ? <output data-confirm-label="">{props.confirmLabel as ReactNode}</output> : null;
     },
   };
@@ -27,6 +29,7 @@ afterEach(() => {
   seen.button.length = 0;
   seen.dialog.length = 0;
   seen.showDialog = false;
+  seen.passthrough = false;
 });
 
 describe("ConfirmButton", () => {
@@ -39,6 +42,8 @@ describe("ConfirmButton", () => {
       </form>,
     );
     expect(html).toBe('<form><button type="submit" class="btn btn-danger btn-sm">Delete</button></form>');
+    // The stub renders nothing whatever it is given, so the markup alone proves nothing: ask what it was told.
+    expect(seen.dialog.at(-1)).toMatchObject({ open: false });
   });
 
   it("puts aria-label on the trigger button (it names the action for screen readers) and renders no dialog", () => {
@@ -51,6 +56,16 @@ describe("ConfirmButton", () => {
     );
     expect(html).toBe('<form><button type="submit" class="btn btn-danger btn-sm" aria-label="Delete coupon WELCOME10">Delete</button></form>');
     expect(html).not.toContain("<dialog");
+    expect(seen.dialog.at(-1)).toMatchObject({ open: false });
+  });
+
+  // The server never renders a Dialog (it mounts after hydration), so this cannot tell open from closed by markup
+  // alone; it checks that the real component accepts what ConfirmButton hands it and adds nothing to the page.
+  it("renders nothing for the real, closed ConfirmDialog", () => {
+    seen.passthrough = true;
+    const html = renderToStaticMarkup(<form><ConfirmButton message="Delete this coupon?">Delete</ConfirmButton></form>);
+    expect(html).toBe('<form><button type="submit" class="btn btn-danger btn-sm">Delete</button></form>');
+    expect(seen.dialog.at(-1)).toMatchObject({ open: false, title: "Delete this coupon?", confirmLabel: "Delete" });
   });
 });
 
