@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PostCard } from "@/components/community/PostCard";
 import { PostComposer } from "@/components/community/PostComposer";
+import { focusRing } from "@/components/community/styles";
 import { Empty } from "@/components/ui";
 import { requireUser } from "@/lib/auth/session";
 import { canPost } from "@/lib/community/access";
@@ -43,12 +44,12 @@ export default async function ChannelPage({
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div className="min-w-0">
-          <h2 className="text-xl font-extrabold">{channel.name}</h2>
+          <h2 className="min-w-0 break-words text-xl font-extrabold">{channel.name}</h2>
           {channel.description && <p className="text-sm text-muted">{channel.description}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
-          <span className="badge badge-muted">{channel.kind === "announcement" ? "Announcements" : "Discussion"}</span>
-          <span className="badge badge-muted">{channel.access === "open" ? "All customers" : "Selected products"}</span>
+          <span className="badge badge-muted"><span className="sr-only">Type: </span>{channel.kind === "announcement" ? "Announcements" : "Discussion"}</span>
+          <span className="badge badge-muted"><span className="sr-only">Access: </span>{channel.access === "open" ? "All customers" : "Selected products"}</span>
         </div>
       </div>
 
@@ -71,7 +72,7 @@ export default async function ChannelPage({
       )}
 
       {nextCursor && (
-        <Link href={`${base}?cursor=${encodeURIComponent(nextCursor)}`} className="btn btn-secondary">Older posts</Link>
+        <Link href={`${base}?cursor=${encodeURIComponent(nextCursor)}`} className={`btn btn-secondary min-h-10 ${focusRing}`}>Older posts</Link>
       )}
     </div>
   );

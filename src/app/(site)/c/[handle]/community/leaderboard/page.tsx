@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { chipActive, chipIdle, focusRing } from "@/components/community/styles";
 import { Empty } from "@/components/ui";
 import { requireUser } from "@/lib/auth/session";
 import { ensureDefaultChannel, listChannelsFor } from "@/lib/community/channels";
@@ -30,7 +31,7 @@ export default async function LeaderboardPage({
     <Link
       href={`${base}?period=${p}`}
       aria-current={period === p ? "page" : undefined}
-      className={`rounded-xl px-3.5 py-2 text-sm font-medium transition-colors duration-150 ${period === p ? "bg-brand-soft text-brand" : "text-muted hover:bg-surface-2 hover:text-ink"}`}
+      className={`inline-flex min-h-10 items-center rounded-xl px-3.5 py-2 text-sm font-medium transition-all duration-150 active:scale-[0.98] ${focusRing} ${period === p ? chipActive : chipIdle}`}
     >
       {label}
     </Link>
@@ -42,25 +43,34 @@ export default async function LeaderboardPage({
         <div>
           <h2 className="text-xl font-extrabold">Leaderboard</h2>
           <p className="text-sm text-muted">Points from lessons, quizzes, courses and community activity. Weeks start Monday, IST.</p>
+          <p className="text-xs text-muted">Members are shown by first name and last initial.</p>
         </div>
-        <div className="flex gap-1">{tab("week", "This week")}{tab("all", "All time")}</div>
+        <nav aria-label="Leaderboard period" className="flex gap-1">{tab("week", "This week")}{tab("all", "All time")}</nav>
       </div>
 
       {lb.top.length === 0 ? (
         <Empty title="No points yet" body="Complete a lesson or start a conversation to get on the board." />
       ) : (
         <ol className="card divide-y divide-line">
-          {lb.top.map((r) => (
-            <li key={r.userId} className={`flex items-center gap-4 px-5 py-3 ${r.userId === user.id ? "bg-brand-soft/60" : ""}`}>
+          {lb.top.map((r, i) => (
+            <li key={i} className={`flex items-center gap-3 px-5 py-3 ${r.isMe ? "bg-brand-soft/60" : ""}`}>
               <span className="w-7 text-right text-sm font-bold tabular-nums text-muted">{r.rank}</span>
-              <span className="min-w-0 flex-1 truncate font-semibold">{r.name}{r.userId === user.id && <span className="ml-2 text-xs font-medium text-muted">you</span>}</span>
-              <span className="badge badge-muted tabular-nums">Level {r.level}</span>
-              <span className="w-16 text-right font-bold tabular-nums">{r.points}</span>
+              <span className="flex min-w-0 flex-1 items-center gap-2">
+                <span className="truncate font-semibold">{r.name}</span>
+                {r.isMe && (
+                  <>
+                    <span aria-hidden className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-xs font-semibold text-ink">you</span>
+                    <span className="sr-only">(you)</span>
+                  </>
+                )}
+              </span>
+              <span className="badge badge-muted shrink-0 tabular-nums">Level {r.level}</span>
+              <span className="w-16 shrink-0 text-right font-bold tabular-nums">{r.points}<span className="sr-only"> points</span></span>
             </li>
           ))}
         </ol>
       )}
-      {lb.me && !lb.top.some((r) => r.userId === user.id) && (
+      {lb.me && !lb.top.some((r) => r.isMe) && (
         <p className="card px-5 py-3 text-sm">You&apos;re ranked <span className="font-bold tabular-nums">#{lb.me.rank}</span> with <span className="font-bold tabular-nums">{lb.me.points}</span> points.</p>
       )}
     </div>

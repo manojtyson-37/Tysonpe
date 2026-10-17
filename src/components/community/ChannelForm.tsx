@@ -30,7 +30,7 @@ function Fields({ channel, products }: { channel?: Channel; products: ProductOpt
           <option value="announcement">Announcements: only you post</option>
         </Field>
         <Field name="access" label="Who can join" as="select" defaultValue={access} onChange={setPicked}>
-          <option value="open">Everyone who has bought from me</option>
+          <option value="open">All paying customers</option>
           <option value="product_gated">Buyers of selected products</option>
         </Field>
       </div>
@@ -40,11 +40,11 @@ function Fields({ channel, products }: { channel?: Channel; products: ProductOpt
           {products.length === 0 ? (
             <p className="text-sm text-muted">Create a product first.</p>
           ) : (
-            <ul className="space-y-1.5">
+            <ul>
               {products.map((p) => (
                 <li key={p.id}>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="productIds" value={p.id} defaultChecked={channel?.productIds.includes(p.id)} />
+                  <label className="flex min-h-10 items-center gap-2 py-2 text-sm">
+                    <input type="checkbox" name="productIds" value={p.id} defaultChecked={channel?.productIds.includes(p.id)} className="size-4 accent-[color:var(--brand-text,#0f172a)]" />
                     {p.title}
                   </label>
                 </li>
@@ -69,7 +69,7 @@ export function ChannelForm({ action, channel, products, submitLabel }: {
       <Fields channel={channel} products={products} />
       <FormError />
       <div className="flex items-center gap-3">
-        <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…">{submitLabel}</SubmitButton>
+        <SubmitButton className="btn btn-primary btn-sm min-h-10" pendingText="Saving…">{submitLabel}</SubmitButton>
         <SavedNote />
       </div>
     </ActionForm>

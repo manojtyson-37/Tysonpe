@@ -12,7 +12,7 @@ export type PostView = {
   author: AuthorView; commentCount: number; likeCount: number; likedByMe: boolean; canEdit: boolean; canDelete: boolean;
 };
 export type CommentView = {
-  id: string; body: string; createdAt: Date; author: AuthorView; likeCount: number; likedByMe: boolean; canDelete: boolean;
+  id: string; body: string; createdAt: Date; editedAt: Date | null; author: AuthorView; likeCount: number; likedByMe: boolean; canDelete: boolean;
 };
 
 const notFound = () => new AppError("not_found", "Not found.");
@@ -97,18 +97,28 @@ export async function listPosts(a: { creatorId: string; channelId: string; userI
   return { posts, nextCursor: hasMore ? page[page.length - 1].id : null };
 }
 
-export async function getThread(userId: string | null, postId: string) {
+/**
+ * One thread page: the post plus up to LIMITS.commentPageSize comments oldest-first (createdAt, id).
+ * `nextCommentCursor` is the id of the last returned comment when more follow (pass it as `after`), else null.
+ */
+export async function getThread(userId: string | null, postId: string, opts: { after?: string } = {}) {
   const { post, ch, viewer } = await gatePost(userId, postId);
   const creator = await db.creator.findUniqueOrThrow({ where: { id: ch.creatorId }, select: { userId: true, displayName: true } });
   const row = await db.post.findUnique({ where: { id: post.id }, select: postSelect });
   if (!row) throw notFound(); // deleted between the gate and this read
   const [postView] = await toPostViews([row], viewer, userId, creator);
-  const rows = await db.comment.findMany({
+  // The cursor must be a comment of THIS post; anything else is ignored (no probing other posts' ids).
+  const after = opts.after && (await db.comment.count({ where: { id: opts.after, postId } })) > 0 ? opts.after : undefined;
+  const fetched = await db.comment.findMany({
     where: { postId },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    select: { id: true, body: true, createdAt: true, authorId: true, author: { select: { id: true, name: true } } },
+    take: LIMITS.commentPageSize + 1,
+    ...(after ? { cursor: { id: after }, skip: 1 } : {}),
+    select: { id: true, body: true, createdAt: true, editedAt: true, authorId: true, author: { select: { id: true, name: true } } },
   });
-  const ids = rows.map((r) => r.id);
+  const hasMore = fetched.length > LIMITS.commentPageSize;
+  const rows = hasMore ? fetched.slice(0, LIMITS.commentPageSize) : fetched;
+  const ids = rows.map((r) => r.id); // likes are aggregated for the returned page only
   const [likes, mine] = await Promise.all([
     db.like.groupBy({ by: ["commentId"], where: { commentId: { in: ids } }, _count: { _all: true } }),
     userId && ids.length ? db.like.findMany({ where: { userId, commentId: { in: ids } }, select: { commentId: true } }) : Promise.resolve([]),
@@ -116,11 +126,11 @@ export async function getThread(userId: string | null, postId: string) {
   const lc = new Map(likes.map((l) => [l.commentId, l._count._all]));
   const liked = new Set(mine.map((m) => m.commentId));
   const comments: CommentView[] = rows.map((r) => ({
-    id: r.id, body: r.body, createdAt: r.createdAt,
+    id: r.id, body: r.body, createdAt: r.createdAt, editedAt: r.editedAt,
     author: authorView(r.author, creator),
     likeCount: lc.get(r.id) ?? 0, likedByMe: liked.has(r.id), canDelete: r.authorId === userId || canModerate(viewer),
   }));
-  return { post: postView, channel: { id: ch.id, slug: ch.slug, name: ch.name, creatorId: ch.creatorId }, comments };
+  return { post: postView, channel: { id: ch.id, slug: ch.slug, name: ch.name, creatorId: ch.creatorId }, comments, nextCommentCursor: hasMore ? rows[rows.length - 1].id : null };
 }
 
 /* ---------- posts ---------- */
@@ -135,8 +145,9 @@ export async function createPost(userId: string, channelId: string, input: unkno
 }
 
 export async function editPost(userId: string, postId: string, input: unknown): Promise<void> {
-  const { post } = await gatePost(userId, postId);
+  const { post, info, viewer } = await gatePost(userId, postId);
   if (post.authorId !== userId) throw forbidden();
+  if (!canPost(info, viewer)) throw forbidden(); // channel became announcement-only: members can't rewrite into it
   const data = parse(postSchema, input);
   await db.post.update({ where: { id: postId }, data: { ...data, editedAt: new Date() } });
 }
@@ -176,6 +187,16 @@ export async function addComment(userId: string, postId: string, input: unknown)
   const c = await db.comment.create({ data: { postId, authorId: userId, body: data.body }, select: { id: true } });
   await awardSafely({ userId, creatorId: ch.creatorId, kind: "comment_created", refId: c.id, sourceId: c.id });
   return c;
+}
+
+/** Author-only (not even the creator rewrites someone else's words); same access gate as every other comment operation. */
+export async function editComment(userId: string, commentId: string, input: unknown): Promise<void> {
+  const comment = await db.comment.findUnique({ where: { id: commentId }, select: { id: true, postId: true, authorId: true } });
+  if (!comment) throw notFound();
+  await gatePost(userId, comment.postId);
+  if (comment.authorId !== userId) throw forbidden();
+  const data = parse(commentSchema, input);
+  await db.comment.update({ where: { id: commentId }, data: { body: data.body, editedAt: new Date() } });
 }
 
 export async function deleteComment(userId: string, commentId: string): Promise<void> {
@@ -234,8 +255,20 @@ export async function banMember(actorUserId: string, creatorId: string, targetUs
   const creator = await db.creator.findUnique({ where: { id: creatorId }, select: { userId: true } });
   if (!creator || creator.userId !== actorUserId) throw forbidden();
   if (targetUserId === creator.userId) throw new AppError("invalid", "You can't ban yourself.");
-  const user = await db.user.findUnique({ where: { id: targetUserId }, select: { id: true } });
-  if (!user) throw notFound();
+  // The target must belong to THIS creator's community (so ids of arbitrary users can't be probed or banned):
+  // enrolled in one of their products, author in their channels (may have since been refunded), or already banned.
+  const linked = await db.user.count({
+    where: {
+      id: targetUserId,
+      OR: [
+        { enrollments: { some: { product: { creatorId } } } },
+        { posts: { some: { channel: { creatorId } } } },
+        { comments: { some: { post: { channel: { creatorId } } } } },
+        { bans: { some: { creatorId } } },
+      ],
+    },
+  });
+  if (linked === 0) throw notFound();
   await db.communityBan.upsert({
     where: { creatorId_userId: { creatorId, userId: targetUserId } },
     create: { creatorId, userId: targetUserId },

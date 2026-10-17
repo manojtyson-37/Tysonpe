@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireCreator } from "@/lib/auth/session";
 import { createChannel, deleteChannel, moveChannel, updateChannel } from "@/lib/community/channels";
+import { checkRate } from "@/lib/community/limits";
 import { banMember, unbanMember } from "@/lib/community/posts";
 import { db } from "@/lib/db";
 import { AppError, isUniqueViolation } from "@/lib/errors";
@@ -105,12 +106,13 @@ export async function setGamificationAction(enabled: boolean) {
   const { creator } = await requireCreator();
   const on = z.boolean().parse(enabled);
   await db.creator.update({ where: { id: creator.id }, data: { gamificationEnabled: on } });
-  if (on) await backfillPoints(creator.id);
+  // Rate-limited per creator: over the limit the flag still flips, the (heavy) backfill is just skipped.
+  if (on && checkRate("backfill", creator.id)) await backfillPoints(creator.id);
   refresh();
 }
 
 export async function recalculatePointsAction() {
   const { creator } = await requireCreator();
-  if (creator.gamificationEnabled) await backfillPoints(creator.id);
+  if (creator.gamificationEnabled && checkRate("backfill", creator.id)) await backfillPoints(creator.id);
   refresh();
 }

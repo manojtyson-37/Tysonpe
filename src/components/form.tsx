@@ -494,6 +494,7 @@ type FieldProps = {
   hint?: string;
   required?: boolean;
   rows?: number;
+  maxLength?: number;
   autoComplete?: string;
   prefix?: string;
   onChange?: (value: string) => void;
@@ -507,7 +508,7 @@ type FieldProps = {
  */
 export function Field({
   name, label, type = "text", as = "input", defaultValue, placeholder, hint, required,
-  rows = 4, autoComplete, prefix, onChange, children, className,
+  rows = 4, maxLength, autoComplete, prefix, onChange, children, className,
 }: FieldProps) {
   const s = useContext(Ctx);
   const error = s?.fields?.[name];
@@ -520,8 +521,8 @@ export function Field({
   };
   // Remount only when the server-returned value changes (not on local edits, which would drop focus).
   const k = `${name}:${s?.values?.[name] ?? ""}`;
-  if (as === "textarea") return <Textarea key={k} {...common} rows={rows} defaultValue={value} />;
+  if (as === "textarea") return <Textarea key={k} {...common} rows={rows} maxLength={maxLength} defaultValue={value} />;
   if (as === "select") return <Select key={k} {...common} defaultValue={value}>{children}</Select>;
-  const inputProps = { ...common, type, autoComplete, defaultValue: type === "password" ? undefined : value };
+  const inputProps = { ...common, type, maxLength, autoComplete, defaultValue: type === "password" ? undefined : value };
   return prefix ? <InputGroup key={k} {...inputProps} prefix={prefix} /> : <Input key={k} {...inputProps} />;
 }

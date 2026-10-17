@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { checkRate } from "@/lib/community/limits";
-import { addComment, createPost, deleteComment, deletePost, editPost, setPinned, toggleLike } from "@/lib/community/posts";
+import { addComment, createPost, deleteComment, deletePost, editComment, editPost, setPinned, toggleLike } from "@/lib/community/posts";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import type { FormState } from "./auth";
@@ -48,8 +48,23 @@ export async function editPostAction(postId: string, _prev: FormState, fd: FormD
   const user = await requireUser();
   const id = idSchema.safeParse(postId);
   if (!id.success) return { error: "Post not found." };
+  if (!checkRate("edit", user.id)) return { error: TOO_FAST };
   try {
     await editPost(user.id, id.data, { title: str(fd, "title"), body: str(fd, "body") });
+  } catch (e) {
+    return failState(e);
+  }
+  refreshCommunity();
+  return { fields: { saved: "1" } };
+}
+
+export async function editCommentAction(commentId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const id = idSchema.safeParse(commentId);
+  if (!id.success) return { error: "Comment not found." };
+  if (!checkRate("edit", user.id)) return { error: TOO_FAST };
+  try {
+    await editComment(user.id, id.data, { body: str(fd, "body") });
   } catch (e) {
     return failState(e);
   }
@@ -73,28 +88,32 @@ export async function addCommentAction(postId: string, _prev: FormState, fd: For
 
 export async function deletePostAction(postId: string, goToChannel: boolean) {
   const user = await requireUser();
-  const id = idSchema.parse(postId);
+  const id = idSchema.safeParse(postId);
+  if (!id.success) return;
   // Resolve the channel URL from the database BEFORE deleting; never from user input.
-  const where = await db.post.findUnique({
-    where: { id },
-    select: { channel: { select: { slug: true, creator: { select: { handle: true } } } } },
-  });
+  const where = goToChannel
+    ? await db.post.findUnique({
+        where: { id: id.data },
+        select: { channel: { select: { slug: true, creator: { select: { handle: true } } } } },
+      })
+    : null;
   try {
-    await deletePost(user.id, id);
+    await deletePost(user.id, id.data);
   } catch (e) {
     if (!(e instanceof AppError)) throw e; // not allowed / already gone: the refreshed page shows the truth
     refreshCommunity();
     return; // never redirect on failure: the URL would reveal a hidden channel's handle and slug
   }
   refreshCommunity();
-  if (goToChannel && where) redirect(`/c/${where.channel.creator.handle}/community/${where.channel.slug}`);
+  if (where) redirect(`/c/${where.channel.creator.handle}/community/${where.channel.slug}`);
 }
 
 export async function deleteCommentAction(commentId: string) {
   const user = await requireUser();
-  const id = idSchema.parse(commentId);
+  const id = idSchema.safeParse(commentId);
+  if (!id.success) return;
   try {
-    await deleteComment(user.id, id);
+    await deleteComment(user.id, id.data);
   } catch (e) {
     if (!(e instanceof AppError)) throw e;
   }
@@ -103,11 +122,12 @@ export async function deleteCommentAction(commentId: string) {
 
 export async function toggleLikeAction(kind: "post" | "comment", targetId: string) {
   const user = await requireUser();
-  const k = z.enum(["post", "comment"]).parse(kind);
-  const id = idSchema.parse(targetId);
+  const k = z.enum(["post", "comment"]).safeParse(kind);
+  const id = idSchema.safeParse(targetId);
+  if (!k.success || !id.success) return;
   if (!checkRate("like", user.id)) return; // silently ignore a flood of clicks
   try {
-    await toggleLike(user.id, k === "post" ? { postId: id } : { commentId: id });
+    await toggleLike(user.id, k.data === "post" ? { postId: id.data } : { commentId: id.data });
   } catch (e) {
     if (!(e instanceof AppError)) throw e;
   }
@@ -116,9 +136,11 @@ export async function toggleLikeAction(kind: "post" | "comment", targetId: strin
 
 export async function setPinnedAction(postId: string, pinned: boolean) {
   const user = await requireUser();
-  const id = idSchema.parse(postId);
+  const id = idSchema.safeParse(postId);
+  const flag = z.boolean().safeParse(pinned);
+  if (!id.success || !flag.success) return;
   try {
-    await setPinned(user.id, id, z.boolean().parse(pinned));
+    await setPinned(user.id, id.data, flag.data);
   } catch (e) {
     if (!(e instanceof AppError)) throw e; // e.g. the 3-pin limit: the post simply stays unpinned
   }

@@ -25,7 +25,7 @@ export function submitWithSubmitter<B extends { form: { requestSubmit(submitter?
  * the form does not submit first; on confirm the ORIGINAL form is submitted with this button as the submitter
  * (`requestSubmit(button)`), so formAction, name and value behave exactly as for a plain submit button.
  */
-export function ConfirmButton({ message, className, children }: { message: string; className?: string; children: ReactNode }) {
+export function ConfirmButton({ message, className, children, "aria-label": ariaLabel }: { message: string; className?: string; children: ReactNode; "aria-label"?: string }) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [state, dispatch] = useReducer(confirmReducer, { open: false, submit: false });
 
@@ -42,6 +42,7 @@ export function ConfirmButton({ message, className, children }: { message: strin
         ref={buttonRef}
         type="submit"
         className={className}
+        aria-label={ariaLabel}
         onClick={(event) => {
           event.preventDefault();
           dispatch("open");

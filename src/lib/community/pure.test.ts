@@ -60,6 +60,18 @@ describe("cleanText", () => {
   it("turns tabs into spaces instead of gluing words together", () => {
     expect(cleanText("a\tb")).toBe("a b");
   });
+  it("strips zero-width and bidi-control characters", () => {
+    expect(cleanText("a\u200Bb\u200E\u200Fc\u202A\u202B\u202C\u202D\u202Ed\u2060\u2061\u2062\u2063\u2064e\u2066\u2067\u2068\u2069f\uFEFFg")).toBe("abcdefg");
+  });
+  it("keeps ZWNJ and ZWJ (needed by Indic scripts and emoji sequences)", () => {
+    expect(cleanText("a\u200Cb\u200Dc")).toBe("a\u200Cb\u200Dc");
+    expect(cleanText("\u0D95\u0DCA\u200D\u0DBB")).toBe("\u0D95\u0DCA\u200D\u0DBB");
+  });
+  it("a body of only invisibles becomes empty and fails min(1)", () => {
+    expect(cleanText("\u200B\u200E \uFEFF\u2060")).toBe("");
+    expect(commentSchema.safeParse({ body: "\u200B\u202E\uFEFF" }).success).toBe(false);
+    expect(postSchema.safeParse({ title: "", body: "\u200B\u2066\u2069" }).success).toBe(false);
+  });
   it("leaves HTML as inert text (React escapes it on render)", () => {
     expect(cleanText("<script>alert(1)</script>")).toBe("<script>alert(1)</script>");
   });
@@ -96,5 +108,20 @@ describe("checkRate", () => {
     for (let i = 0; i < 5; i++) expect(checkRate("post", u)).toBe(true);
     expect(checkRate("post", u)).toBe(false);
     expect(checkRate("post", `${u}-other`)).toBe(true);
+  });
+
+  it("allows 10 edits per minute per user, then blocks (separate from posts and comments)", () => {
+    const u = `edit-user-${Math.random()}`;
+    for (let i = 0; i < 10; i++) expect(checkRate("edit", u)).toBe(true);
+    expect(checkRate("edit", u)).toBe(false);
+    expect(checkRate("edit", `${u}-other`)).toBe(true);
+    expect(checkRate("post", u)).toBe(true);
+    expect(checkRate("comment", u)).toBe(true);
+  });
+  it("allows 3 backfills per 10 minutes per creator, then blocks", () => {
+    const u = `backfill-creator-${Math.random()}`;
+    for (let i = 0; i < 3; i++) expect(checkRate("backfill", u)).toBe(true);
+    expect(checkRate("backfill", u)).toBe(false);
+    expect(checkRate("backfill", `${u}-other`)).toBe(true);
   });
 });

@@ -1,10 +1,17 @@
 import type { CSSProperties, ReactNode } from "react";
-import { readableOn } from "@/lib/color";
+import { brandRingColor, brandTextColor, readableOn } from "@/lib/color";
 import { Avatar as UiAvatar } from "@/components/ui/avatar";
 
 /** Scopes a creator's brand colour to their storefront subtree. */
 export function BrandScope({ color, children }: { color: string; children: ReactNode }) {
-  const style = { "--brand": color, "--brand-ink": readableOn(color), "--brand-soft": `${color}1f` } as CSSProperties;
+  // --brand-text / --brand-ring are the contrast-safe variants of --brand for text (>=4.5:1) and non-text UI (>=3:1); --brand itself is unchanged.
+  const style = {
+    "--brand": color,
+    "--brand-ink": readableOn(color),
+    "--brand-soft": `${color}1f`,
+    "--brand-text": brandTextColor(color),
+    "--brand-ring": brandRingColor(color),
+  } as CSSProperties;
   return <div style={style}>{children}</div>;
 }
 

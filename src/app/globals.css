@@ -18,6 +18,8 @@
   --logo-mark: #0f7b4d;
   --logo-mark-ink: #ffffff;
   --brand-soft: #ece8dd;
+  --brand-text: var(--brand);
+  --brand-ring: var(--brand);
   --accent: #f59e0b;
   --good: #0f7b4d;
   --good-soft: #e3f1ea;
@@ -266,7 +268,7 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
   .badge-bad { @apply bg-bad-soft text-bad; }
   .badge-warn { @apply bg-warn-soft text-ink; }
   .badge-muted { @apply bg-surface-2 text-muted; }
-  .badge-brand { @apply bg-brand-soft text-brand; }
+  .badge-brand { @apply bg-brand-soft text-[color:var(--brand-text)]; }
 
   .table { @apply w-full text-left text-sm; }
   .table th {

@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireCreator } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { RESERVED_PRODUCT_SLUGS, slugify } from "@/lib/handles";
+import { slugify } from "@/lib/handles";
+import { pickProductSlug } from "@/lib/product-slug";
 import { AppError, refundOrder } from "@/lib/orders";
 import {
   GST_RATES,
@@ -30,14 +31,11 @@ const productSchema = z.object({
   billing: z.enum(["one_time", "monthly"]),
 });
 
-async function uniqueSlug(creatorId: string, title: string, ignoreId?: string) {
-  const base = slugify(title);
-  for (let i = 0; i < 50; i++) {
-    const slug = i === 0 ? base : `${base}-${i + 1}`;
+function uniqueSlug(creatorId: string, title: string, ignoreId?: string) {
+  return pickProductSlug(slugify(title), async (slug) => {
     const hit = await db.product.findUnique({ where: { creatorId_slug: { creatorId, slug } } });
-    if (!RESERVED_PRODUCT_SLUGS.has(slug) && (!hit || hit.id === ignoreId)) return slug;
-  }
-  return `${base}-${Date.now()}`;
+    return !!hit && hit.id !== ignoreId;
+  });
 }
 
 export async function createProduct(_prev: FormState, fd: FormData): Promise<FormState> {

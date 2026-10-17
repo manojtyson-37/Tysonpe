@@ -2,12 +2,14 @@
 
 > **CRITICAL DIRECTIVE**: This document is the permanent, immutable core memory for Claude Code and all AI assistants working on Tysonpe. Regardless of task, session, or tool switch, you MUST strictly follow the design systems, anti-slop rules, and motion principles detailed below.
 
+> **START HERE in a new session:** read [docs/HANDOFF.md](docs/HANDOFF.md) first (current state, how to resume, how work is run, open items, next steps). History of the last build: [docs/superpowers/handoff/sub-project-3-log.md](docs/superpowers/handoff/sub-project-3-log.md). Update HANDOFF.md whenever a sub-project finishes or the state changes.
+
 ---
 
 ## 1. Project Overview & Tech Stack
 - **Product**: Tysonpe — Creator commerce & fintech platform for India (storefronts, UPI/card checkout, GST invoices, course LMS, payout ledgers).
 - **Core**: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Prisma with SQLite / PostgreSQL.
-- **Testing**: Vitest (`npm test`). Current suite has 357 passing tests. Each vitest run uses its own SQLite file (`prisma/test-<pid>.db`), so concurrent runs are safe.
+- **Testing**: Vitest (`npm test`). Current suite has 541 passing tests (1 Postgres-only test is skipped on SQLite). Each vitest run uses its own SQLite file (`prisma/test-<pid>.db`), so concurrent runs are safe.
 - **Commands**:
   - Dev server: `npm run dev` (running on port 3100)
   - Test suite: `npm test`

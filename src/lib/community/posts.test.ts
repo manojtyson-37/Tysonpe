@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db, isPostgres } from "@/lib/db";
 import { enroll, makeChannel, makeCreatorWithProduct, makeUser } from "@/test/factories";
 import {
-  addComment, banMember, createPost, deleteComment, deletePost, editPost, getThread, listBans, listPosts,
+  addComment, banMember, createPost, deleteComment, deletePost, editComment, editPost, getThread, listBans, listPosts,
   setPinned, toggleLike, unbanMember,
 } from "./posts";
 import { LIMITS } from "./validation";
@@ -56,6 +56,9 @@ describe("access (server-side, every operation)", () => {
     await expect(setPinned(ctx.stranger.id, id, true)).rejects.toMatchObject({ code: "not_found" });
     await expect(deletePost(ctx.stranger.id, id)).rejects.toMatchObject({ code: "not_found" });
     await expect(deleteComment(ctx.stranger.id, c.id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(editComment(ctx.stranger.id, c.id, { body: "hack" })).rejects.toMatchObject({ code: "not_found" });
+    await expect(editComment(ctx.stranger.id, "no-such-comment", { body: "hack" })).rejects.toMatchObject({ code: "not_found" });
+    expect((await db.comment.findUniqueOrThrow({ where: { id: c.id } })).body).toBe("c");
     await expect(toggleLike(ctx.stranger.id, { commentId: c.id })).rejects.toMatchObject({ code: "not_found" });
     expect(await db.like.count({ where: { OR: [{ userId: ctx.stranger.id }, { commentId: c.id }, { postId: id }] } })).toBe(0);
   });
@@ -71,6 +74,7 @@ describe("access (server-side, every operation)", () => {
     if (how === "refunded") await db.enrollment.deleteMany({ where: { userId: ctx.member.id } });
     else await banMember(ctx.creatorUser.id, ctx.creator.id, ctx.member.id);
     await expect(deleteComment(ctx.member.id, c.id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(editComment(ctx.member.id, c.id, { body: "edit" })).rejects.toMatchObject({ code: "not_found" });
     await expect(editPost(ctx.member.id, id, { body: "edit" })).rejects.toMatchObject({ code: "not_found" });
     await expect(deletePost(ctx.member.id, id)).rejects.toMatchObject({ code: "not_found" });
     await expect(setPinned(ctx.member.id, id, true)).rejects.toMatchObject({ code: "not_found" });
@@ -78,6 +82,7 @@ describe("access (server-side, every operation)", () => {
     await expect(toggleLike(ctx.member.id, { commentId: c.id })).rejects.toMatchObject({ code: "not_found" });
     await expect(getThread(ctx.member.id, id)).rejects.toMatchObject({ code: "not_found" });
     expect(await db.comment.count({ where: { id: c.id } })).toBe(1);
+    expect((await db.comment.findUniqueOrThrow({ where: { id: c.id } })).body).toBe("my comment");
   });
 
   it("a gated channel is invisible to members of other products", async () => {
@@ -179,6 +184,16 @@ describe("posts", () => {
     expect(row.editedAt).not.toBeNull();
   });
 
+  it("a member cannot edit their post once its channel became an announcement channel", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "v1" });
+    await db.channel.update({ where: { id: ctx.channel.id }, data: { kind: "announcement" } });
+    await expect(editPost(ctx.member.id, id, { body: "now an announcement" })).rejects.toMatchObject({ code: "forbidden" });
+    expect((await db.post.findUniqueOrThrow({ where: { id } })).body).toBe("v1");
+    // The creator keeps posting (and editing their own posts) there.
+    const mine = await createPost(ctx.creatorUser.id, ctx.channel.id, { body: "official" });
+    await expect(editPost(ctx.creatorUser.id, mine.id, { body: "official v2" })).resolves.toBeUndefined();
+  });
+
   it("author or creator may delete; another member may not", async () => {
     const a = await createPost(ctx.member.id, ctx.channel.id, { body: "x" });
     await expect(deletePost(ctx.member2.id, a.id)).rejects.toMatchObject({ code: "forbidden" });
@@ -226,6 +241,107 @@ describe("comments", () => {
     await expect(deleteComment(ctx.member.id, c.id)).rejects.toMatchObject({ code: "forbidden" });
     await deleteComment(ctx.creatorUser.id, c.id);
     expect(await db.comment.count({ where: { postId: id } })).toBe(0);
+  });
+});
+
+describe("thread comment pagination", () => {
+  async function seedComments(postId: string, n: number, authorId = ctx.member2.id) {
+    const base = Date.now() - n * 1000;
+    // Identical timestamps in pairs exercise the (createdAt, id) tiebreak.
+    await db.comment.createMany({
+      data: Array.from({ length: n }, (_, i) => ({ id: `c${postId.slice(-6)}${String(i).padStart(3, "0")}`, postId, authorId, body: `c${i}`, createdAt: new Date(base + Math.floor(i / 2) * 1000) })),
+    });
+  }
+
+  it("small threads are unchanged: all comments, no cursor", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "q" });
+    await seedComments(id, 3);
+    const t = await getThread(ctx.member.id, id);
+    expect(t.comments.map((c) => c.body)).toEqual(["c0", "c1", "c2"]);
+    expect(t.nextCommentCursor).toBeNull();
+  });
+
+  it("returns the first 50 oldest-first plus a cursor, then the rest on the next call", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "q" });
+    await seedComments(id, 55);
+    const first = await getThread(ctx.member.id, id);
+    expect(first.comments).toHaveLength(50);
+    expect(first.comments[0].body).toBe("c0");
+    expect(first.comments[49].body).toBe("c49");
+    expect(first.nextCommentCursor).toBe(first.comments[49].id);
+    const second = await getThread(ctx.member.id, id, { after: first.nextCommentCursor! });
+    expect(second.comments.map((c) => c.body)).toEqual(["c50", "c51", "c52", "c53", "c54"]);
+    expect(second.nextCommentCursor).toBeNull();
+    expect(new Set([...first.comments, ...second.comments].map((c) => c.id)).size).toBe(55);
+  });
+
+  it("exactly 50 comments has no next page", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "q" });
+    await seedComments(id, 50);
+    const t = await getThread(ctx.member.id, id);
+    expect(t.comments).toHaveLength(50);
+    expect(t.nextCommentCursor).toBeNull();
+  });
+
+  it("a cursor belonging to another post (or nothing) is ignored", async () => {
+    const a = await createPost(ctx.member.id, ctx.channel.id, { body: "a" });
+    const b = await createPost(ctx.member.id, ctx.channel.id, { body: "b" });
+    await seedComments(a.id, 3);
+    await seedComments(b.id, 60);
+    const foreign = (await db.comment.findFirstOrThrow({ where: { postId: b.id }, orderBy: { id: "desc" } })).id;
+    const t = await getThread(ctx.member.id, a.id, { after: foreign });
+    expect(t.comments.map((c) => c.body)).toEqual(["c0", "c1", "c2"]);
+    const u = await getThread(ctx.member.id, b.id, { after: "nope" });
+    expect(u.comments[0].body).toBe("c0");
+    expect(u.nextCommentCursor).not.toBeNull();
+  });
+
+  it("like counts and likedByMe are correct on a later page", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "q" });
+    await seedComments(id, 52);
+    const late = await db.comment.findFirstOrThrow({ where: { postId: id, body: "c51" } });
+    await toggleLike(ctx.member.id, { commentId: late.id });
+    const first = await getThread(ctx.member.id, id);
+    const page2 = await getThread(ctx.member.id, id, { after: first.nextCommentCursor! });
+    const view = page2.comments.find((c) => c.id === late.id)!;
+    expect(view.likeCount).toBe(1);
+    expect(view.likedByMe).toBe(true);
+  });
+});
+
+describe("editing comments", () => {
+  it("only the author edits; edit sets editedAt and the thread exposes it", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "q" });
+    const c = await addComment(ctx.member2.id, id, { body: "v1" });
+    expect((await getThread(ctx.member.id, id)).comments[0].editedAt).toBeNull();
+    await editComment(ctx.member2.id, c.id, { body: "  v2  " });
+    const row = await db.comment.findUniqueOrThrow({ where: { id: c.id } });
+    expect(row.body).toBe("v2");
+    expect(row.editedAt).not.toBeNull();
+    const view = (await getThread(ctx.member.id, id)).comments[0];
+    expect(view.body).toBe("v2");
+    expect(view.editedAt).toBeInstanceOf(Date);
+  });
+
+  it("another member or even the creator cannot edit someone else's comment (forbidden)", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "q" });
+    const c = await addComment(ctx.member2.id, id, { body: "mine" });
+    await expect(editComment(ctx.member.id, c.id, { body: "hack" })).rejects.toMatchObject({ code: "forbidden" });
+    await expect(editComment(ctx.creatorUser.id, c.id, { body: "hack" })).rejects.toMatchObject({ code: "forbidden" });
+    const row = await db.comment.findUniqueOrThrow({ where: { id: c.id } });
+    expect(row.body).toBe("mine");
+    expect(row.editedAt).toBeNull();
+  });
+
+  it("validates with the comment schema and leaves the comment untouched on failure", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "q" });
+    const c = await addComment(ctx.member2.id, id, { body: "keep" });
+    await expect(editComment(ctx.member2.id, c.id, { body: "   " })).rejects.toMatchObject({ code: "invalid" });
+    await expect(editComment(ctx.member2.id, c.id, { body: "\u200B\uFEFF" })).rejects.toMatchObject({ code: "invalid" });
+    await expect(editComment(ctx.member2.id, c.id, { body: "x".repeat(LIMITS.commentBody + 1) })).rejects.toMatchObject({ code: "invalid" });
+    const row = await db.comment.findUniqueOrThrow({ where: { id: c.id } });
+    expect(row.body).toBe("keep");
+    expect(row.editedAt).toBeNull();
   });
 });
 
@@ -314,5 +430,44 @@ describe("bans", () => {
     await banMember(ctx.creatorUser.id, ctx.creator.id, ctx.member.id);
     await banMember(ctx.creatorUser.id, ctx.creator.id, ctx.member.id); // idempotent
     expect((await listBans(ctx.creator.id)).map((b) => b.name)).toEqual(["Meera Learner"]);
+  });
+
+  it("the target must be linked to this creator's community (unrelated user -> not_found, nothing written)", async () => {
+    await expect(banMember(ctx.creatorUser.id, ctx.creator.id, ctx.stranger.id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(banMember(ctx.creatorUser.id, ctx.creator.id, "no-such-user")).rejects.toMatchObject({ code: "not_found" });
+    expect(await db.communityBan.count({ where: { creatorId: ctx.creator.id } })).toBe(0);
+  });
+
+  it("enrolment in ANOTHER creator's product does not link a user to this community", async () => {
+    const other = await makeCreatorWithProduct();
+    const outsider = await makeUser();
+    await enroll(outsider.id, other.product.id);
+    await expect(banMember(ctx.creatorUser.id, ctx.creator.id, outsider.id)).rejects.toMatchObject({ code: "not_found" });
+  });
+
+  it("a commenter or poster who lost their enrolment can still be banned", async () => {
+    const { id } = await createPost(ctx.member.id, ctx.channel.id, { body: "spam" });
+    await addComment(ctx.member2.id, id, { body: "spam too" });
+    await db.enrollment.deleteMany({ where: { userId: { in: [ctx.member.id, ctx.member2.id] } } });
+    await expect(banMember(ctx.creatorUser.id, ctx.creator.id, ctx.member.id)).resolves.toBeUndefined();
+    await expect(banMember(ctx.creatorUser.id, ctx.creator.id, ctx.member2.id)).resolves.toBeUndefined();
+    expect(await db.communityBan.count({ where: { creatorId: ctx.creator.id } })).toBe(2);
+  });
+
+  it("posting in ANOTHER creator's channel does not link a user to this community", async () => {
+    const other = await makeCreatorWithProduct();
+    const otherChannel = await makeChannel(other.creator.id, { slug: "elsewhere" });
+    const poster = await makeUser();
+    await enroll(poster.id, other.product.id);
+    await createPost(poster.id, otherChannel.id, { body: "hi" });
+    await db.enrollment.deleteMany({ where: { userId: poster.id } });
+    await expect(banMember(ctx.creatorUser.id, ctx.creator.id, poster.id)).rejects.toMatchObject({ code: "not_found" });
+  });
+
+  it("an already banned user stays idempotent even with no other link left", async () => {
+    await banMember(ctx.creatorUser.id, ctx.creator.id, ctx.member.id);
+    await db.enrollment.deleteMany({ where: { userId: ctx.member.id } });
+    await expect(banMember(ctx.creatorUser.id, ctx.creator.id, ctx.member.id)).resolves.toBeUndefined();
+    expect(await db.communityBan.count({ where: { creatorId: ctx.creator.id } })).toBe(1);
   });
 });
