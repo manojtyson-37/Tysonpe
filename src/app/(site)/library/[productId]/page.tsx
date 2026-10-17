@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { completeLesson } from "@/app/actions/learning";
-import { IconArrowLeft, IconArrowRight, IconCheck, IconExternal, IconLock } from "@/components/icons";
+import { IconArrowLeft, IconArrowRight, IconCheck, IconChevronDown, IconExternal, IconLock } from "@/components/icons";
 import { QuizPlayer } from "@/components/QuizPlayer";
 import { Button, ButtonLink, Callout, Progress } from "@/components/ui";
 import { requireUser } from "@/lib/auth/session";
@@ -22,6 +22,58 @@ function lockText(s: DripState): string {
   if (s.reason === "date") return `Opens ${formatDateTime(s.unlockAt, { year: true })}`;
   if (s.reason === "after_previous") return "Finish the previous lesson to unlock";
   return "Not available";
+}
+
+type LoadedCourse = NonNullable<Awaited<ReturnType<typeof loadCourse>>>;
+
+/**
+ * The course outline, rendered once inside a collapsed disclosure (below lg) and once as the sticky rail (from lg).
+ * The CSS on each wrapper hides the other copy with display:none, so exactly one nav is ever in the accessibility tree.
+ */
+function CourseOutline({ course, productId, currentId }: { course: LoadedCourse; productId: string; currentId: string | undefined }) {
+  return (
+    <nav aria-label="Course content">
+      {course.lessons.length === 0 ? (
+        <p className="rounded-card border border-line bg-surface p-5 text-sm text-muted">The creator hasn&apos;t added any content yet. It will show up here as soon as they do.</p>
+      ) : (
+        <div className="space-y-5">
+          {course.groups.map((g) => (
+            <div key={g.id ?? "loose"}>
+              {g.title && <h2 className="t-label mb-1.5 px-1">{g.title}</h2>}
+              <ul className="divide-y divide-line border-y border-line">
+                {g.lessons.map((l) => {
+                  const active = l.id === currentId;
+                  const locked = !l.state.unlocked;
+                  return (
+                    <li key={l.id}>
+                      <Link
+                        href={`/library/${productId}?lesson=${l.id}`}
+                        aria-current={active ? "page" : undefined}
+                        className={`flex items-start gap-3 border-l-2 py-3 pl-3 pr-3.5 text-sm pointer-coarse:min-h-11 transition-colors duration-(--dur-fast) ease-(--ease-standard) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ink ${active ? "border-ink bg-surface-2" : "border-transparent hover:bg-surface-2"}`}
+                      >
+                        <span aria-hidden className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full ${l.completed ? "bg-ink text-bg" : locked ? "text-muted" : "border border-line-strong"}`}>
+                          {l.completed ? <IconCheck size={12} /> : locked ? <IconLock size={16} /> : null}
+                        </span>
+                        <span className="min-w-0">
+                          <span className={`block truncate ${active ? "font-semibold" : "font-medium"} ${locked ? "text-muted" : ""}`}>
+                            {l.completed && <span className="sr-only">Completed: </span>}
+                            {l.title}
+                          </span>
+                          <span className="block text-xs text-muted">
+                            {l.kind === "quiz" ? "Quiz" : l.kind}{!l.required && " · optional"}{locked && ` · ${lockText(l.state)}`}
+                          </span>
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </nav>
+  );
 }
 
 export default async function LearnPage({ params, searchParams }: PageProps<"/library/[productId]">) {
@@ -96,7 +148,7 @@ export default async function LearnPage({ params, searchParams }: PageProps<"/li
           className="mt-5"
           action={
             course.certificate ? (
-              <ButtonLink href={`/certificates/${course.certificate.publicId}`} size="sm">View your certificate</ButtonLink>
+              <ButtonLink href={`/certificates/${course.certificate.publicId}`} size="sm" className="pointer-coarse:min-h-11">View your certificate</ButtonLink>
             ) : undefined
           }
         >
@@ -106,47 +158,27 @@ export default async function LearnPage({ params, searchParams }: PageProps<"/li
       )}
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[300px_minmax(0,1fr)]">
-        <nav aria-label="Course content" className="lg:sticky lg:top-24 lg:self-start">
-          {course.lessons.length === 0 ? (
-            <p className="rounded-card border border-line bg-surface p-5 text-sm text-muted">The creator hasn&apos;t added any content yet. It will show up here as soon as they do.</p>
-          ) : (
-            <div className="space-y-5">
-              {course.groups.map((g) => (
-                <div key={g.id ?? "loose"}>
-                  {g.title && <h2 className="t-label mb-1.5 px-1">{g.title}</h2>}
-                  <ul className="divide-y divide-line border-y border-line">
-                    {g.lessons.map((l) => {
-                      const active = l.id === current?.id;
-                      const locked = !l.state.unlocked;
-                      return (
-                        <li key={l.id}>
-                          <Link
-                            href={`/library/${productId}?lesson=${l.id}`}
-                            aria-current={active ? "page" : undefined}
-                            className={`flex items-start gap-3 border-l-2 py-3 pl-3 pr-3.5 text-sm pointer-coarse:min-h-11 transition-colors duration-(--dur-fast) ease-(--ease-standard) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ink ${active ? "border-ink bg-surface-2" : "border-transparent hover:bg-surface-2"}`}
-                          >
-                            <span aria-hidden className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full ${l.completed ? "bg-ink text-bg" : locked ? "text-muted" : "border border-line-strong"}`}>
-                              {l.completed ? <IconCheck size={12} /> : locked ? <IconLock size={16} /> : null}
-                            </span>
-                            <span className="min-w-0">
-                              <span className={`block truncate ${active ? "font-semibold" : "font-medium"} ${locked ? "text-muted" : ""}`}>
-                                {l.completed && <span className="sr-only">Completed: </span>}
-                                {l.title}
-                              </span>
-                              <span className="block text-xs text-muted">
-                                {l.kind === "quiz" ? "Quiz" : l.kind}{!l.required && " · optional"}{locked && ` · ${lockText(l.state)}`}
-                              </span>
-                            </span>
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          )}
-        </nav>
+        {/* Below lg the outline is a closed disclosure so the lesson is on screen at load; it sits before the article in
+            the DOM (no CSS order, which would split tab order from reading order). The key resets it to closed when a
+            lesson is picked: the open attribute is DOM state React would otherwise keep across a soft navigation. */}
+        <details key={current?.id} className="group lg:hidden">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 rounded-card border border-line bg-surface px-3.5 py-2.5 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink [&::-webkit-details-marker]:hidden">
+            <span className="min-w-0 flex-1 truncate">
+              <span className="font-semibold">Course content</span>
+              <span className="text-muted">
+                {progress.total > 0 && ` · ${progress.done} of ${progress.total} complete`}
+                {current && ` · Now: ${current.title}`}
+              </span>
+            </span>
+            <IconChevronDown size={16} className="shrink-0 transition-transform duration-(--dur-fast) ease-(--ease-standard) group-open:rotate-180" />
+          </summary>
+          <div className="mt-3">
+            <CourseOutline course={course} productId={productId} currentId={current?.id} />
+          </div>
+        </details>
+        <div className="hidden lg:block lg:sticky lg:top-24 lg:self-start">
+          <CourseOutline course={course} productId={productId} currentId={current?.id} />
+        </div>
 
         <article className="min-w-0">
           {notice && <Callout tone="bad" className="mb-4">{notice}</Callout>}

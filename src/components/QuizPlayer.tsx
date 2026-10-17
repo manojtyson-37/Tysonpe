@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode, type Ref } from "react";
 import { submitQuizAction } from "@/app/actions/learning";
 import { CheckboxCard, RadioCard } from "@/components/form";
 import { IconArrowRight, IconCheck } from "@/components/icons";
@@ -20,6 +20,22 @@ export function toggleAnswer(answers: QuizAnswers, question: Pick<QuizQuestion, 
   const current = answers[question.id] ?? [];
   if (question.kind === "single") return { ...answers, [question.id]: [optionId] };
   return { ...answers, [question.id]: current.includes(optionId) ? current.filter((x) => x !== optionId) : [...current, optionId] };
+}
+
+const passedLine = (r: QuizSubmission) => `Passed with ${r.scorePct}%. ${r.correctCount} of ${r.total} correct.`;
+const failedLine = (r: QuizSubmission, passPct: number) =>
+  `You scored ${r.scorePct}% (${r.correctCount} of ${r.total}). You need ${passPct}%.${r.attemptsLeft === 0 ? " You've used all your attempts." : " Review the material and try again."}`;
+
+/**
+ * The result, in a wrapper the player can focus. tabIndex -1 makes it focusable by script only (not a tab stop) and
+ * scroll-mt-24 keeps it clear of the sticky header when focus() scrolls it into view.
+ */
+function ResultFocus({ resultRef, children }: { resultRef?: Ref<HTMLDivElement>; children: ReactNode }) {
+  return (
+    <div ref={resultRef} tabIndex={-1} className="outline-none scroll-mt-24">
+      {children}
+    </div>
+  );
 }
 
 const attemptsText = (left: number) => `${left} attempt${left === 1 ? "" : "s"} left`;
@@ -57,10 +73,14 @@ export function QuizReview({ questions, reveal }: { questions: QuizQuestion[]; r
 }
 
 /** The result of a passing attempt: the score, the answers revealed, and the way on. */
-export function QuizPassed({ questions, result, nextHref }: { questions: QuizQuestion[]; result: QuizSubmission; nextHref: string | null }) {
+export function QuizPassed({ questions, result, nextHref, resultRef }: {
+  questions: QuizQuestion[]; result: QuizSubmission; nextHref: string | null; resultRef?: Ref<HTMLDivElement>;
+}) {
   return (
     <div className="space-y-5">
-      <Callout tone="good">Passed with {result.scorePct}%. {result.correctCount} of {result.total} correct.</Callout>
+      <ResultFocus resultRef={resultRef}>
+        <Callout tone="good">{passedLine(result)}</Callout>
+      </ResultFocus>
       <QuizReview questions={questions} reveal={result.reveal} />
       {nextHref && (
         <ButtonLink href={nextHref} variant="primary">
@@ -73,14 +93,15 @@ export function QuizPassed({ questions, result, nextHref }: { questions: QuizQue
 }
 
 /** A failed attempt: what was scored and what to do next, plus the answers once the attempts are spent. */
-export function QuizFailed({ questions, result, passPct }: { questions: QuizQuestion[]; result: QuizSubmission; passPct: number }) {
+export function QuizFailed({ questions, result, passPct, resultRef }: {
+  questions: QuizQuestion[]; result: QuizSubmission; passPct: number; resultRef?: Ref<HTMLDivElement>;
+}) {
   const exhausted = result.attemptsLeft === 0;
   return (
     <div className="space-y-5">
-      <Callout tone="bad">
-        You scored {result.scorePct}% ({result.correctCount} of {result.total}). You need {passPct}%.
-        {exhausted ? " You've used all your attempts." : " Review the material and try again."}
-      </Callout>
+      <ResultFocus resultRef={resultRef}>
+        <Callout tone="bad">{failedLine(result, passPct)}</Callout>
+      </ResultFocus>
       {exhausted && result.reveal && <QuizReview questions={questions} reveal={result.reveal} />}
     </div>
   );
@@ -93,7 +114,7 @@ export function QuizFailed({ questions, result, passPct }: { questions: QuizQues
 export function QuizForm(props: {
   questions: QuizQuestion[]; passPct: number; attemptsLeft: number | null; lastScorePct: number | null;
   result: QuizSubmission | null; answers: QuizAnswers; error: string | null; pending: boolean;
-  onToggle: (q: QuizQuestion, optionId: string) => void; onSubmit: () => void;
+  onToggle: (q: QuizQuestion, optionId: string) => void; onSubmit: () => void; resultRef?: Ref<HTMLDivElement>;
 }) {
   const { result, answers, error, pending } = props;
   const left = result ? result.attemptsLeft : props.attemptsLeft;
@@ -106,7 +127,7 @@ export function QuizForm(props: {
         {props.lastScorePct !== null && !result && ` Last score ${props.lastScorePct}%.`}
       </p>
 
-      {result && !result.passed && <QuizFailed questions={props.questions} result={result} passPct={props.passPct} />}
+      {result && !result.passed && <QuizFailed questions={props.questions} result={result} passPct={props.passPct} resultRef={props.resultRef} />}
 
       {!exhausted && (
         <>
@@ -145,8 +166,35 @@ export function QuizForm(props: {
 }
 
 /**
- * One stable instance owns every quiz state (new, failed, passed, out of attempts). The page refreshes
- * server data after each submit; if state lived in different components the result screen would vanish.
+ * Every quiz state (new, failed, passed, already passed, out of attempts) as a pure function of its props, so each can
+ * be rendered without a DOM. The polite live region comes first and is the same element in every branch: it must be in
+ * the document BEFORE its text changes for a screen reader to announce the change, and a Callout inserted together with
+ * its text is the case that is not reliably announced. `resultRef` marks the result wrapper that gets focus.
+ */
+export function QuizView(props: {
+  questions: QuizQuestion[]; passPct: number; attemptsLeft: number | null; lastScorePct: number | null;
+  nextHref: string | null; completed: boolean; result: QuizSubmission | null; answers: QuizAnswers; error: string | null;
+  pending: boolean; announce: string; resultRef?: Ref<HTMLDivElement>;
+  onToggle: (q: QuizQuestion, optionId: string) => void; onSubmit: () => void;
+}) {
+  const { result } = props;
+  let body;
+  if (result?.passed) body = <QuizPassed questions={props.questions} result={result} nextHref={props.nextHref} resultRef={props.resultRef} />;
+  else if (!result && props.completed) body = <Callout tone="good">You&apos;ve passed this quiz.</Callout>;
+  else if (!result && props.attemptsLeft === 0) {
+    body = <Callout tone="bad">You&apos;ve used all attempts for this quiz. Contact the creator if you need another.</Callout>;
+  } else body = <QuizForm {...props} />;
+  return (
+    <>
+      <p role="status" className="sr-only">{props.announce}</p>
+      {body}
+    </>
+  );
+}
+
+/**
+ * One stable instance owns every quiz state. The page refreshes server data after each submit; if state lived in
+ * different components the result screen would vanish.
  */
 export function QuizPlayer(props: {
   itemId: string; questions: QuizQuestion[]; passPct: number; attemptsLeft: number | null;
@@ -156,7 +204,16 @@ export function QuizPlayer(props: {
   const [answers, setAnswers] = useState<QuizAnswers>({});
   const [result, setResult] = useState<QuizSubmission | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [announce, setAnnounce] = useState("");
   const [pending, start] = useTransition();
+  const resultRef = useRef<HTMLDivElement>(null);
+
+  // A pass unmounts the Submit button that has focus, and a failed attempt puts the result above the fold, so focus
+  // goes to the result. `result` is a new object per submit, so repeat failures fire again. This is an effect BODY on
+  // purpose: focus moved in a cleanup is undone, because React DOM restores the pre-commit element after mutation.
+  useEffect(() => {
+    if (result) resultRef.current?.focus();
+  }, [result]);
 
   function submit() {
     setError(null);
@@ -164,26 +221,20 @@ export function QuizPlayer(props: {
       const r = await submitQuizAction(props.itemId, answers);
       if (!r.ok) return setError(r.error);
       setResult(r.result);
+      setAnnounce(r.result.passed ? passedLine(r.result) : failedLine(r.result, props.passPct));
       router.refresh(); // sidebar progress + attempts
     });
   }
 
-  if (result?.passed) return <QuizPassed questions={props.questions} result={result} nextHref={props.nextHref} />;
-
-  if (!result && props.completed) return <Callout tone="good">You&apos;ve passed this quiz.</Callout>;
-  if (!result && props.attemptsLeft === 0) {
-    return <Callout tone="bad">You&apos;ve used all attempts for this quiz. Contact the creator if you need another.</Callout>;
-  }
   return (
-    <QuizForm
-      questions={props.questions}
-      passPct={props.passPct}
-      attemptsLeft={props.attemptsLeft}
-      lastScorePct={props.lastScorePct}
+    <QuizView
+      {...props}
       result={result}
       answers={answers}
       error={error}
       pending={pending}
+      announce={announce}
+      resultRef={resultRef}
       onToggle={(q, optId) => setAnswers((a) => toggleAnswer(a, q, optId))}
       onSubmit={submit}
     />

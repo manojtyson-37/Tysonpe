@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -5,7 +7,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }))
 vi.mock("@/app/actions/learning", () => ({ submitQuizAction: async () => ({ ok: false, error: "x" }) }));
 
 import type { QuizSubmission } from "@/lib/learning/service";
-import { QuizFailed, QuizForm, QuizPassed, QuizPlayer, QuizReview, toggleAnswer, type QuizQuestion } from "./QuizPlayer";
+import { QuizFailed, QuizForm, QuizPassed, QuizPlayer, QuizReview, QuizView, toggleAnswer, type QuizQuestion } from "./QuizPlayer";
 
 const render = renderToStaticMarkup;
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
@@ -226,5 +228,81 @@ describe("QuizReview: the right answer is marked in words, not colour alone", ()
     const bare = render(<QuizReview questions={questions} reveal={undefined} />);
     expect(bare).not.toContain("Correct answer");
     expect(text(bare)).toContain("Sales day book");
+  });
+});
+
+/*
+ * Result announcement and focus. A node suite cannot assert real focus or what a screen reader says, so these pin the
+ * structure that makes both work: ONE polite live region that is in the DOM before its text changes, and a focusable
+ * wrapper around the result for the effect to focus. The real behaviour is checked in a browser.
+ */
+const view = (over: Partial<Parameters<typeof QuizView>[0]> = {}) =>
+  render(
+    <QuizView
+      {...props} result={null} answers={{}} error={null} pending={false} announce="" onToggle={() => {}} onSubmit={() => {}} {...over} />,
+  );
+const reveal = [{ questionId: "q1", correct: true, correctOptionIds: ["a"], explanation: "" }, { questionId: "q2", correct: true, correctOptionIds: ["c"], explanation: "" }];
+const LIVE = /<p role="status" class="sr-only"><\/p>/g;
+
+describe("QuizView: one persistent, empty live region in every state", () => {
+  const states: Array<[string, Partial<Parameters<typeof QuizView>[0]>]> = [
+    ["fresh", {}],
+    ["already passed", { completed: true }],
+    ["out of attempts", { attemptsLeft: 0 }],
+    ["passed just now", { result: sub({ passed: true, scorePct: 100, correctCount: 2, reveal }) }],
+    ["failed with attempts left", { result: sub({ attemptsLeft: 2 }) }],
+    ["failed on the last attempt", { result: sub({ attemptsLeft: 0 }) }],
+  ];
+  for (const [name, over] of states) {
+    it(`${name}: exactly one empty role="status" and no other live region of that kind`, () => {
+      const html = view(over);
+      expect(html.match(LIVE)).toHaveLength(1);
+      expect(html.match(/role="status"/g)).toHaveLength(1);
+    });
+  }
+
+  it("the live region comes first, so it keeps its place when the branch below it changes", () => {
+    for (const [, over] of states) expect(view(over).startsWith('<p role="status" class="sr-only">')).toBe(true);
+  });
+
+  it("carries the announcement text when there is one", () => {
+    expect(view({ announce: "Passed with 100%. 2 of 2 correct." })).toContain('<p role="status" class="sr-only">Passed with 100%. 2 of 2 correct.</p>');
+  });
+
+  it("the result Callout does not carry the role: a region inserted together with its text is the unreliable case", () => {
+    const passed = view({ result: sub({ passed: true, scorePct: 100, correctCount: 2, reveal }) });
+    expect(passed).toContain("bg-good-soft");
+    expect(passed.match(/role="status"/g)).toHaveLength(1);
+  });
+});
+
+describe("the result is wrapped in a focus target", () => {
+  it("passed: a tabindex=-1 wrapper holds the Callout, with scroll margin for the sticky header", () => {
+    const html = render(<QuizPassed questions={questions} result={sub({ passed: true, scorePct: 100, correctCount: 2, reveal })} nextHref={null} />);
+    expect(html).toMatch(/<div tabindex="-1" class="outline-none scroll-mt-24"><div class="[^"]*bg-good-soft/);
+  });
+
+  it("failed: the same wrapper holds the alert", () => {
+    const html = render(<QuizFailed questions={questions} result={sub()} passPct={60} />);
+    expect(html).toMatch(/<div tabindex="-1" class="outline-none scroll-mt-24"><div role="alert"/);
+  });
+
+  it("the form shows exactly one wrapper after a failed attempt, and none before any attempt", () => {
+    expect(form({ result: sub() }).match(/tabindex="-1"/g)).toHaveLength(1);
+    expect(form()).not.toContain('tabindex="-1"');
+  });
+});
+
+describe("focus is moved in an effect body, never a cleanup", () => {
+  const src = readFileSync(path.join(__dirname, "QuizPlayer.tsx"), "utf8");
+
+  it("focuses the result wrapper inside a useEffect keyed on the result", () => {
+    expect(src).toMatch(/useEffect\(\(\) => \{\s*if \(result\) resultRef\.current\?\.focus\(\);\s*\}, \[result\]\)/);
+  });
+
+  it("no .focus( call appears inside a cleanup function: React DOM re-focuses the pre-commit element after the mutation phase", () => {
+    // Every `return () =>` in this file is an effect cleanup (no component here returns a function).
+    const cleanups = [...src.matchAll(/return\s*\(\)\s*=>\s*(\{[\s\S]*?\}|[^;\n]*)/g)].map((m) => m[1]);
+    for (const body of cleanups) expect(body).not.toContain(".focus(");
   });
 });

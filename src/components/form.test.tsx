@@ -363,10 +363,16 @@ describe("CheckboxCard", () => {
   it("passes disabled through, dims the card, and merges className on the label", () => {
     const html = render(<CheckboxCard name="g" value="a" title="T" disabled className="col-span-2" />);
     expect(html).toMatch(/<input[^>]*\sdisabled/);
-    // the card body and the check box each dim: two spans, so one surviving class cannot satisfy this
-    expect(html.match(/peer-disabled:opacity-50/g)).toHaveLength(2);
+    // the card body, the check box and the check icon each dim: three elements, so one surviving class cannot satisfy this
+    expect(html.match(/peer-disabled:opacity-50/g)).toHaveLength(3);
     expect(html).toContain("peer-disabled:cursor-not-allowed");
     expect(html).toMatch(/^<label class="[^"]*col-span-2/);
+  });
+
+  it("draws the box with a token radius: square corners, never the off-scale rounded-sm", () => {
+    const html = render(<CheckboxCard name="g" value="a" title="T" />);
+    expect(html).not.toContain("rounded-sm");
+    expect(html).toContain("rounded-none");
   });
 
   it("uses explicit transition properties and no hover motion", () => {

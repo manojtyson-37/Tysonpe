@@ -61,8 +61,8 @@ export default async function LibraryPage() {
                       className="sm:w-64 sm:shrink-0"
                       value={progress.done}
                       max={progress.total}
-                      label={`${p.title} progress`}
-                      valueText={`${progress.done} of ${progress.total} ${progress.total === 1 ? "lesson" : "lessons"}`}
+                      label="Course progress"
+                      valueText={`${progress.done} of ${progress.total} ${progress.total < lessons ? "required " : ""}${progress.total === 1 ? "lesson" : "lessons"}`}
                       tone={progress.complete ? "good" : "ink"}
                     />
                   )}

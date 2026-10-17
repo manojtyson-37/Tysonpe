@@ -458,7 +458,7 @@ export function CheckboxCard({ title, description, trailing, children, className
       <span
         aria-hidden="true"
         className={join(
-          "absolute left-4 top-[1.125rem] size-4 rounded-sm border border-muted bg-surface",
+          "absolute left-4 top-[1.125rem] size-4 rounded-none border border-muted bg-surface",
           "transition-colors duration-(--dur-fast) ease-(--ease-standard)",
           "peer-checked:border-ink peer-checked:bg-ink peer-disabled:opacity-50",
         )}
@@ -468,7 +468,7 @@ export function CheckboxCard({ title, description, trailing, children, className
         className={join(
           "absolute left-4 top-[1.125rem] text-brand-ink opacity-0",
           "transition-opacity duration-(--dur-fast) ease-(--ease-standard)",
-          "peer-checked:opacity-100",
+          "peer-checked:opacity-100 peer-disabled:opacity-50",
         )}
       />
     </label>
