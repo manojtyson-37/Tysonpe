@@ -1,8 +1,14 @@
-export type ProgressTone = "ink" | "good";
+/**
+ * `ink` fills with the brand colour, `good` with emerald, `ring` with the contrast-safe non-text shade of a creator's
+ * brand (`--brand-ring`, at least 3:1 on white). Use `ring` inside a BrandScope, where a light brand colour would
+ * otherwise disappear against the track; outside one it is the same ink as `ink`.
+ */
+export type ProgressTone = "ink" | "good" | "ring";
 
 const FILL_CLASS: Record<ProgressTone, string> = {
   ink: "bg-brand",
   good: "bg-good",
+  ring: "bg-[color:var(--brand-ring)]",
 };
 
 /** Flat completion bar. The accessible name comes from `label`; the visible text value means it never relies on colour. */

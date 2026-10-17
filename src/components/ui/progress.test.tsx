@@ -46,6 +46,13 @@ describe("Progress", () => {
     expect(good).not.toContain("bg-brand");
   });
 
+  it("the ring tone fills with the brand's contrast-safe ring shade, not the raw brand colour", () => {
+    const html = render(<Progress value={10} label="x" tone="ring" />);
+    expect(html).toContain("bg-[color:var(--brand-ring)]");
+    expect(html).not.toMatch(/\bbg-brand\b/);
+    expect(html).not.toContain("bg-good");
+  });
+
   it("is flat: no gradient and no raw palette", () => {
     const html = render(<Progress value={10} label="x" />);
     expect(html).not.toMatch(/gradient|slate|stone|indigo|emerald|rose|amber/);

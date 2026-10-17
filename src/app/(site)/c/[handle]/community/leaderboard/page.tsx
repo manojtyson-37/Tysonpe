@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { chipActive, chipIdle, focusRing } from "@/components/community/styles";
-import { Empty } from "@/components/ui";
+import { Avatar, Callout, EmptyRow, Table, Tabs, Td, Th, Tr } from "@/components/ui";
 import { requireUser } from "@/lib/auth/session";
 import { ensureDefaultChannel, listChannelsFor } from "@/lib/community/channels";
 import { resolveCommunity } from "@/lib/community/viewer";
@@ -27,51 +25,58 @@ export default async function LeaderboardPage({
   const period = sp.period === "all" ? "all" : "week";
   const lb = await getLeaderboard(ctx.creator.id, period, user.id);
   const base = `/c/${ctx.creator.handle}/community/leaderboard`;
-  const tab = (p: "week" | "all", label: string) => (
-    <Link
-      href={`${base}?period=${p}`}
-      aria-current={period === p ? "page" : undefined}
-      className={`inline-flex min-h-10 items-center rounded-xl px-3.5 py-2 text-sm font-medium transition-all duration-150 active:scale-[0.98] ${focusRing} ${period === p ? chipActive : chipIdle}`}
-    >
-      {label}
-    </Link>
-  );
+  const periods = [
+    { period: "week", label: "This week", empty: "No points this week yet" },
+    { period: "all", label: "All time", empty: "No points yet" },
+  ] as const;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-extrabold">Leaderboard</h2>
-          <p className="text-sm text-muted">Points from lessons, quizzes, courses and community activity. Weeks start Monday, IST.</p>
-          <p className="text-xs text-muted">Members are shown by first name and last initial.</p>
-        </div>
-        <nav aria-label="Leaderboard period" className="flex gap-1">{tab("week", "This week")}{tab("all", "All time")}</nav>
+    <div className="space-y-5">
+      <div className="min-w-0">
+        <h2 className="text-xl font-bold">Leaderboard</h2>
+        <p className="mt-0.5 text-sm text-muted">Points from lessons, quizzes, courses and community activity. Weeks start Monday, IST.</p>
+        <p className="t-meta">Members are shown by first name and last initial.</p>
       </div>
 
-      {lb.top.length === 0 ? (
-        <Empty title="No points yet" body="Complete a lesson or start a conversation to get on the board." />
-      ) : (
-        <ol className="card divide-y divide-line">
-          {lb.top.map((r, i) => (
-            <li key={i} className={`flex items-center gap-3 px-5 py-3 ${r.isMe ? "bg-brand-soft/60" : ""}`}>
-              <span className="w-7 text-right text-sm font-bold tabular-nums text-muted">{r.rank}</span>
-              <span className="flex min-w-0 flex-1 items-center gap-2">
-                <span className="truncate font-semibold">{r.name}</span>
-                {r.isMe && (
-                  <>
-                    <span aria-hidden className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-xs font-semibold text-ink">you</span>
-                    <span className="sr-only">(you)</span>
-                  </>
-                )}
-              </span>
-              <span className="badge badge-muted shrink-0 tabular-nums">Level {r.level}</span>
-              <span className="w-16 shrink-0 text-right font-bold tabular-nums">{r.points}<span className="sr-only"> points</span></span>
-            </li>
-          ))}
-        </ol>
-      )}
+      {/* The period lives in the query string; the server already resolved it, so `current` says which tab is on. */}
+      <Tabs
+        ariaLabel="Leaderboard period"
+        items={periods.map((p) => ({ href: `${base}?period=${p.period}`, label: p.label, current: period === p.period }))}
+      />
+
+      <Table aria-label="Leaderboard" stack>
+        <thead>
+          <tr>
+            <Th>Rank</Th>
+            <Th>Member</Th>
+            <Th>Level</Th>
+            <Th align="right">Points</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {lb.top.length === 0 ? (
+            <EmptyRow colSpan={4} title={periods.find((p) => p.period === period)!.empty} body="Complete a lesson or start a conversation to get on the board." />
+          ) : (
+            lb.top.map((r, i) => (
+              // `isMe` is marked in words ("you") and in aria-current, with the tint only as reinforcement.
+              <Tr key={`${r.rank}-${i}`} aria-current={r.isMe ? "true" : undefined} className={r.isMe ? "bg-brand-soft" : undefined}>
+                <Td label="Rank" className="font-semibold tabular-nums text-muted sm:w-16">{r.rank}</Td>
+                <Td label="Member">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Avatar name={r.name} size="sm" />
+                    <span className="min-w-0 break-words font-semibold">{r.name}</span>
+                    {r.isMe && <span className="shrink-0 text-xs font-semibold">(you)</span>}
+                  </div>
+                </Td>
+                <Td label="Level" className="tabular-nums text-muted">Level {r.level}</Td>
+                <Td label="Points" align="right" className="font-bold tabular-nums">{r.points}</Td>
+              </Tr>
+            ))
+          )}
+        </tbody>
+      </Table>
       {lb.me && !lb.top.some((r) => r.isMe) && (
-        <p className="card px-5 py-3 text-sm">You&apos;re ranked <span className="font-bold tabular-nums">#{lb.me.rank}</span> with <span className="font-bold tabular-nums">{lb.me.points}</span> points.</p>
+        <Callout tone="info">You&apos;re ranked <span className="font-bold tabular-nums">#{lb.me.rank}</span> with <span className="font-bold tabular-nums">{lb.me.points}</span> points.</Callout>
       )}
     </div>
   );
