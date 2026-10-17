@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { BrandScope } from "@/components/Brand";
 import { ChannelNav } from "@/components/community/ChannelNav";
 import { MemberCard, MemberCardCompact } from "@/components/community/MemberCard";
+import { touchButton } from "@/components/community/styles";
+import { ButtonLink } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth/session";
 import { ensureDefaultChannel, listChannelsFor } from "@/lib/community/channels";
 import { resolveCommunity } from "@/lib/community/viewer";
@@ -24,14 +26,13 @@ export default async function CommunityLayout({ children, params }: { children: 
   return (
     <BrandScope color={creator.brandColor}>
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-        <p aria-hidden className="text-xs font-semibold uppercase tracking-wider text-muted">Community</p>
-        <h1 className="min-w-0 break-words text-2xl font-extrabold sm:text-3xl">
+        <h1 className="min-w-0 break-words text-2xl font-bold sm:text-3xl">
           <span className="sr-only">Community: </span>
           <Link href={`/c/${creator.handle}`} className="transition-colors duration-150 hover:text-[color:var(--brand-text)]">{creator.displayName}</Link>
         </h1>
 
         {channels.length === 0 ? (
-          <div className="card mt-6 max-w-xl px-6 py-8">
+          <div className="mt-6 max-w-xl border-y border-line py-6">
             <p className="text-lg font-semibold">
               {viewer.banned
                 ? "You've been removed from this community"
@@ -47,7 +48,7 @@ export default async function CommunityLayout({ children, params }: { children: 
                   : "Customers of this creator get access here."}
             </p>
             {!viewer.banned && viewer.enrolledProductIds.length === 0 && (
-              <Link href={`/c/${creator.handle}`} className="btn btn-primary mt-5">See what {creator.displayName} offers</Link>
+              <ButtonLink href={`/c/${creator.handle}`} className={`mt-5 ${touchButton}`}>See what {creator.displayName} offers</ButtonLink>
             )}
           </div>
         ) : (

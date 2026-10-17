@@ -21,10 +21,12 @@ const ICONS = [
   ["IconInfo", icons.IconInfo],
   ["IconAlert", icons.IconAlert],
   ["IconClock", icons.IconClock],
+  ["IconHeart", icons.IconHeart],
+  ["IconPin", icons.IconPin],
 ] as const;
 
 describe("icon set", () => {
-  it("exports exactly the 18 icons", () => {
+  it("exports exactly the 20 icons", () => {
     const exported = Object.keys(icons).filter((k) => k.startsWith("Icon")).sort();
     expect(exported).toEqual(ICONS.map(([name]) => name).sort());
   });

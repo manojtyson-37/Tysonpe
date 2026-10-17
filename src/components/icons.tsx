@@ -128,3 +128,13 @@ export const IconClock = make(
   </>,
   "IconClock",
 );
+
+export const IconHeart = make(<path d="M12 20s-7.5-4.4-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.6 12 20 12 20Z" />, "IconHeart");
+
+export const IconPin = make(
+  <>
+    <path d="M9 4h6l-.9 5.2 2.9 3.1v1.2H7v-1.2l2.9-3.1L9 4Z" />
+    <path d="M12 13.5V20" />
+  </>,
+  "IconPin",
+);

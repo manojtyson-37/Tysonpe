@@ -1,27 +1,31 @@
 "use client";
 
 import { useFormStatus } from "react-dom";
-import { focusRing } from "./styles";
+import { IconHeart } from "@/components/icons";
+import { Button } from "@/components/ui";
+import { touchButton } from "./styles";
 
 /**
  * The like button's submit control. The accessible name is CONSTANT ("Like, 3"); `aria-pressed` carries the on/off
  * state, so a screen reader doesn't hear the label flip. `aria-disabled` (not `disabled`, which drops keyboard focus in Chrome) while in flight; clicks are ignored to stop double-taps.
+ * Always a secondary button: liked is a FILLED heart in the brand text colour, not a brand-filled call to action, so a
+ * feed of liked posts is not a wall of primary buttons. The shape change (outline to filled) carries the state, not colour alone.
  */
 export function LikeSubmit({ count, liked }: { count: number; liked: boolean }) {
   const { pending } = useFormStatus();
   return (
-    <button
+    <Button
       type="submit"
+      variant="secondary"
+      size="sm"
       aria-disabled={pending || undefined}
       onClick={(e) => { if (pending) e.preventDefault(); }}
       aria-pressed={liked}
       aria-label={`Like, ${count}`}
-      className={`btn btn-sm min-h-10 ${focusRing} ${liked ? "btn-primary" : "btn-secondary"}`}
+      className={touchButton}
     >
-      <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden fill={liked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.6">
-        <path d="M10 16.5s-6-3.6-6-8.1A3.4 3.4 0 0 1 10 6.3a3.4 3.4 0 0 1 6 2.1c0 4.5-6 8.1-6 8.1Z" strokeLinejoin="round" />
-      </svg>
+      <IconHeart size={16} fill={liked ? "currentColor" : "none"} className={liked ? "text-[color:var(--brand-text)]" : undefined} />
       <span className="tabular-nums" aria-hidden>{count}</span>
-    </button>
+    </Button>
   );
 }

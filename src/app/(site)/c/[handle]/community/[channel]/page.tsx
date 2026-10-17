@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PostCard } from "@/components/community/PostCard";
 import { PostComposer } from "@/components/community/PostComposer";
-import { focusRing } from "@/components/community/styles";
-import { Empty } from "@/components/ui";
+import { touchButton } from "@/components/community/styles";
+import { ButtonLink, Callout, EmptyState } from "@/components/ui";
 import { requireUser } from "@/lib/auth/session";
 import { canPost } from "@/lib/community/access";
 import { getChannelFor } from "@/lib/community/channels";
@@ -40,31 +39,35 @@ export default async function ChannelPage({
   const { posts, nextCursor } = page;
   const base = `/c/${creator.handle}/community/${channel.slug}`;
 
+  const mayPost = canPost(channel, viewer);
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div className="min-w-0">
-          <h2 className="min-w-0 break-words text-xl font-extrabold">{channel.name}</h2>
-          {channel.description && <p className="text-sm text-muted">{channel.description}</p>}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <span className="badge badge-muted"><span className="sr-only">Type: </span>{channel.kind === "announcement" ? "Announcements" : "Discussion"}</span>
-          <span className="badge badge-muted"><span className="sr-only">Access: </span>{channel.access === "open" ? "All customers" : "Selected products"}</span>
-        </div>
+    <div className="space-y-5">
+      <div className="min-w-0">
+        <h2 className="min-w-0 break-words text-xl font-bold">{channel.name}</h2>
+        {channel.description && <p className="mt-0.5 break-words text-sm text-muted">{channel.description}</p>}
+        {/* Two facts about the channel, said once as a quiet line (the labels are for screen readers). */}
+        <p className="t-meta mt-1">
+          <span className="sr-only">Type: </span>
+          {channel.kind === "announcement" ? "Announcements" : "Discussion"} · <span className="sr-only">Access: </span>
+          {channel.access === "open" ? "All customers" : "Selected products"}
+        </p>
       </div>
 
-      {canPost(channel, viewer) ? (
+      {mayPost ? (
         <PostComposer channelId={channel.id} />
       ) : (
-        <p className="card px-5 py-4 text-sm text-muted">Only {creator.displayName} posts here. You can still comment and like.</p>
+        <Callout tone="info">Only {creator.displayName} posts here. You can still comment and like.</Callout>
       )}
 
       {posts.length === 0 ? (
-        <Empty title="No posts yet" body={canPost(channel, viewer) ? "Be the first to post." : "Check back soon."} />
+        <div className="border-y border-line">
+          <EmptyState inline title="No posts yet" body={mayPost ? "Be the first to post." : "Check back soon."} />
+        </div>
       ) : (
-        <ul className="space-y-3">
+        <ul className="divide-y divide-line">
           {posts.map((p) => (
-            <li key={p.id}>
+            <li key={p.id} className="py-5 first:pt-0">
               <PostCard post={p} href={`${base}/p/${p.id}`} viewerIsCreator={viewer.isCreator} />
             </li>
           ))}
@@ -72,7 +75,7 @@ export default async function ChannelPage({
       )}
 
       {nextCursor && (
-        <Link href={`${base}?cursor=${encodeURIComponent(nextCursor)}`} className={`btn btn-secondary min-h-10 ${focusRing}`}>Older posts</Link>
+        <ButtonLink href={`${base}?cursor=${encodeURIComponent(nextCursor)}`} variant="secondary" className={touchButton}>Older posts</ButtonLink>
       )}
     </div>
   );
