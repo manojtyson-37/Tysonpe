@@ -1,11 +1,14 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-export interface EmptyActionItem {
-  label: string;
-  href?: string;
-  onClick?: () => void;
-}
+/**
+ * Either a link (`href`) or a click handler, never both and never neither: `{ label }` alone would render a dead button.
+ * `onClick` is client-only. A server component cannot pass a function across the boundary (the route would 500), so it
+ * must use `href`.
+ */
+export type EmptyActionItem =
+  | { label: string; href: string; onClick?: never }
+  | { label: string; onClick: () => void; href?: never };
 
 export interface EmptyStateProps {
   icon?: ReactNode;
@@ -21,7 +24,7 @@ export interface EmptyStateProps {
 
 function ActionButton({ item, primary, className }: { item: EmptyActionItem; primary: boolean; className?: string }) {
   const cls = [primary ? "btn btn-primary" : "btn btn-secondary", className].filter(Boolean).join(" ");
-  if (item.href) {
+  if (item.href !== undefined) {
     return (
       <Link href={item.href} className={cls}>
         {item.label}

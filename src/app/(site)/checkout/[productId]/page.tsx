@@ -105,11 +105,10 @@ export default async function CheckoutPage({ params, searchParams }: PageProps<"
             <p className="mt-1.5">
               <Money paise={priced.totalPaise} free size="xl" />
             </p>
-            {!isFree && <p className="mt-1 text-sm text-muted">You choose how to pay on the next step.</p>}
             <ActionForm action={action} className="mt-5 space-y-3">
               <input type="hidden" name="coupon" value={coupon ? coupon.code : ""} />
               <FormError />
-              <SubmitButton pendingText="Creating order…" className="btn btn-primary btn-lg w-full">
+              <SubmitButton pendingText="Creating order…" size="lg" className="w-full">
                 {isFree ? "Get access" : "Continue to payment"}
               </SubmitButton>
             </ActionForm>

@@ -48,6 +48,7 @@ export type ButtonProps = Look &
     /**
      * Shows a spinner, sets aria-busy/aria-disabled and blocks activation. The button stays focusable (no `disabled`
      * attribute) and the label stays in layout and in the accessibility tree, so the width and the name do not change.
+     * Needs a client component; a server component must not pass `loading` or `onClick`.
      */
     loading?: boolean;
     children: ReactNode;

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { EmptyState } from "./empty";
+import { EmptyState, type EmptyActionItem } from "./empty";
+import { functionProps } from "@/test/rsc-safe";
 import { Empty, EmptyState as EmptyStateFromUi } from "@/components/ui";
 
 const render = (el: React.ReactElement) => renderToStaticMarkup(el);
@@ -43,6 +44,21 @@ describe("EmptyState", () => {
     expect(html).toContain("<button");
     expect(html).toContain(">Add product<");
     expect(html).not.toContain("<a");
+  });
+
+  it("a button action carries a handler, which makes it client-only; a link action does not", () => {
+    const withHandler = <EmptyState title="No products" action={{ label: "Add product", onClick: () => {} }} />;
+    expect(functionProps(withHandler)).toEqual(["<button>.onClick"]);
+    expect(functionProps(<EmptyState title="No products" action={{ label: "Add product", href: "/new" }} />)).toEqual([]);
+  });
+
+  it("requires exactly one of href or onClick (a bare label would be a dead button)", () => {
+    // Compile-time contract: each @ts-expect-error fails `npm run typecheck` if the line stops being an error.
+    // @ts-expect-error neither href nor onClick
+    const neither: EmptyActionItem = { label: "Add" };
+    // @ts-expect-error both href and onClick
+    const both: EmptyActionItem = { label: "Add", href: "/a", onClick: () => {} };
+    expect([neither, both]).toHaveLength(2);
   });
 
   it("renders the secondary action alongside the primary", () => {

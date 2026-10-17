@@ -69,6 +69,21 @@ describe("Button", () => {
     expect(calls).toEqual(["click"]);
   });
 
+  // The SubmitButton path: `loading` with no caller onClick. This is the branch that builds the handler on its own,
+  // and the one that stops a loading type=submit button from submitting its form a second time.
+  it("blocks activation while loading even when the caller passed no onClick", () => {
+    const calls: string[] = [];
+    const el = Button({ loading: true, children: "Pay" }) as ReactElement<{ onClick?: (e: { preventDefault: () => void }) => void }>;
+    expect(typeof el.props.onClick).toBe("function");
+    el.props.onClick?.({ preventDefault: () => calls.push("prevented") });
+    expect(calls).toEqual(["prevented"]);
+  });
+
+  it("attaches no handler at all when neither loading nor onClick is set", () => {
+    const el = Button({ children: "Apply" }) as ReactElement<{ onClick?: unknown }>;
+    expect(el.props.onClick).toBeUndefined();
+  });
+
   it("keeps the real disabled attribute for the disabled prop, even while loading", () => {
     expect(renderToStaticMarkup(<Button loading disabled>Pay</Button>)).toMatch(/\sdisabled(=|\s|>)/);
   });

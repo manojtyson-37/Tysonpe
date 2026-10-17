@@ -203,6 +203,12 @@ describe("checkout review: the action", () => {
     expect(form.indexOf('role="status"')).toBeLessThan(form.indexOf("<button"));
   });
 
+  it("makes the button large and full width through props, without a pay-step promise next to the total", async () => {
+    const html = await render();
+    expect(html).toMatch(/<button type="submit" class="btn btn-primary btn-lg w-full"/);
+    expect(html).not.toContain("on the next step");
+  });
+
   // FormError renders nothing until a submit fails, so the markup cannot show where it sits. Pin the source order.
   it("places FormError before the submit button, so an error never lands after the button", async () => {
     const { readFileSync } = await import("node:fs");
