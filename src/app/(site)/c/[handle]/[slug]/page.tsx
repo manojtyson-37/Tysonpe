@@ -22,28 +22,35 @@ async function getProduct(handle: string, slug: string) {
           data: { payoutUpiId: "7619671728@ybl", payoutPhone: "7619671728" },
         });
       }
-      prod = await db.product.upsert({
-        where: { creatorId_slug: { creatorId: creator.id, slug: "upi-test-course" } },
-        update: { pricePaise: 100, gstRatePct: 0, status: "published" },
-        create: {
-          creatorId: creator.id,
-          slug: "upi-test-course",
-          title: "UPI ₹1 Verification Test Course",
-          tagline: "Live UPI verification test for 7619671728@ybl. 1 Rupee payment.",
-          type: "course",
-          pricePaise: 100,
-          gstRatePct: 0,
-          status: "published",
-          description: "A 1-Rupee live test product to verify direct UPI QR scanning, PhonePe/GPay intent triggers, and real account settlement to 7619671728@ybl.",
-          items: {
-            create: [
-              { title: "Verification Confirmation", kind: "text", body: "Congratulations! Your ₹1 test payment to 7619671728@ybl was completed and settled successfully.", position: 0 },
-              { title: "UPI Receipt", kind: "text", body: "Reference VPA: 7619671728@ybl. Transaction amount: ₹1.00. Payment method: Direct UPI.", position: 1 },
-            ],
+      try {
+        prod = await db.product.upsert({
+          where: { creatorId_slug: { creatorId: creator.id, slug: "upi-test-course" } },
+          update: { pricePaise: 100, gstRatePct: 0, status: "published" },
+          create: {
+            creatorId: creator.id,
+            slug: "upi-test-course",
+            title: "UPI ₹1 Verification Test Course",
+            tagline: "Live UPI verification test for 7619671728@ybl. 1 Rupee payment.",
+            type: "course",
+            pricePaise: 100,
+            gstRatePct: 0,
+            status: "published",
+            description: "A 1-Rupee live test product to verify direct UPI QR scanning, PhonePe/GPay intent triggers, and real account settlement to 7619671728@ybl.",
+            items: {
+              create: [
+                { title: "Verification Confirmation", kind: "text", body: "Congratulations! Your ₹1 test payment to 7619671728@ybl was completed and settled successfully.", position: 0 },
+                { title: "UPI Receipt", kind: "text", body: "Reference VPA: 7619671728@ybl. Transaction amount: ₹1.00. Payment method: Direct UPI.", position: 1 },
+              ],
+            },
           },
-        },
-        include: { creator: true, items: { orderBy: { position: "asc" }, select: { id: true, title: true, kind: true } } },
-      });
+          include: { creator: true, items: { orderBy: { position: "asc" }, select: { id: true, title: true, kind: true } } },
+        });
+      } catch {
+        prod = await db.product.findFirst({
+          where: { slug, creator: { handle: normHandle } },
+          include: { creator: true, items: { orderBy: { position: "asc" }, select: { id: true, title: true, kind: true } } },
+        });
+      }
     }
   }
 
