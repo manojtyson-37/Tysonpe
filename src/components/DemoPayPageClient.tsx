@@ -48,7 +48,7 @@ export function DemoPayPageClient({
 
       <fieldset>
         <legend className="t-label mb-2.5">Payment gateway</legend>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3">
           {GATEWAYS.map((gw) => (
             <RadioCard
               key={gw.id}

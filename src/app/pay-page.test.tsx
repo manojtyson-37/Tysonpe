@@ -168,6 +168,16 @@ describe("pay page: gateway choice is a RadioCard group", () => {
     expect(html).not.toMatch(/Selected|Select<|●|○/); // the bespoke text-glyph pill is gone
   });
 
+  it("stacks the cards in one column at every width (two columns inside max-w-xl left ~1 word per line)", async () => {
+    const html = await render();
+    const list = html.match(/<legend[^>]*>[^<]*<\/legend><div class="([^"]*)"/);
+    expect(list, "the gateway list container follows the legend").not.toBeNull();
+    const classes = list![1].split(/\s+/);
+    expect(classes.filter((c) => /(^|:)(grid-cols-([2-9]|1\d)|columns-)/.test(c))).toEqual([]);
+    expect(classes.some((c) => /^(grid-cols-1|flex-col)$/.test(c) || c === "space-y-3")).toBe(true);
+    expect(html.slice(html.indexOf(list![0])).split("</fieldset>")[0].split('type="radio"').length - 1).toBe(2);
+  });
+
   it("?gw=easebuzz checks Easebuzz instead and swaps the action to a link with the order id", async () => {
     const html = await render({ gw: "easebuzz" });
     expect(checkedGateways(html)).toEqual(["easebuzz"]);
