@@ -7,14 +7,13 @@ import { InputGroup, RadioCard } from "./form";
 import {
   ClockIcon,
   GPayIcon,
-  LockIcon,
   MastercardIcon,
   PaytmIcon,
   PhonePeIcon,
-  ShieldCheckIcon,
   UpiIcon,
   VisaIcon,
 } from "./gateway-icons";
+import { IconInfo } from "./icons";
 import { RazorpayDemoModal } from "./RazorpayDemoModal";
 
 interface DemoPayPageClientProps {
@@ -73,7 +72,7 @@ export function DemoPayPageClient({
                 ) : (
                   <>
                     <ClockIcon className="h-3.5 w-3.5 text-muted" />
-                    <span className="text-xs text-muted">15-minute session timer</span>
+                    <span className="text-xs text-muted">15-minute countdown</span>
                   </>
                 )}
               </span>
@@ -85,13 +84,13 @@ export function DemoPayPageClient({
       <div className="border-t border-line pt-4">
         {activeGw === "razorpay" ? (
           <div className="space-y-3">
-            <Button size="lg" icon={<LockIcon className="h-4 w-4" />} onClick={() => setIsRzpModalOpen(true)} className="w-full">
+            <Button size="lg" onClick={() => setIsRzpModalOpen(true)} className="w-full">
               <span>
                 Pay <Money paise={amountPaise} /> with Razorpay
               </span>
             </Button>
             <p className="flex items-center justify-center gap-1.5 text-center text-xs text-muted">
-              <ShieldCheckIcon className="h-3.5 w-3.5 text-good" />
+              <IconInfo size={14} className="shrink-0 text-muted" />
               <span>Opens the simulated Razorpay checkout over this page.</span>
             </p>
 
@@ -108,7 +107,7 @@ export function DemoPayPageClient({
           <div className="space-y-4">
             <InputGroup
               label="Mobile number"
-              hint="Pre-filled for the simulation. Easebuzz requires one."
+              hint="Not sent anywhere in the simulation."
               type="tel"
               inputMode="tel"
               autoComplete="tel-national"
@@ -118,12 +117,12 @@ export function DemoPayPageClient({
               placeholder="9876543210"
             />
 
-            <ButtonLink size="lg" href={`/gateway/easebuzz/${orderId}`} icon={<LockIcon className="h-4 w-4" />} className="w-full">
+            <ButtonLink size="lg" href={`/gateway/easebuzz/${orderId}`} className="w-full">
               Continue to Easebuzz
             </ButtonLink>
             <p className="flex items-center justify-center gap-1.5 text-center text-xs text-muted">
-              <ShieldCheckIcon className="h-3.5 w-3.5 text-good" />
-              <span>Redirects to the Easebuzz hosted page, which expires after 15 minutes.</span>
+              <IconInfo size={14} className="shrink-0 text-muted" />
+              <span>Redirects to the Easebuzz hosted page, which shows a 15-minute countdown.</span>
             </p>
           </div>
         )}

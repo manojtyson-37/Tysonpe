@@ -4,7 +4,7 @@ import { startEasebuzzPayment } from "@/app/actions/checkout";
 import { ActionForm, Field, FormError, SubmitButton } from "@/components/form";
 import { DemoPayPageClient } from "@/components/DemoPayPageClient";
 import { RazorpayButton } from "@/components/RazorpayButton";
-import { Callout, MetricList, MetricRow, Money, PageHeader, Surface } from "@/components/ui";
+import { ButtonLink, Callout, MetricList, MetricRow, Money, PageHeader, Surface } from "@/components/ui";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { formatINR } from "@/lib/money";
@@ -44,7 +44,7 @@ export default async function PayPage({ params, searchParams }: PageProps<"/chec
 
         {failed && (
           <Callout tone="bad" className="mt-4">
-            The previous payment attempt was declined or cancelled. No funds were debited. You can try again below.
+            The previous attempt didn&apos;t complete. Check your bank statement before retrying; nothing is charged in test mode.
           </Callout>
         )}
 
@@ -71,8 +71,8 @@ export default async function PayPage({ params, searchParams }: PageProps<"/chec
                 required
               />
               <FormError />
-              <SubmitButton pendingText="Opening secure payment page…" size="lg" className="w-full">
-                Pay securely with Easebuzz
+              <SubmitButton pendingText="Opening the Easebuzz page…" size="lg" className="w-full">
+                Continue to Easebuzz
               </SubmitButton>
               {process.env.EASEBUZZ_ENV !== "prod" && (
                 <Callout tone="info">
@@ -89,7 +89,16 @@ export default async function PayPage({ params, searchParams }: PageProps<"/chec
               buyer={{ name: user.name, email: user.email }}
             />
           ) : (
-            <Callout tone="bad">This order was created with a different payment setup. Please start a new checkout.</Callout>
+            <Callout
+              tone="bad"
+              action={
+                <ButtonLink variant="secondary" href={`/checkout/${order.productId}`}>
+                  Start a new checkout
+                </ButtonLink>
+              }
+            >
+              This order was created with a different payment setup.
+            </Callout>
           )}
         </div>
       </Surface>

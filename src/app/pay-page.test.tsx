@@ -120,7 +120,7 @@ describe("pay page: the order summary", () => {
 
   it("prints every rupee amount through Money (tabular-nums), never the old two-decimal literal", async () => {
     const html = await render();
-    expect(html).toContain('<span class="tabular-nums whitespace-nowrap text-xl font-semibold">₹1,120</span>');
+    expect(html).toMatch(/<span class="[^"]*tabular-nums[^"]*">₹1,120<\/span>/);
     expect(html).not.toContain("1,120.00");
     // Every rupee sign in the markup sits inside a Money span.
     expect(count(html, "₹")).toBe(count(html, 'class="tabular-nums whitespace-nowrap'));
@@ -147,7 +147,7 @@ describe("pay page: the simulation notice and failures", () => {
   it("a failed attempt shows exactly one alert, in the bad tone", async () => {
     const html = await render({ failed: "1" });
     expect(count(html, 'role="alert"')).toBe(1);
-    expect(html).toContain("No funds were debited");
+    expect(html).toContain("The previous attempt didn&#x27;t complete. Check your bank statement before retrying; nothing is charged in test mode.");
     expect(html).toContain("bg-bad-soft");
   });
 
@@ -208,7 +208,7 @@ describe("pay page: other providers", () => {
     state.order = { ...baseOrder, provider: "easebuzz" };
     state.provider = { name: "easebuzz" };
     const html = await render();
-    expect(html).toContain("Pay securely with Easebuzz");
+    expect(html).toContain("Continue to Easebuzz");
     expect(html).toContain("<strong>Test mode.</strong>");
     expect(html).not.toContain("bg-warn-soft px-3.5");
     expect(html).not.toContain("rounded-xl");
@@ -220,6 +220,52 @@ describe("pay page: other providers", () => {
     const html = await render();
     expect(html).toContain("different payment setup");
     expect(count(html, 'role="alert"')).toBe(1);
+  });
+
+  it("a provider mismatch ends in a way out: a secondary link back to checkout for the order's product", async () => {
+    state.order = { ...baseOrder, provider: "razorpay" };
+    state.provider = { name: "mock" };
+    const html = await render();
+    expect(html).toMatch(/<a [^>]*href="\/checkout\/p1"[^>]*>Start a new checkout<\/a>/);
+    expect(html).toMatch(/class="[^"]*btn-secondary[^"]*"[^>]*href="\/checkout\/p1"|href="\/checkout\/p1"[^>]*class="[^"]*btn-secondary/);
+  });
+});
+
+describe("pay page: copy that claims only what is true", () => {
+  const FILES = [
+    "src/app/(site)/checkout/pay/[orderId]/page.tsx",
+    "src/components/DemoPayPageClient.tsx",
+  ];
+  const source = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
+
+  it.each(FILES)("%s makes no security, refund-guarantee or expiry claim it cannot back", (file) => {
+    const src = source(file);
+    expect(src).not.toMatch(/secure/i);
+    expect(src).not.toContain("No funds were debited");
+    expect(src).not.toContain("expires after");
+    expect(src).not.toContain("session timer");
+    expect(src).not.toMatch(/ShieldCheck|LockIcon/);
+    expect(src).not.toMatch(/Icon[^>]*text-good/);
+  });
+
+  it("the rendered Easebuzz simulation says what the clock does, with neutral muted icons", async () => {
+    const html = await render({ gw: "easebuzz" });
+    expect(html).toContain("Redirects to the Easebuzz hosted page, which shows a 15-minute countdown.");
+    expect(html).toContain("Not sent anywhere in the simulation.");
+    expect(html).not.toMatch(/expires|Easebuzz requires one/);
+    expect(html).not.toContain("text-good");
+  });
+
+  it("the Razorpay simulation note uses a muted icon, not an emerald one", async () => {
+    const html = await render();
+    expect(html).toContain("Opens the simulated Razorpay checkout over this page.");
+    expect(html).not.toContain("text-good");
+  });
+
+  it("the gateway list says 15-minute countdown, not session timer", async () => {
+    const html = await render();
+    expect(html).toContain("15-minute countdown");
+    expect(html).not.toContain("session timer");
   });
 });
 
