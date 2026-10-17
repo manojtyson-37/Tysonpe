@@ -3,9 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { settleDemoAction } from "@/app/actions/checkout";
+import { buildUpiUri, generateQrSvg } from "@/lib/payments/qr";
 import {
   AxisBankIcon,
   BankIcon,
+  BhimIcon,
+  ClockIcon,
+  CredIcon,
   CreditCardIcon,
   GPayIcon,
   HdfcBankIcon,
@@ -14,7 +18,6 @@ import {
   MastercardIcon,
   PaytmIcon,
   PhonePeIcon,
-  QrCodeIcon,
   RupayIcon,
   SbiBankIcon,
   ShieldCheckIcon,
@@ -30,6 +33,7 @@ export interface RazorpayDemoModalProps {
   amountPaise: number;
   productTitle: string;
   buyer: { name: string; email: string };
+  creatorUpiId?: string;
 }
 
 type Tab = "upi" | "card" | "netbanking" | "wallet";
@@ -42,6 +46,7 @@ export function RazorpayDemoModal({
   amountPaise,
   productTitle,
   buyer,
+  creatorUpiId,
 }: RazorpayDemoModalProps) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("upi");
@@ -59,11 +64,44 @@ export function RazorpayDemoModal({
   const [cardCvv, setCardCvv] = useState("•••");
   const [cardName, setCardName] = useState(buyer.name || "Customer");
   const [selectedBank, setSelectedBank] = useState("hdfc");
+  const [secondsRemaining, setSecondsRemaining] = useState(300);
+  const [copied, setCopied] = useState(false);
 
   const formattedAmount = (amountPaise / 100).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+
+  const vpaHandle = creatorUpiId?.trim() || "tysonpe@okhdfcbank";
+  const upiUri = buildUpiUri({
+    payeeAddress: vpaHandle,
+    payeeName: "Tysonpe Creator Commerce",
+    amountInRupees: amountPaise / 100,
+    transactionNote: `Order ${orderId}`,
+    currency: "INR",
+  });
+
+  const qrSvg = generateQrSvg(upiUri, 180);
+
+  useEffect(() => {
+    if (!isOpen || status !== "idle") return;
+    const timer = setInterval(() => {
+      setSecondsRemaining((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isOpen, status]);
+
+  function handleCopyVpa() {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(vpaHandle).catch(() => {});
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  }
+
+  const minutes = Math.floor(secondsRemaining / 60);
+  const seconds = secondsRemaining % 60;
+  const timeFormatted = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -82,10 +120,13 @@ export function RazorpayDemoModal({
     setErrorMsg(null);
     setProcessingStep("Connecting to payment network…");
 
-    await new Promise((r) => setTimeout(r, 650));
-    setProcessingStep("Authorizing simulated transaction with bank…");
+    await new Promise((r) => setTimeout(r, 600));
+    setProcessingStep("Authorizing transaction with bank…");
 
-    await new Promise((r) => setTimeout(r, 650));
+    await new Promise((r) => setTimeout(r, 600));
+    setProcessingStep("Confirming payment observation mesh…");
+
+    await new Promise((r) => setTimeout(r, 600));
 
     try {
       const res = await settleDemoAction(orderId, outcome);
@@ -124,6 +165,10 @@ export function RazorpayDemoModal({
               </span>
               <span className="rounded-full bg-amber-400/15 border border-amber-400/35 px-2.5 py-0.5 text-[10px] font-bold text-amber-300 uppercase tracking-widest">
                 SANDBOX
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-mono tabular-nums text-slate-200">
+                <ClockIcon className="w-3 h-3 text-amber-400" />
+                {timeFormatted}
               </span>
             </div>
 
@@ -297,37 +342,72 @@ export function RazorpayDemoModal({
                   </div>
 
                   {upiMode === "apps" && (
-                    <div className="grid grid-cols-3 gap-2.5">
-                      {[
-                        { id: "gpay", name: "Google Pay", icon: <GPayIcon className="w-6 h-6" /> },
-                        { id: "phonepe", name: "PhonePe", icon: <PhonePeIcon className="w-6 h-6" /> },
-                        { id: "paytm", name: "Paytm", icon: <PaytmIcon className="w-8 h-4" /> },
-                      ].map((app) => (
-                        <button
-                          key={app.id}
-                          type="button"
-                          onClick={() => setSelectedUpiApp(app.id)}
-                          className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-2 transition ${
-                            selectedUpiApp === app.id
-                              ? "border-blue-600 bg-blue-50/50 text-blue-900 ring-2 ring-blue-600 shadow-xs"
-                              : "border-slate-200 hover:bg-slate-50 text-slate-700"
-                          }`}
-                        >
-                          {app.icon}
-                          <span className="text-[11px] truncate w-full text-center">{app.name}</span>
-                        </button>
-                      ))}
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                        {[
+                          { id: "gpay", name: "Google Pay", icon: <GPayIcon className="w-6 h-6" /> },
+                          { id: "phonepe", name: "PhonePe", icon: <PhonePeIcon className="w-6 h-6" /> },
+                          { id: "paytm", name: "Paytm", icon: <PaytmIcon className="w-8 h-4" /> },
+                          { id: "cred", name: "CRED", icon: <CredIcon className="w-6 h-6" /> },
+                          { id: "bhim", name: "BHIM", icon: <BhimIcon className="w-6 h-6" /> },
+                        ].map((app) => (
+                          <button
+                            key={app.id}
+                            type="button"
+                            onClick={() => setSelectedUpiApp(app.id)}
+                            className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-2 transition active:scale-[0.98] ${
+                              selectedUpiApp === app.id
+                                ? "border-blue-600 bg-blue-50/60 text-blue-900 ring-2 ring-blue-600 shadow-xs"
+                                : "border-slate-200 hover:bg-slate-50 text-slate-700"
+                            }`}
+                          >
+                            {app.icon}
+                            <span className="text-[11px] truncate w-full text-center">{app.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-slate-500 text-center">
+                        Select your preferred UPI app and click Pay to authorize instantly.
+                      </p>
                     </div>
                   )}
 
                   {upiMode === "qr" && (
-                    <div className="flex flex-col items-center justify-center p-4 rounded-2xl border border-slate-200 bg-slate-50/60 space-y-3">
-                      <div className="p-3 bg-white rounded-xl shadow-xs border border-slate-200">
-                        <QrCodeIcon className="w-28 h-28 text-slate-800" />
+                    <div className="flex flex-col items-center justify-center p-4 rounded-2xl border border-slate-200 bg-slate-50/60 space-y-3.5">
+                      <div className="p-2.5 bg-white rounded-2xl shadow-sm border border-slate-200/90 flex items-center justify-center">
+                        <div
+                          className="w-40 h-40 flex items-center justify-center [&>svg]:w-full [&>svg]:h-full"
+                          dangerouslySetInnerHTML={{ __html: qrSvg }}
+                        />
                       </div>
+
+                      <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-mono tabular-nums">
+                        <ClockIcon className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Valid for <strong>{timeFormatted}</strong></span>
+                      </div>
+
+                      {/* Copyable VPA Handle */}
+                      <div className="w-full max-w-xs flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200 shadow-2xs text-xs">
+                        <div className="truncate px-1 font-mono text-slate-700 text-left">
+                          <span className="text-[10px] text-slate-400 block uppercase font-sans font-semibold">UPI ID / VPA</span>
+                          {vpaHandle}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleCopyVpa}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition active:scale-[0.98] ${
+                            copied
+                              ? "bg-emerald-600 text-white"
+                              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                          }`}
+                        >
+                          {copied ? "Copied!" : "Copy"}
+                        </button>
+                      </div>
+
                       <div className="text-center">
                         <p className="text-xs font-bold text-slate-800">Scan with any UPI App</p>
-                        <p className="text-[11px] text-slate-500">Google Pay, PhonePe, Paytm, or BHIM</p>
+                        <p className="text-[11px] text-slate-500">Google Pay, PhonePe, Paytm, CRED, or BHIM</p>
                       </div>
                     </div>
                   )}

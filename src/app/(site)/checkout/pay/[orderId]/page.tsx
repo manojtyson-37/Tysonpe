@@ -17,7 +17,10 @@ export default async function PayPage({ params, searchParams }: PageProps<"/chec
   const { orderId } = await params;
   const sp = await searchParams;
   const user = await requireUser();
-  const order = await db.order.findFirst({ where: { id: orderId, userId: user.id }, include: { product: true } });
+  const order = await db.order.findFirst({
+    where: { id: orderId, userId: user.id },
+    include: { product: true, creator: true },
+  });
   if (!order) notFound();
   if (order.status === "paid") redirect(`/checkout/success/${order.id}`);
   if (order.status === "refunded") redirect("/library");
@@ -97,6 +100,7 @@ export default async function PayPage({ params, searchParams }: PageProps<"/chec
               initialGateway={resolveGateway(sp.gw, user.preferredGateway)}
               buyer={{ name: user.name, email: user.email }}
               failed={failed}
+              creatorUpiId={order.creator?.payoutUpiId ?? undefined}
             />
           ) : (
             <p className="text-sm text-bad">This order was created with a different payment setup. Please start a new checkout.</p>

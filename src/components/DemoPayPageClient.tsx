@@ -23,6 +23,7 @@ interface DemoPayPageClientProps {
   initialGateway: GatewayId;
   buyer: { name: string; email: string };
   failed?: boolean;
+  creatorUpiId?: string;
 }
 
 export function DemoPayPageClient({
@@ -32,6 +33,7 @@ export function DemoPayPageClient({
   initialGateway,
   buyer,
   failed,
+  creatorUpiId,
 }: DemoPayPageClientProps) {
   const [activeGw, setActiveGw] = useState<GatewayId>(initialGateway);
   const [isRzpModalOpen, setIsRzpModalOpen] = useState(false);
@@ -145,6 +147,7 @@ export function DemoPayPageClient({
               amountPaise={amountPaise}
               productTitle={productTitle}
               buyer={buyer}
+              creatorUpiId={creatorUpiId}
             />
           </div>
         ) : (

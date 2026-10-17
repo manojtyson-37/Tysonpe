@@ -41,6 +41,9 @@ model Creator {
   bio         String   @default("")
   brandColor  String   @default("#6d28d9")
   planKey     String   @default("basic") // basic | pro | advanced | ultimate
+  payoutUpiId String?  // Creator receiving VPA (e.g. name@okhdfcbank)
+  payoutPhone String?  // Creator receiving 10-digit UPI phone
+  storefrontConfig String? // Serialized JSON for rich landing page customizations (links, pictures, texts, FAQs, testimonials)
   gamificationEnabled Boolean @default(true)
   createdAt   DateTime @default(now())
 

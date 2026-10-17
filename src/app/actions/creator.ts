@@ -187,16 +187,63 @@ const profileSchema = z.object({
   displayName: z.string().trim().min(2, "Enter a name").max(80),
   bio: z.string().trim().max(600).default(""),
   brandColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Pick a colour"),
+  payoutUpiId: z
+    .string()
+    .trim()
+    .max(100)
+    .refine(
+      (v) => !v || /^[\w.-]+@[\w.-]+$/.test(v),
+      "Enter a valid UPI ID (e.g. yourname@okhdfcbank or 9876543210@paytm)",
+    )
+    .optional()
+    .default(""),
+  payoutPhone: z
+    .string()
+    .trim()
+    .max(20)
+    .refine(
+      (v) => !v || /^[6-9]\d{9}$/.test(v.replace(/[\s\-+]/g, "")),
+      "Enter a valid 10-digit Indian mobile number",
+    )
+    .optional()
+    .default(""),
 });
 
 export async function updateProfile(_prev: FormState, fd: FormData): Promise<FormState> {
   const { creator } = await requireCreator();
   const p = profileSchema.safeParse(Object.fromEntries(fd));
   if (!p.success) return fail(p.error);
-  await db.creator.update({ where: { id: creator.id }, data: p.data });
+  const { payoutUpiId, payoutPhone, ...rest } = p.data;
+  await db.creator.update({
+    where: { id: creator.id },
+    data: {
+      ...rest,
+      payoutUpiId: payoutUpiId || null,
+      payoutPhone: payoutPhone ? payoutPhone.replace(/[\s\-+]/g, "") : null,
+    },
+  });
   revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/payouts");
   revalidatePath(`/c/${creator.handle}`);
   return { fields: { saved: "1" } };
+}
+
+export async function saveStorefrontAction(config: import("@/lib/storefront").StorefrontConfig) {
+  const { creator } = await requireCreator();
+  const valid = (await import("@/lib/storefront")).storefrontSchema.safeParse(config);
+  if (!valid.success) {
+    return { ok: false, error: "Validation failed: " + valid.error.issues.map((i) => i.message).join(", ") };
+  }
+  await db.creator.update({
+    where: { id: creator.id },
+    data: {
+      storefrontConfig: JSON.stringify(valid.data),
+    },
+  });
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/storefront");
+  revalidatePath(`/c/${creator.handle}`);
+  return { ok: true };
 }
 
 /* ---------- Orders ---------- */

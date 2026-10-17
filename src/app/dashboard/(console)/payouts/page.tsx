@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { UpiIcon } from "@/components/gateway-icons";
 import { Empty, Money, PageHeader, Stat, dateFmt } from "@/components/ui";
 import { requireCreator } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -24,6 +26,35 @@ export default async function PayoutsPage() {
   return (
     <>
       <PageHeader title="Payouts" sub={`Plan: ${creator.planKey}. This ledger shows what each sale earns you.`} />
+
+      {/* Receiving Settlement UPI Card */}
+      <div className="card p-4 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-line/80 bg-surface">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-good-soft flex items-center justify-center text-good font-bold shrink-0">
+            <UpiIcon className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-muted uppercase tracking-wider">Settlement UPI Handle</span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                creator.payoutUpiId ? "bg-good-soft text-good" : "bg-amber-500/10 text-amber-800"
+              }`}>
+                {creator.payoutUpiId ? "Connected" : "Action Needed"}
+              </span>
+            </div>
+            <p className="text-sm font-mono font-semibold text-ink mt-0.5">
+              {creator.payoutUpiId || "No UPI ID configured"}
+            </p>
+          </div>
+        </div>
+        <Link
+          href="/dashboard/settings"
+          className="text-xs font-semibold text-brand hover:underline self-start sm:self-auto shrink-0"
+        >
+          {creator.payoutUpiId ? "Update UPI ID →" : "Set Up UPI ID →"}
+        </Link>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Gross sales" value={<Money paise={sum("grossPaise")} />} />
         <Stat label="Platform fees" value={<Money paise={sum("platformFeePaise")} />} />
