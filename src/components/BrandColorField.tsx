@@ -12,6 +12,10 @@ import { ColorField } from "./form";
  * the in-between state, so the wrapper listens to the bubbling `input` event: when it comes from the hex text box, the
  * box's value is judged by the same rule as the storefront (`isPendingHex`) and the preview says the colour is not valid
  * yet. The native picker always yields a valid colour, so an event from it (or a valid emit) clears the flag.
+ *
+ * Assistive tech: while the flag is up the field gets an `error`, which ColorField turns into `aria-invalid` on the hex
+ * text input plus a described-by message, and BrandPreview lists its findings in a polite live region. A screen-reader
+ * user typing "#12" is told the box is not a colour yet instead of hearing nothing change.
  */
 export function BrandColorField({ defaultColor, storeName }: { defaultColor: string; storeName: string }) {
   const [color, setColor] = useState(defaultColor);
@@ -30,6 +34,7 @@ export function BrandColorField({ defaultColor, storeName }: { defaultColor: str
         defaultValue={defaultColor}
         hint="Buttons and accents on your storefront use this colour."
         required
+        error={pending ? "Enter six digits, like #0f7b4d." : undefined}
         onChange={(hex) => {
           setColor(hex);
           setPending(false);

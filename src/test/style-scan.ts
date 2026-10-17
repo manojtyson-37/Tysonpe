@@ -2,7 +2,7 @@
  * Static scan of a source file for the legacy styling the UI rebuild removes. It reads double-quoted, single-quoted
  * and template literals (where class names live), so `!product` in code is not mistaken for a `!` utility. Comments
  * are dropped first, and a single-quoted literal only counts in a code position (after `= ( , ? : [ { & | +` or
- * `return`), so an apostrophe in JSX copy ("It's done") never pairs up with the next one and swallows what is between. Returns one
+ * `return` / `case`), so an apostrophe in JSX copy ("It's done") never pairs up with the next one and swallows what is between. Returns one
  * human-readable line per finding; an empty list means clean.
  *
  *  - Tailwind `!` overrides, leading ("!w-auto", "sm:!py-1.5") or Tailwind v4 trailing ("w-auto!", "sm:py-1.5!",
@@ -24,7 +24,7 @@ const TRAILING_BANG = [
 ];
 // After `<tag`, an attribute named title whose value is a string, or a braced expression with a string branch.
 const TITLE_ATTR = /\stitle=(?:["']|\{\s*(?:["'`]|[^}]*?(?:\?|&&|\|\|)\s*["'`]))/y;
-const IN_CODE_POSITION = /(?:[=(,?:[{&|+]|\breturn)\s*$/;
+const IN_CODE_POSITION = /(?:[=(,?:[{&|+]|\b(?:return|case))\s*$/;
 
 /** Index just past the string/template literal that opens at `start`, or -1 when a quote has no partner (a template may span lines). */
 function literalEnd(source: string, start: number): number {

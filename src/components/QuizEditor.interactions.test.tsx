@@ -104,6 +104,12 @@ function mount(defaults: QuizDefaults, action: (fd: FormData) => Promise<unknown
       els.find((e) => typeof e.props.onInput === "function")!.props.onInput();
       render();
     },
+    /** The field names inside the subtree of the one element that carries onInput (the settings wrapper), in tree order. */
+    settingsFieldNames: () => {
+      const wrappers = els.filter((e) => typeof e.props.onInput === "function");
+      expect(wrappers, "exactly one element listens to onInput").toHaveLength(1);
+      return walk(wrappers[0].props.children).flatMap((e) => (typeof e.props.name === "string" ? [e.props.name] : []));
+    },
     /** Submits the settings form with the CURRENT hidden-input value; `during` runs while the save is in flight. */
     save: async (during?: () => void, posted: string = JSON.stringify(api.posted())) => {
       const fd = new FormData();
@@ -353,6 +359,13 @@ describe("QuizEditor closures: Unsaved changes", () => {
     expect(m.status()).toBe("");
     m.click("Add question");
     expect(m.status()).toBe("Unsaved changes");
+  });
+
+  it("the wrapper that flags an edit contains the pass mark, max attempts and shuffle fields (a field moved out would never flag)", () => {
+    // onInput bubbles from a field to an ancestor only, so a field rendered outside the wrapper edits nothing as far as
+    // the flag is concerned; the wrapper's handler itself is driven by editSettings below.
+    const m = mount(D([Q("single", [0])]));
+    expect(m.settingsFieldNames()).toEqual(["passPct", "maxAttempts", "shuffle"]);
   });
 
   it("an edit to the settings fields shows it too", () => {

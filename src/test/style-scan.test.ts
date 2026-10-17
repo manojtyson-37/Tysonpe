@@ -22,6 +22,11 @@ describe("legacyStyleFindings: single quotes only in code positions", () => {
     expect(legacyStyleFindings(`/* it's "btn btn-primary" */ const a = "p-2";`)).toEqual([]);
   });
 
+  it("does not let a case label like case '/*': open a comment that swallows the code after it", () => {
+    expect(legacyStyleFindings(`switch (k) {\n  case '/*':\n    return "p-2";\n}\nconst a = "rounded-xl";`)).toEqual(["rounded-xl: rounded-xl"]);
+    expect(legacyStyleFindings(`switch (k) { case '//': break; }\nconst a = "btn";`)).toEqual(["legacy class: btn"]);
+  });
+
   it("flags the class on the line after such a comment", () => {
     expect(legacyStyleFindings(`// don't put "rounded-xl" here, it's legacy\nconst a = "rounded-xl";`)).toEqual(["rounded-xl: rounded-xl"]);
   });

@@ -22,6 +22,10 @@ beforeAll(() => {
   writeFileSync(at("components/reexport.ts"), 'import { KIND as K2, Comp as C2 } from "./Client";\nexport { K2 as KIND2, C2 };\nexport const KIND3 = K2;\nexport default K2;\n');
   // a server module that re-exports only types and values of its own: nothing client in it.
   writeFileSync(at("components/serverbarrel.ts"), 'import type { Thing } from "./Client";\nexport type { Thing };\nexport const own = {};\n');
+  // namespace re-exports: `export * as ns from`, `import * as C; export { C }` (also renamed), and a star over either.
+  writeFileSync(at("components/nsbarrel.ts"), 'export * as ns from "./Client";\n');
+  writeFileSync(at("components/nsreexport.ts"), 'import * as C from "./Client";\nexport { C };\nexport { C as D };\n');
+  writeFileSync(at("components/nsstar.ts"), 'export * from "./nsbarrel";\nexport * from "./plain";\n');
 });
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
@@ -118,6 +122,82 @@ describe("clientReferenceMisuse (the checker itself)", () => {
       expect(misuseWith(prelude, source)).toEqual([]);
     });
 
+    describe("wrappers around the reference (parentheses, as, !, satisfies, <T> assertions)", () => {
+      const K = 'import { KIND, Comp, helper } from "@/components/Client";';
+      it.each([
+        ["a parenthesised read", "const a = (KIND).video;"],
+        ["a non-null read", "const a = KIND!.video;"],
+        ["an `as` cast then an index", "const a = (KIND as Record<string, string>)[k];"],
+        ["a `satisfies` then a read", "const a = (KIND satisfies object).video;"],
+        ["stacked wrappers", "const a = ((KIND as any)!).video;"],
+        ["a wrapped call", "const a = (helper as () => number)();"],
+        ["a wrapped destructure", "const { video } = KIND as Record<string, string>;"],
+        ["a wrapped Object.entries argument", "const a = Object.entries(KIND as object);"],
+        ["a wrapped spread", "const a = { ...(KIND as object) };"],
+        ["a wrapped `in` test", 'const a = "video" in (KIND as object);'],
+        ["a spread on a JSX element", "const a = <Comp {...KIND} />;"],
+        ["a wrapped spread on a JSX element", "const a = <Comp {...(KIND as object)} />;"],
+      ])("flags %s", (_label, source) => {
+        expect(misuseWith(K, source).length).toBeGreaterThan(0);
+      });
+
+      it.each([
+        ["a parenthesised value", "const a = <List table={(KIND)} />;"],
+        ["a cast value", "const a = <List table={KIND as object} icon={Comp!} />;"],
+        ["a satisfies value", "const a = KIND satisfies object;"],
+        ["a wrapped tag value", "const a = { c: (Comp as unknown) };"],
+      ])("does not flag %s", (_label, source) => {
+        expect(misuseWith(K, source)).toEqual([]);
+      });
+
+      it("flags an angle-bracket assertion in a .ts file", () => {
+        expect(clientReferenceMisuse(root, at("page.ts"), `${K}\nconst a = (<Record<string, string>>KIND).video;`).length).toBeGreaterThan(0);
+        expect(clientReferenceMisuse(root, at("page.ts"), `${K}\nconst a = { t: <object>KIND };`)).toEqual([]);
+      });
+
+      it("reports the line of the identifier, not of the wrapper", () => {
+        expect(misuseWith(K, "const a = (\n  KIND as object\n).video;")).toEqual(["page.tsx:3: KIND is a client reference; reading into it throws on the server"]);
+      });
+    });
+
+    describe("namespace re-exports and string-literal member access", () => {
+      const NSB = 'import { ns } from "@/components/nsbarrel";';
+      const NSR = 'import { C, D } from "@/components/nsreexport";';
+      const NSS = 'import { ns, plain } from "@/components/nsstar";';
+      it.each([
+        ["`export * as ns from` then a member read", NSB, "const a = ns.KIND.video;"],
+        ["`export * as ns from` then a member call", NSB, "const a = ns.helper();"],
+        ["`import * as C; export { C }` then a member read", NSR, "const a = C.KIND.video;"],
+        ["the same, renamed by the export", NSR, "const a = D.KIND[k];"],
+        ["a star over a barrel with `export * as`", NSS, "const a = ns.KIND.video;"],
+        ["a string-literal member read", NS, "const a = C[\"KIND\"].video;"],
+        ["a single-quoted member call", NS, "const a = C['helper']();"],
+        ["a template-literal member read", NS, "const a = C[`KIND`].video;"],
+        ["a wrapped namespace member", NS, "const a = (C.KIND as object).video;"],
+        ["a parenthesised namespace member", NS, "const a = (C.KIND).video;"],
+        ["a spread on a JSX element of a namespace member", NS, "const a = <X {...C.KIND} />;"],
+      ])("flags %s", (_label, prelude, source) => {
+        expect(misuseWith(prelude, source).length).toBeGreaterThan(0);
+      });
+
+      it.each([
+        ["rendering `export * as` members", NSB, "const a = <ns.Comp x={1} />; const b = { k: ns.KIND };"],
+        ["passing `import * as; export` members on", NSR, "const a = <List table={C.KIND} icon={D[\"Comp\"]} />;"],
+        ["the namespace itself as a value", NSB, "const a = <List mod={ns} />;"],
+        ["a plain export next to a namespace in a star barrel", NSS, "const a = plain.video;"],
+        ["a string-literal member passed on", NS, 'const a = <List table={C["KIND"]} />;'],
+        ["a string-literal member that is a plain export", NS_STAR, 'const a = B["plain"].video;'],
+      ])("does not flag %s", (_label, prelude, source) => {
+        expect(misuseWith(prelude, source)).toEqual([]);
+      });
+
+      it("knows the namespaces a barrel exports", () => {
+        expect([...clientExportsOf(root, at("components/nsbarrel.ts")).namespaces.keys()]).toEqual(["ns"]);
+        expect([...clientExportsOf(root, at("components/nsreexport.ts")).namespaces.keys()].sort()).toEqual(["C", "D"]);
+        expect([...clientExportsOf(root, at("components/nsstar.ts")).namespaces.keys()]).toEqual(["ns"]);
+      });
+    });
+
     it("reports the line of the identifier even when the chain spans lines", () => {
       expect(misuseWith('import { KIND } from "@/components/Client";', "const a = KIND\n  .video;")).toEqual(["page.tsx:2: KIND is a client reference; reading into it throws on the server"]);
     });
@@ -165,7 +245,7 @@ describe("clientReferenceMisuse (the checker itself)", () => {
 
 describe("static scan: server modules never read into a client module's export", () => {
   const files = [...sourceFiles(path.join(SRC, "app")), ...sourceFiles(path.join(SRC, "components"))];
-  const server = files.filter((file) => !declaresUseClient(readFileSync(file, "utf8")));
+  const server = files.filter((file) => !declaresUseClient(readFileSync(file, "utf8"), file));
   const importsClient = (file: string) => namedImports(readFileSync(file, "utf8"), file).some((imp) => importsClientExport(SRC, file, imp));
 
   it("is not vacuous: it scans the Task 20-22 server pages, each of which imports a client export", () => {

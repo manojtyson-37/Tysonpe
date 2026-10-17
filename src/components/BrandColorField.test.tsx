@@ -5,6 +5,7 @@
 // input to the wrapper's onInput in a browser, or batching and re-render timing. The wrapper's onInput is driven here
 // with a hand-made event ({ target: { tagName, type, value } }), which is the only part of the event it reads.
 import { isValidElement, type ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const H = vi.hoisted(() => ({ slots: [] as unknown[], i: 0 }));
@@ -96,6 +97,31 @@ describe("BrandColorField", () => {
     const b = render();
     expect(b.preview.pending).toBe(false);
     expect(b.preview.color).toBe("#123456");
+  });
+
+  it("a pending hex puts the field in an error state (aria-invalid comes from ColorField's `error`), and any valid colour lifts it", () => {
+    expect(render().field.error).toBeUndefined();
+    render().root.onInput(input("text", "#12345"));
+    const pending = render().field.error;
+    expect(pending).toEqual(expect.stringMatching(/six digits/i));
+    expect(typeof pending).toBe("string"); // the message is announced via the field's own describedby/alert wiring
+    render().field.onChange("#abcdef");
+    expect(render().field.error).toBeUndefined();
+    render().root.onInput(input("text", "#12"));
+    expect(render().field.error).toBeDefined();
+    render().root.onInput(input("color", "#abcdef"));
+    expect(render().field.error).toBeUndefined();
+  });
+
+  it("ColorField turns `error` into aria-invalid on the hex text input (the contract the pending state relies on)", () => {
+    const hexInput = (error?: string) => {
+      H.i = 0;
+      H.slots = [];
+      const html = renderToStaticMarkup(<ColorField name="brandColor" label="Brand colour" defaultValue="#6d28d9" error={error} />);
+      return /<input\b[^>]*type="text"[^>]*>/.exec(html)![0];
+    };
+    expect(hexInput("Enter six digits, like #0f7b4d.")).toContain('aria-invalid="true"');
+    expect(hexInput()).not.toContain("aria-invalid");
   });
 
   it("an input event from the colour picker clears the flag on its own", () => {

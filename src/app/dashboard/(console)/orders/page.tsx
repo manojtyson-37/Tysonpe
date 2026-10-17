@@ -49,7 +49,7 @@ function breakableEmail(email: string) {
   if (at < 0) return email;
   const [host, ...rest] = email.slice(at + 1).split(".");
   return [
-    `${email.slice(0, at + 1)}`,
+    email.slice(0, at + 1),
     <wbr key="at" />,
     host,
     ...rest.flatMap((part, i) => [<wbr key={i} />, `.${part}`]),

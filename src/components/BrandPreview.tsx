@@ -47,7 +47,8 @@ export function BrandPreview({ color, storeName, pending = false }: { color: str
           </div>
         </BrandScope>
       </div>
-      <ul className="mt-3 space-y-2 text-sm">
+      {/* Always mounted, so a finding that appears while someone types ("Not a six-digit hex yet...") is announced politely. */}
+      <ul aria-live="polite" className="mt-3 space-y-2 text-sm">
         {pending && <Finding ok={false}>Not a six-digit hex yet; the preview shows your last valid colour.</Finding>}
         {!p.valid && (
           <Finding ok={false}>
