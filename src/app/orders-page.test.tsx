@@ -63,7 +63,8 @@ function own(owned: number) {
 type Search = Record<string, string | string[] | undefined>;
 const call = async (sp: Search = {}) => (await (OrdersPage as (p: unknown) => Promise<ReactNode>)({ searchParams: Promise.resolve(sp) })) as ReactNode;
 const render = async (sp: Search = {}) => renderToStaticMarkup(<>{await call(sp)}</>);
-const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+// <wbr> is a zero-width break opportunity, not a separator: dropping it (not turning it into a space) is what a reader sees.
+const text = (html: string) => html.replace(/<wbr\s*\/?>/g, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 const rowCells = (html: string) => {
   const body = html.slice(html.indexOf("<tbody"));
   return [...body.matchAll(/<tr\b[^>]*>(.*?)<\/tr>/g)].map((r) => [...r[1].matchAll(/<td\b[^>]*>(.*?)<\/td>/g)].map((c) => text(c[1]).trim()));
@@ -170,8 +171,14 @@ describe("orders: rows", () => {
   it("lets a long buyer email shrink and wrap instead of widening the row, with no ellipsis", async () => {
     const html = await render();
     expect(html).toMatch(/<div class="min-w-0[^"]*">/);
-    const email = /<p class="([^"]*)">asha@example.com<\/p>/.exec(html)![1].split(/\s+/);
-    expect(email).toContain("break-all");
+    const [, cls, inner] = /<p class="([^"]*)">(asha@.*?)<\/p>/.exec(html)!;
+    const email = cls.split(/\s+/);
+    // overflow-wrap:anywhere (not word-break:break-all, which splits mid-word while a natural break is free), and the
+    // markup offers soft breaks after the @ and before each dot of the domain; the text itself is still the address.
+    expect(email).toContain("wrap-anywhere");
+    expect(email).not.toContain("break-all");
+    expect(inner).toBe("asha@<wbr/>example<wbr/>.com");
+    expect(text(inner).trim()).toBe("asha@example.com");
     expect(email).not.toContain("truncate");
     expect(email.some((c) => /^(?:text-ellipsis|line-clamp-\d+|overflow-hidden)$/.test(c))).toBe(false);
   });
@@ -216,10 +223,12 @@ describe("orders: column fit", () => {
       const [name, email] = [...buyer.inner.matchAll(/<p class="([^"]*)">/g)].map((m) => classes(`class="${m[1]}"`));
       expect(name).toContain("truncate");
       // The address is what a creator needs to read in full: it breaks anywhere (an email has no spaces) and is never clipped.
-      expect(email).toContain("break-all");
+      expect(email).toContain("wrap-anywhere");
+      expect(email).not.toContain("break-all");
       for (const c of ["truncate", "text-ellipsis", "overflow-hidden", "whitespace-nowrap"]) expect(email, c).not.toContain(c);
       expect([...email].some((c) => c.startsWith("line-clamp"))).toBe(false);
       expect(buyer.inner).not.toContain("title=");
+      expect(buyer.inner).toMatch(/@<wbr\/>/); // a break opportunity right after the @, so the local part is never split first
     }
     expect(cellsOf(html).map((r) => text(r[1].inner).trim())).toEqual([LONG[0], LONG[1], LONG[0], LONG[1]].map((e) => `Demo Buyer ${e}`));
   });
@@ -320,15 +329,16 @@ describe("orders: refund", () => {
     const [c] = await confirms();
     const dialog = String(c.props.message);
     expect(dialog).not.toMatch(/razorpay/i);
-    expect(dialog).toMatch(/removes the access this order granted/i);
-    // refundOrder keeps access when the buyer holds another paid order for the product, so never promise it is lost.
+    expect(dialog).toMatch(/removes the access this order granted and any certificate it unlocked\./i);
+    // refundOrder keeps access (and so the certificate) when the buyer holds another paid order for the product, so
+    // never promise it is lost: the certificate is named only as something of THIS order's access.
     expect(dialog).not.toMatch(/loses access|immediately|revokes/i);
     expect(dialog).toMatch(/does not (?:return|send) (?:any |the )?money/i);
     expect(dialog).toMatch(/payment gateway/i);
 
     const foot = text(await render()).replace(/&#x27;/g, "'");
     expect(foot).not.toMatch(/razorpay/i);
-    expect(foot).toMatch(/removes the access this order granted and takes the order out of payouts/);
+    expect(foot).toMatch(/removes the access this order granted and any certificate it unlocked, and takes the order out of payouts/);
     expect(foot).not.toMatch(/revokes|loses access|immediately/i);
     expect(foot).toMatch(/does not return any money/);
     expect(foot).toMatch(/through your payment gateway/);

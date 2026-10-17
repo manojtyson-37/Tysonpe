@@ -242,48 +242,34 @@ describe("QuizEditor: limits at the boundary", () => {
 describe("QuizEditor: unsaved changes", () => {
   it("does not flag a brand-new quiz with no questions: the baseline is the blank question the editor starts with", () => {
     const html = render(defaults({ questions: [] }));
-    expect(html).toMatch(/<span role="status" class="text-sm font-medium text-muted"><\/span>/);
+    expect(html).toMatch(/<span role="status"[^>]*><\/span>/);
     expect(html).not.toContain("Unsaved changes");
     // The same blank question is what is posted, so posted and baseline cannot differ before an edit.
     const posted = unescape(/name="questions" value="([^"]*)"/.exec(html)![1]);
     const blank = JSON.stringify([{ prompt: "", kind: "single", explanation: "", options: [{ text: "", correct: true }, { text: "", correct: false }] }]);
     expect(hasUnsavedChanges(isQuizDirty(posted, blank), false)).toBe(false);
-    const src = readFileSync(new URL("./QuizEditor.tsx", import.meta.url), "utf8");
-    expect(src).toContain("useState(() => JSON.stringify(defaults.questions.length ? defaults.questions : [blankQ()]))");
+    // That the editor's own baseline is this same blank question is proved by QuizEditor.interactions.test.tsx
+    // ("a brand-new quiz with no questions is clean at once"), which runs the closures instead of reading the source.
   });
 
-  it("the rendered words come from the dirty flag only, and the Saved note is gated on the same flag", () => {
-    // The initial render of any quiz is clean, so the words themselves are rendered and asserted in
-    // QuizEditor.interactions.test.tsx (stubbed hooks). Here: the pure rule that feeds the flag, and the wiring.
+  it("flags a quiz as unsaved when either the questions or the settings differ", () => {
+    // The initial render of any quiz is clean, so the words and the Saved note are asserted in
+    // QuizEditor.interactions.test.tsx (stubbed hooks). Here: the pure rule that feeds the flag.
     expect(hasUnsavedChanges(true, false)).toBe(true);
     expect(hasUnsavedChanges(false, true)).toBe(true);
     expect(hasUnsavedChanges(false, false)).toBe(false);
-    const src = readFileSync(new URL("./QuizEditor.tsx", import.meta.url), "utf8");
-    expect(src).toMatch(/<span role="status"[^>]*>\{dirty \? "Unsaved changes" : ""\}<\/span>\s*\{!dirty && <SavedNote \/>\}/);
   });
 
   it("shows an always-mounted status region that is empty until something changes", () => {
     const html = render();
-    expect(html).toMatch(/<span role="status" class="text-sm font-medium text-muted"><\/span>/);
+    expect(html).toMatch(/<span role="status"[^>]*><\/span>/);
     expect(html).not.toContain("Unsaved changes");
   });
 
-  it("flags edits to the settings fields (pass mark, max attempts, shuffle) and clears the flag only on a save", () => {
-    const src = readFileSync(new URL("./QuizEditor.tsx", import.meta.url), "utf8");
-    // The three settings fields sit in ONE wrapper that listens for both events.
-    const wrapper = /<div className="grid gap-3 sm:grid-cols-3"([^>]*)>([\s\S]*?)<\/div>\s*<FormError/.exec(src)!;
-    expect(wrapper[1]).toContain("onInput={editSettings}");
-    expect(wrapper[1]).toContain("onChange={editSettings}");
-    for (const name of ['name="passPct"', 'name="maxAttempts"', 'name="shuffle"']) expect(wrapper[2], name).toContain(name);
-    expect(src).toMatch(/const editSettings = \(\) => \{[^}]*setSettingsDirty\(true\)/);
-    expect(src).toMatch(/saveSucceeded\(res\)[^\n]*setSettingsDirty\(false\)/);
-  });
-
-  it("hides the Saved note while anything is unsaved, and shows Unsaved changes from the same flag", () => {
-    const src = readFileSync(new URL("./QuizEditor.tsx", import.meta.url), "utf8");
-    expect(src).toContain("const dirty = hasUnsavedChanges(isQuizDirty(serialised, saved), settingsDirty);");
-    expect(src).toContain('{dirty ? "Unsaved changes" : ""}');
-    expect(src).toContain("{!dirty && <SavedNote />}");
+  it("renders the three settings fields (pass mark, max attempts, shuffle) that the settings wrapper listens to", () => {
+    // That an edit in them flags the quiz, and that a save clears it, is driven in QuizEditor.interactions.test.tsx.
+    const html = render();
+    for (const name of ["passPct", "maxAttempts", "shuffle"]) expect(html, name).toContain(`name="${name}"`);
   });
 
   it("stringifies the questions once per render", () => {
@@ -291,16 +277,9 @@ describe("QuizEditor: unsaved changes", () => {
     expect(src.match(/JSON\.stringify\(qs\)/g)).toHaveLength(1);
   });
 
-  it("moves the save baseline through baselineAfterSave, posting what the form posted", () => {
-    const src = readFileSync(new URL("./QuizEditor.tsx", import.meta.url), "utf8");
-    expect(src).toMatch(/setSaved\(\(baseline\) => baselineAfterSave\(res, String\(fd\.get\("questions"\) \?\? ""\), baseline\)\)/);
-  });
-
   it("points add-question and add-option focus at the key of the control that was just added", () => {
-    const src = readFileSync(new URL("./QuizEditor.tsx", import.meta.url), "utf8");
-    expect(src).toContain("setFocusTo({ key: focusKeyAfterAddQuestion(qs.length) });");
-    expect(src).toContain("setFocusTo({ key: focusKeyAfterAddOption(qi, qs[qi].options.length) });");
-    // And those keys exist on the rendered controls once the list has grown by one.
+    // The handlers that pick these keys are driven in QuizEditor.interactions.test.tsx; here the keys exist on the
+    // rendered controls once the list has grown by one.
     const html = render();
     const keys = [...html.matchAll(/data-focus-key="([^"]+)"/g)].map((m) => m[1]);
     expect(keys).toContain(focusKeyAfterAddQuestion(1)); // a second question exists in the fixture: q1-prompt

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { clientExportsOf, clientReferenceMisuse, declaresUseClient, namedImports, resolveFirstParty, sourceFiles, stripNonCode } from "./client-imports";
+import { clientExportsOf, clientReferenceMisuse, declaresUseClient, importsClientExport, namedImports, resolveFirstParty, sourceFiles } from "./client-imports";
 
 const SRC = path.resolve(import.meta.dirname, "..");
 
@@ -15,8 +15,17 @@ beforeAll(() => {
   writeFileSync(at("components/Client.tsx"), '"use client";\nexport const KIND: Record<string, string> = {};\nexport const Comp = () => null;\nexport function helper() { return 1; }\nexport default function Def() { return null; }\n');
   writeFileSync(at("components/barrel.ts"), 'export { Comp, KIND as KINDS } from "./Client";\nexport { plain } from "./plain";\n');
   writeFileSync(at("components/plain.ts"), "export const plain: Record<string, string> = {};\n");
+  // `export *` barrels: one star-exports the client module and a plain one, the next star-exports that barrel.
+  writeFileSync(at("components/starbarrel.ts"), 'export * from "./Client";\nexport * from "./plain";\n');
+  writeFileSync(at("components/chain.ts"), 'export * from "./starbarrel";\n');
+  // import-then-export: the client reference is re-exported under another name, and as the default.
+  writeFileSync(at("components/reexport.ts"), 'import { KIND as K2, Comp as C2 } from "./Client";\nexport { K2 as KIND2, C2 };\nexport const KIND3 = K2;\nexport default K2;\n');
+  // a server module that re-exports only types and values of its own: nothing client in it.
+  writeFileSync(at("components/serverbarrel.ts"), 'import type { Thing } from "./Client";\nexport type { Thing };\nexport const own = {};\n');
 });
 afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+const misuseWith = (prelude: string, source: string) => clientReferenceMisuse(root, at("page.tsx"), `${prelude}\n${source}`);
 
 const misuse = (source: string) => clientReferenceMisuse(root, at("page.tsx"), `import { KIND, Comp, helper } from "@/components/Client";\nimport Def from "@/components/Client";\nimport { KINDS } from "@/components/barrel";\nimport { plain } from "@/components/plain";\n${source}`);
 
@@ -54,6 +63,77 @@ describe("clientReferenceMisuse (the checker itself)", () => {
     expect(misuse("const a = <p>It's here</p>; const b = KIND.video; const c = <p>can't</p>;").length).toBeGreaterThan(0);
   });
 
+  describe("module graph: export * and namespace imports (invisible to the regex scanner)", () => {
+    const STAR = 'import { KIND, Comp, helper, plain } from "@/components/starbarrel";';
+    const CHAIN = 'import { KIND, plain } from "@/components/chain";';
+    const NS = 'import * as C from "@/components/Client";';
+    const NS_STAR = 'import * as B from "@/components/starbarrel";';
+    const RE = 'import { KIND2, C2, KIND3 } from "@/components/reexport";\nimport Dflt from "@/components/reexport";';
+
+    it.each([
+      ["a name that a barrel re-exports with `export *`", STAR, "const a = KIND.video;"],
+      ["a function reached through `export *`", STAR, "const a = helper();"],
+      ["a name reached through two levels of `export *`", CHAIN, "const a = KIND[k];"],
+      ["a member read on a namespace import", NS, "const a = C.KIND.video;"],
+      ["a call on a namespace import member", NS, "const a = C.helper();"],
+      ["a bracket read on a namespace import member", NS, "const a = C.KIND[k];"],
+      ["a member JSX tag on a namespace member", NS, "const a = <C.Comp.Item />;"],
+      ["a namespace import of an `export *` barrel", NS_STAR, "const a = B.KIND.video;"],
+      ["a name imported then exported under an alias", RE, "const a = KIND2.video;"],
+      ["a name imported then exported as a const alias", RE, "const a = KIND3.video;"],
+      ["a default that is an imported client reference", RE, "const a = Dflt.video;"],
+      ["an aliased named import", 'import { KIND as K } from "@/components/Client";', "const a = K.video;"],
+      ["an arbitrarily named default import", 'import Whatever from "@/components/Client";', "const a = Whatever.displayName;"],
+      ["a chain broken over lines", 'import { KIND } from "@/components/Client";', "const a = KIND\n  .video;"],
+      ["an optional chain broken over lines", 'import { KIND } from "@/components/Client";', "const a = KIND\n  ?.video;"],
+      ["object destructuring", 'import { KIND } from "@/components/Client";', "const { video } = KIND;"],
+      ["array destructuring", 'import { KIND } from "@/components/Client";', "const [first] = KIND;"],
+      ["an object spread", 'import { KIND } from "@/components/Client";', "const a = { ...KIND };"],
+      ["an array spread", 'import { KIND } from "@/components/Client";', "const a = [...KIND];"],
+      ["Object.entries", 'import { KIND } from "@/components/Client";', "const a = Object.entries(KIND);"],
+      ["Object.keys", 'import { KIND } from "@/components/Client";', "const a = Object.keys(KIND);"],
+      ["an `in` test", 'import { KIND } from "@/components/Client";', 'const a = "video" in KIND;'],
+      ["a for...in loop", 'import { KIND } from "@/components/Client";', "for (const k in KIND) {}"],
+      ["a use after a string that contains /*", 'import { KIND } from "@/components/Client";', 'const s = "/* not a comment"; const a = KIND.video;'],
+      ["a use after a string that contains //", 'import { KIND } from "@/components/Client";', 'const s = "http://x"; const a = KIND.video;'],
+      ["a use after a comment that contains from \"...\"", 'import { KIND } from "@/components/Client";', '// see import x from "y"\nconst a = KIND.video;'],
+      ["a use between two imports separated by a comment naming a module", 'import { KIND } from "@/components/Client";\n/* import { z } from "q" */\nimport { plain } from "@/components/plain";', "const a = KIND.video;"],
+    ])("flags %s", (_label, prelude, source) => {
+      expect(misuseWith(prelude, source).length).toBeGreaterThan(0);
+    });
+
+    it.each([
+      ["rendering a name from an `export *` barrel", STAR, "const a = <Comp />; const b = { Comp, KIND };"],
+      ["a plain name next to client names in an `export *` barrel", STAR, "const a = plain.video;"],
+      ["a plain name two levels down", CHAIN, "const a = plain.video;"],
+      ["rendering a namespace member as a tag", NS, "const a = <C.Comp x={1} />;"],
+      ["passing a namespace member on as a value", NS, "const a = <List icon={C.Comp} table={C.KIND} />;"],
+      ["a plain member of a star barrel's namespace", NS_STAR, "const a = B.plain.video;"],
+      ["rendering an imported-then-exported name", RE, "const a = <C2 />; const b = { KIND2 };"],
+      ["a type-only re-export", 'import { own } from "@/components/serverbarrel";', "const a = own.video;"],
+      ["an import written inside a string and a comment", 'import { plain as p } from "@/components/plain";', '// import { KIND } from "@/components/Client"\nconst s = \'import { KIND } from "@/components/Client"\';\nconst a = p.video;'],
+      ["a type-position mention", 'import { KIND } from "@/components/Client";', "type T = typeof KIND; const a = {} as T;"],
+      ["a shadowing property name", 'import { KIND } from "@/components/Client";', "const a = obj.KIND.video; const b = { KIND: 1 }.KIND;"],
+    ])("does not flag %s", (_label, prelude, source) => {
+      expect(misuseWith(prelude, source)).toEqual([]);
+    });
+
+    it("reports the line of the identifier even when the chain spans lines", () => {
+      expect(misuseWith('import { KIND } from "@/components/Client";', "const a = KIND\n  .video;")).toEqual(["page.tsx:2: KIND is a client reference; reading into it throws on the server"]);
+    });
+
+    it("names the namespace member in the finding", () => {
+      expect(misuseWith(NS, "const a = C.KIND.video;")).toEqual(["page.tsx:2: C.KIND is a client reference; reading into it throws on the server"]);
+    });
+
+    it("knows which names a barrel exports from client modules", () => {
+      expect([...clientExportsOf(root, at("components/starbarrel.ts")).names].sort()).toEqual(["Comp", "KIND", "helper"]);
+      expect([...clientExportsOf(root, at("components/chain.ts")).names].sort()).toEqual(["Comp", "KIND", "helper"]);
+      expect([...clientExportsOf(root, at("components/reexport.ts")).names].sort()).toEqual(["C2", "KIND2", "KIND3", "default"].sort());
+      expect(clientExportsOf(root, at("components/serverbarrel.ts")).names.size).toBe(0);
+    });
+  });
+
   it("skips a file that is itself a client module", () => {
     const source = '"use client";\nimport { KIND } from "@/components/Client";\nconst a = KIND.video;';
     expect(clientReferenceMisuse(root, at("page.tsx"), source)).toEqual([]);
@@ -75,20 +155,18 @@ describe("clientReferenceMisuse (the checker itself)", () => {
     expect([...clientExportsOf(root, at("components/barrel.ts")).names].sort()).toEqual(["Comp", "KINDS"]);
     expect(clientExportsOf(root, at("components/Client.tsx")).all).toBe(true);
     expect(resolveFirstParty(root, at("page.tsx"), "react")).toBeNull();
-    expect(stripNonCode('const a = "x.y"; // z.w\nconst b = 1;')).not.toMatch(/[xyzw]\./);
+    expect(declaresUseClient('// header\n/* block */\n\n"use client";\nx')).toBe(true);
+    expect(declaresUseClient("'use client'\nx")).toBe(true);
+    expect(declaresUseClient('const a = 1;\n"use client";')).toBe(false);
+    expect(declaresUseClient('// "use client"\nexport const a = 1;')).toBe(false);
+    expect(namedImports('import * as C from "x";\nimport "side";\nimport { type T } from "y";')).toEqual([{ local: "C", imported: "*", spec: "x" }]);
   });
 });
 
 describe("static scan: server modules never read into a client module's export", () => {
   const files = [...sourceFiles(path.join(SRC, "app")), ...sourceFiles(path.join(SRC, "components"))];
   const server = files.filter((file) => !declaresUseClient(readFileSync(file, "utf8")));
-  const importsClient = (file: string) =>
-    namedImports(readFileSync(file, "utf8")).some(({ imported, spec }) => {
-      const target = resolveFirstParty(SRC, file, spec);
-      if (!target) return false;
-      const exports = clientExportsOf(SRC, target);
-      return exports.all || exports.names.has(imported);
-    });
+  const importsClient = (file: string) => namedImports(readFileSync(file, "utf8"), file).some((imp) => importsClientExport(SRC, file, imp));
 
   it("is not vacuous: it scans the Task 20-22 server pages, each of which imports a client export", () => {
     const rel = (file: string) => path.relative(SRC, file).split(path.sep).join("/");
@@ -102,6 +180,17 @@ describe("static scan: server modules never read into a client module's export",
       expect(scanned, page).toContain(page);
     }
     expect(scanned.length).toBeGreaterThan(10);
+  });
+
+  it("sees through the ui.tsx -> ui/index `export *` barrel to the client primitives", () => {
+    const names = clientExportsOf(SRC, path.join(SRC, "components/ui.tsx")).names;
+    for (const name of ["Tabs", "Dialog", "toast", "Disclosure"]) expect(names, name).toContain(name);
+  });
+
+  it("flags a read through the real ui.tsx barrel (a mutation check on the live module graph)", () => {
+    const page = path.join(SRC, "app/dashboard/(console)/x/page.tsx");
+    expect(clientReferenceMisuse(SRC, page, 'import { Tabs, Dialog } from "@/components/ui";\nconst a = Tabs.x; const b = <Dialog />;')).toHaveLength(1);
+    expect(clientReferenceMisuse(SRC, page, 'import { Button } from "@/components/ui";\nconst a = Button.x;')).toEqual([]);
   });
 
   it("finds no server module that dots into, indexes or calls a client export", () => {

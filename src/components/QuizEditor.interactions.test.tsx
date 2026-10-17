@@ -12,7 +12,7 @@
 // - useState batching, functional-updater ordering across several setState calls in one event, and effect timing
 //   (the effect is run by hand after the render, so "focus is set in the commit after the DOM changed" is not proven).
 // - The DOM: native radio exclusivity, real focus(), React 19's form reset after an action, change events bubbling
-//   from the settings inputs to the wrapper's onChange/onInput.
+//   from the settings inputs (the number fields and the shuffle select) to the wrapper's onInput.
 import { createElement, isValidElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -119,8 +119,13 @@ function mount(defaults: QuizDefaults, action: (fd: FormData) => Promise<unknown
      * nothing is to be focused. Also checks that a control with that key exists in the tree.
      */
     focusKey: (): string | null => {
-      // React 19 passes `ref` as an ordinary prop; the only element with one is the root <div ref={root}>.
-      const ref = els.find((e) => e.props.ref)!.props.ref as { current: unknown };
+      // React 19 passes `ref` as an ordinary prop. The ref this needs is the one on the editor's root element (the first
+      // element walked, and the only one with a ref): assert both, so a second ref added elsewhere fails here loudly
+      // instead of silently hijacking the fake root.
+      const withRef = els.filter((e) => e.props.ref !== undefined);
+      expect(withRef, "exactly one element carries a ref").toHaveLength(1);
+      expect(withRef[0], "and it is the editor's root").toBe(els[0]);
+      const ref = withRef[0].props.ref as { current: unknown };
       let selector: string | null = null;
       ref.current = { querySelector: (s: string) => ((selector = s), { focus: () => undefined }) };
       H.effects.forEach((fn) => fn());
@@ -319,10 +324,10 @@ describe("QuizEditor closures: Unsaved changes", () => {
   it("shows the words when a question is edited, hides the Saved note meanwhile, and clears when edited back", () => {
     const m = mount(D([Q("single", [0])]));
     expect(m.status()).toBe("");
-    expect(m.statusMarkup()).toBe('<span role="status" class="text-sm font-medium text-muted"></span>');
+    expect(m.statusMarkup()).toMatch(/^<span role="status"[^>]*><\/span>$/); // always mounted, and empty while clean
     expect(m.savedNote()).toBe(true);
     m.change("Question 1 prompt", "x");
-    expect(m.statusMarkup()).toBe('<span role="status" class="text-sm font-medium text-muted">Unsaved changes</span>');
+    expect(m.statusMarkup()).toMatch(/^<span role="status"[^>]*>Unsaved changes<\/span>$/);
     expect(m.savedNote()).toBe(false);
     m.change("Question 1 prompt", "p");
     expect(m.status()).toBe("");

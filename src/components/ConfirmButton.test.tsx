@@ -61,7 +61,7 @@ describe("ConfirmButton", () => {
 
   // The server never renders a Dialog (it mounts after hydration), so this cannot tell open from closed by markup
   // alone; it checks that the real component accepts what ConfirmButton hands it and adds nothing to the page.
-  it("renders nothing for the real, closed ConfirmDialog", () => {
+  it("accepts the props and adds no SSR markup", () => {
     seen.passthrough = true;
     const html = renderToStaticMarkup(<form><ConfirmButton message="Delete this coupon?">Delete</ConfirmButton></form>);
     expect(html).toBe('<form><button type="submit" class="btn btn-danger btn-sm">Delete</button></form>');

@@ -35,19 +35,35 @@ const COARSE = "pointer-coarse:min-h-11";
 // Column budget. Content is 728px wide at the 1024px breakpoint and 856px at 1280px, minus the table's 20px
 // scroll-fade gutter, so the cells give up 4px of side padding each (a descendant selector, which outranks Td's own
 // px-3) and the two free-text columns are bounded: a long email would otherwise set the column's width
-// (the Buyer name is cut with `truncate`, but the email wraps with `break-all` so a creator can always read the whole
-// address: wrapping adds height, not width), while Product may wrap but not collapse to a one-word column. Below xl the actions may wrap onto two lines instead of widening the table; from xl
+// (the Buyer name is cut with `truncate`, but the email wraps with `wrap-anywhere` so a creator can always read the
+// whole address: wrapping adds height, not width), while Product may wrap but not collapse to a one-word column. Below xl the actions may wrap onto two lines instead of widening the table; from xl
 // they sit in one row. Either way both buttons are left-aligned, so Invoice has the same x on paid and refunded rows.
 const TABLE_FIT = "[&_td]:px-2 [&_th]:px-2";
 const BUYER_CELL = "min-w-0 max-w-28 xl:max-w-40";
 const PRODUCT_CELL = "min-w-28 max-w-xs";
+// An email has no spaces, so it needs somewhere to break: `wrap-anywhere` (overflow-wrap:anywhere) lets it break and
+// also lowers the cell's min-content width, and the <wbr> hints put the preferred breaks after the @ and before each
+// dot of the domain, so a long address splits at a boundary a reader recognises before it splits mid-word.
+function breakableEmail(email: string) {
+  const at = email.lastIndexOf("@");
+  if (at < 0) return email;
+  const [host, ...rest] = email.slice(at + 1).split(".");
+  return [
+    `${email.slice(0, at + 1)}`,
+    <wbr key="at" />,
+    host,
+    ...rest.flatMap((part, i) => [<wbr key={i} />, `.${part}`]),
+  ];
+}
+
 const ACTIONS = "flex flex-wrap items-center gap-2 xl:flex-nowrap";
 
 // What marking refunded really does (see refundOrder): access and payout effects only. No gateway is called, and the
 // gateway may be the demo one, so the copy names no provider. Access is "the access this order granted", not "the
-// buyer's access": refundOrder hands the enrolment to another paid order for the same product when there is one.
+// buyer's access": refundOrder hands the enrolment to another paid order for the same product when there is one, and
+// it revokes the certificate only when no access remains, so the certificate is tied to that same access.
 const REFUND_CONFIRM =
-  "Mark this order refunded? This removes the access this order granted. It does not return any money: refund it through your payment gateway.";
+  "Mark this order refunded? This removes the access this order granted and any certificate it unlocked. It does not return any money: refund it through your payment gateway.";
 
 export default async function OrdersPage({ searchParams }: PageProps<"/dashboard/orders">) {
   const { creator } = await requireCreator();
@@ -104,7 +120,7 @@ export default async function OrdersPage({ searchParams }: PageProps<"/dashboard
                 <Td label="Buyer">
                   <div className={BUYER_CELL}>
                     <p className="truncate font-medium">{o.user.name}</p>
-                    <p className="t-meta break-all">{o.user.email}</p>
+                    <p className="t-meta wrap-anywhere">{breakableEmail(o.user.email)}</p>
                   </div>
                 </Td>
                 <Td label="Product">
@@ -153,7 +169,7 @@ export default async function OrdersPage({ searchParams }: PageProps<"/dashboard
         </p>
       )}
       <p className="t-meta mt-3">
-        “Mark refunded” removes the access this order granted and takes the order out of payouts. It does not return any money: refund the buyer through your payment gateway.
+        “Mark refunded” removes the access this order granted and any certificate it unlocked, and takes the order out of payouts. It does not return any money: refund the buyer through your payment gateway.
       </p>
     </>
   );

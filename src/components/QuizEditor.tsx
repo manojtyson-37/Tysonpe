@@ -223,7 +223,8 @@ export function QuizEditor({ action, defaults }: { action: (prev: FormState, fd:
       <ActionForm action={saveAction} className="space-y-4">
         <h2 className="font-semibold">Quiz settings</h2>
         <input type="hidden" name="questions" value={serialised} />
-        <div className="grid gap-3 sm:grid-cols-3" onInput={editSettings} onChange={editSettings}>
+        {/* `input` bubbles from the number fields and, in current browsers, from the select too, so one listener covers all three. */}
+        <div className="grid gap-3 sm:grid-cols-3" onInput={editSettings}>
           <Field name="passPct" label="Pass mark (%)" type="number" defaultValue={defaults.passPct} required />
           <Field name="maxAttempts" label="Max attempts" type="number" defaultValue={defaults.maxAttempts ?? ""} hint="Empty = unlimited. Unlimited retakes let learners probe the answers by trial and error; 3 is a good default." />
           <Field name="shuffle" label="Shuffle options" as="select" defaultValue={defaults.shuffle ? "yes" : "no"}>

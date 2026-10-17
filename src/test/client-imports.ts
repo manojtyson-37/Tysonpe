@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
 /**
  * In a React Server Component, an export of a "use client" module is a client REFERENCE, not the value. It can be
@@ -7,50 +8,69 @@ import path from "node:path";
  * `Name.prop` or `Name[key]` ("Cannot access KIND_LABEL.video on the server"), and so does calling it (`Name()`).
  * `next dev` and Vitest hide this (dev returns undefined; Vitest ignores the directive), so a page that dots into a
  * client module's constant renders wrong in dev and 500s in production. This scan finds that statically.
+ *
+ * It reads the TypeScript syntax tree, not the text, so comments and string contents (`from "..."`, `/*`, `//`) can
+ * never be mistaken for code. The module graph it follows: `export { A as B } from`, `export * from` (recursively),
+ * an import re-exported under `export { X }` / `export default X` / `export const Y = X`, and `import * as C`.
+ *
+ * What counts as "reading into" a client reference X (or a namespace member `C.X`): `X.p`, `X?.p`, `X[k]`, `X()`,
+ * `new X()`, a tagged template on X, destructuring X, `...X`, `Object.entries/keys/values/assign/...(X)`,
+ * `"k" in X`, and `for (k in X)` / `for (v of X)`. Rendering `<X />`, `<C.X />` and passing X on as a value are fine.
+ * A namespace itself (`C`) is a module proxy whose members are references, so `C.X` alone is fine; `C.X.p` is not.
+ * The scan has no scope analysis: a local that shadows an imported client name is treated as the import.
  */
 
-/** True when the module opens with a "use client" directive (after any leading comments or blank lines). */
-export function declaresUseClient(source: string): boolean {
-  return /^(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*["']use client["']/.test(source);
+const parseCache = new Map<string, { text: string; sf: ts.SourceFile }>();
+function parse(file: string, text: string): ts.SourceFile {
+  const hit = parseCache.get(file);
+  if (hit && hit.text === text) return hit.sf;
+  const kind = /\.tsx$|\.jsx$/.test(file) ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, kind);
+  parseCache.set(file, { text, sf });
+  return sf;
 }
+const parseFile = (file: string) => parse(file, readFileSync(file, "utf8"));
 
-/** Blanks comments and string/regex-free quoted text so prose cannot look like code. Newlines are kept. */
-export function stripNonCode(source: string): string {
-  const blank = (s: string) => s.replace(/[^\n]/g, " ");
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, blank)
-    .replace(/(^|[^:\\])\/\/[^\n]*/g, (_m, pre: string) => pre + blank(_m.slice(pre.length)))
-    .replace(/"(?:[^"\\\n]|\\.)*"/g, blank)
-    .replace(/'(?:[^'\\\n]|\\.)*'/g, (m, offset: number, whole: string) => {
-      // A lone apostrophe in JSX copy (don't) is not a string; only blank a '...' that follows a code character.
-      return /[=(,?:[{+&|]\s*$/.test(whole.slice(Math.max(0, offset - 3), offset)) ? blank(m) : m;
-    });
+/** True when the module opens with a "use client" directive (the directive prologue; comments and blank lines are not statements). */
+export function declaresUseClient(source: string): boolean {
+  const sf = parse("directive.tsx", source);
+  for (const statement of sf.statements) {
+    if (!ts.isExpressionStatement(statement) || !ts.isStringLiteral(statement.expression)) return false;
+    if (statement.expression.text === "use client") return true;
+  }
+  return false;
 }
 
 export interface NamedImport {
   /** The local binding. */
   local: string;
-  /** The name the module exports ("default" for a default import). */
+  /** The name the module exports ("default" for a default import, "*" for `import * as local`). */
   imported: string;
   spec: string;
 }
 
-/** Value imports (named, renamed and default) of a module. `import type` and inline `type X` members are erased, so skipped. */
-export function namedImports(source: string): NamedImport[] {
+const moduleSpec = (decl: ts.ImportDeclaration | ts.ExportDeclaration) => (decl.moduleSpecifier && ts.isStringLiteral(decl.moduleSpecifier) ? decl.moduleSpecifier.text : null);
+
+function importsOf(sf: ts.SourceFile): NamedImport[] {
   const out: NamedImport[] = [];
-  for (const m of source.matchAll(/^\s*import\s+(?!type\b)([\s\S]*?)\s+from\s+["']([^"']+)["']/gm)) {
-    const clause = m[1];
-    const braces = /\{([\s\S]*)\}/.exec(clause)?.[1] ?? "";
-    for (const part of braces.split(",")) {
-      const p = part.trim();
-      if (!p || /^type\s/.test(p)) continue;
-      const [imported, local = imported] = p.split(/\s+as\s+/).map((x) => x.trim());
-      out.push({ local, imported, spec: m[2] });
+  for (const statement of sf.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    const clause = statement.importClause;
+    const spec = moduleSpec(statement);
+    if (!clause || clause.isTypeOnly || spec === null) continue; // `import "x"` binds nothing; `import type` is erased
+    const bindings = clause.namedBindings;
+    if (bindings && ts.isNamedImports(bindings)) {
+      for (const el of bindings.elements) if (!el.isTypeOnly) out.push({ local: el.name.text, imported: (el.propertyName ?? el.name).text, spec });
     }
-    const def = /^([A-Za-z_$][\w$]*)\s*(?:,|$)/.exec(clause.trim());
-    if (def) out.push({ local: def[1], imported: "default", spec: m[2] });
+    if (clause.name) out.push({ local: clause.name.text, imported: "default", spec });
+    if (bindings && ts.isNamespaceImport(bindings)) out.push({ local: bindings.name.text, imported: "*", spec });
   }
   return out;
+}
+
+/** Value imports (named, renamed, default and namespace) of a module. `import type` and inline `type X` members are erased, so skipped. */
+export function namedImports(source: string, file = "module.tsx"): NamedImport[] {
+  return importsOf(parse(file, source));
 }
 
 export function resolveFirstParty(srcDir: string, fromFile: string, spec: string): string | null {
@@ -66,48 +86,173 @@ export function resolveFirstParty(srcDir: string, fromFile: string, spec: string
   return null;
 }
 
+const hasModifier = (node: ts.Node, kind: ts.SyntaxKind) => ts.canHaveModifiers(node) && (ts.getModifiers(node)?.some((m) => m.kind === kind) ?? false);
+
+function bindingNames(name: ts.BindingName, into: string[]): void {
+  if (ts.isIdentifier(name)) into.push(name.text);
+  else for (const el of name.elements) if (!ts.isOmittedExpression(el)) bindingNames(el.name, into);
+}
+
+/** Value names a module exports (types erased), including through `export *`. "default" is listed but never passed on by a star. */
+function valueExportNames(srcDir: string, file: string, stack: ReadonlySet<string>): Set<string> {
+  const names = new Set<string>();
+  if (stack.has(file)) return names;
+  const inner = new Set(stack).add(file);
+  for (const statement of parseFile(file).statements) {
+    if (ts.isVariableStatement(statement) && hasModifier(statement, ts.SyntaxKind.ExportKeyword)) {
+      const found: string[] = [];
+      for (const decl of statement.declarationList.declarations) bindingNames(decl.name, found);
+      found.forEach((n) => names.add(n));
+    } else if ((ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement) || ts.isEnumDeclaration(statement)) && hasModifier(statement, ts.SyntaxKind.ExportKeyword) && !hasModifier(statement, ts.SyntaxKind.DeclareKeyword)) {
+      names.add(hasModifier(statement, ts.SyntaxKind.DefaultKeyword) ? "default" : (statement.name?.text ?? "default"));
+    } else if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
+      names.add("default");
+    } else if (ts.isExportDeclaration(statement) && !statement.isTypeOnly) {
+      const spec = moduleSpec(statement);
+      const clause = statement.exportClause;
+      if (clause && ts.isNamedExports(clause)) {
+        for (const el of clause.elements) if (!el.isTypeOnly) names.add(el.name.text);
+      } else if (clause && ts.isNamespaceExport(clause)) {
+        names.add(clause.name.text);
+      } else if (spec !== null) {
+        const target = resolveFirstParty(srcDir, file, spec);
+        if (target) for (const n of valueExportNames(srcDir, target, inner)) if (n !== "default") names.add(n);
+      }
+    }
+  }
+  return names;
+}
+
+export interface ClientExports {
+  /** The module is itself "use client": every export is a client reference. */
+  all: boolean;
+  /** For a module without the directive: the exported names that are client references re-exported from one. */
+  names: Set<string>;
+}
+
 /**
  * Names a module exports that live in a "use client" file: its own exports when it is a client module, or, for a
- * barrel without the directive, the names it re-exports from one (`export { A, B as C } from "./x"`).
+ * barrel without the directive, the names it re-exports from one (`export { A, B as C } from "./x"`, `export * from
+ * "./x"`, or an import it exports again).
  */
-export function clientExportsOf(srcDir: string, file: string, seen = new Set<string>()): { all: boolean; names: Set<string> } {
-  if (seen.has(file)) return { all: false, names: new Set() };
-  seen.add(file);
+export function clientExportsOf(srcDir: string, file: string, stack: ReadonlySet<string> = new Set()): ClientExports {
+  const none: ClientExports = { all: false, names: new Set() };
+  if (stack.has(file)) return none;
   const source = readFileSync(file, "utf8");
   if (declaresUseClient(source)) return { all: true, names: new Set() };
+  const sf = parse(file, source);
+  const inner = new Set(stack).add(file);
+  const isClient = (target: string, name: string) => {
+    const exports = clientExportsOf(srcDir, target, inner);
+    return exports.all || exports.names.has(name);
+  };
+  // Imports of this file that are client references, by local name (an import then re-exported below).
+  const clientLocals = new Set<string>();
+  for (const imp of importsOf(sf)) {
+    const target = resolveFirstParty(srcDir, file, imp.spec);
+    if (target && imp.imported !== "*" && isClient(target, imp.imported)) clientLocals.add(imp.local);
+  }
   const names = new Set<string>();
-  for (const m of source.matchAll(/^\s*export\s+(?!type\b)\{([^}]*)\}\s*from\s*["']([^"']+)["']/gm)) {
-    const target = resolveFirstParty(srcDir, file, m[2]);
-    if (!target) continue;
-    const inner = clientExportsOf(srcDir, target, seen);
-    if (!inner.all && inner.names.size === 0) continue;
-    for (const part of m[1].split(",")) {
-      const p = part.trim();
-      if (!p || /^type\s/.test(p)) continue;
-      const [orig, exported = orig] = p.split(/\s+as\s+/).map((s) => s.trim());
-      if (inner.all || inner.names.has(orig)) names.add(exported);
+  for (const statement of sf.statements) {
+    if (ts.isExportDeclaration(statement) && !statement.isTypeOnly) {
+      const spec = moduleSpec(statement);
+      const clause = statement.exportClause;
+      if (spec !== null) {
+        const target = resolveFirstParty(srcDir, file, spec);
+        if (!target) continue;
+        if (clause && ts.isNamedExports(clause)) {
+          for (const el of clause.elements) if (!el.isTypeOnly && isClient(target, (el.propertyName ?? el.name).text)) names.add(el.name.text);
+        } else if (!clause) {
+          const exports = clientExportsOf(srcDir, target, inner);
+          const star = exports.all ? valueExportNames(srcDir, target, inner) : exports.names;
+          for (const n of star) if (n !== "default") names.add(n);
+        }
+      } else if (clause && ts.isNamedExports(clause)) {
+        for (const el of clause.elements) if (!el.isTypeOnly && clientLocals.has((el.propertyName ?? el.name).text)) names.add(el.name.text);
+      }
+    } else if (ts.isExportAssignment(statement) && !statement.isExportEquals && ts.isIdentifier(statement.expression) && clientLocals.has(statement.expression.text)) {
+      names.add("default");
+    } else if (ts.isVariableStatement(statement) && hasModifier(statement, ts.SyntaxKind.ExportKeyword)) {
+      for (const decl of statement.declarationList.declarations) {
+        if (ts.isIdentifier(decl.name) && decl.initializer && ts.isIdentifier(decl.initializer) && clientLocals.has(decl.initializer.text)) names.add(decl.name.text);
+      }
     }
   }
   return { all: false, names };
 }
 
+/** True when an import binds (a member of) a client module: a named or default client export, or a namespace with any. */
+export function importsClientExport(srcDir: string, file: string, imp: NamedImport): boolean {
+  const target = resolveFirstParty(srcDir, file, imp.spec);
+  if (!target) return false;
+  const exports = clientExportsOf(srcDir, target);
+  return imp.imported === "*" ? exports.all || exports.names.size > 0 : exports.all || exports.names.has(imp.imported);
+}
+
+const ENUMERATING_OBJECT_METHODS = new Set(["entries", "keys", "values", "assign", "fromEntries", "getOwnPropertyNames", "getOwnPropertyDescriptors", "getOwnPropertySymbols"]);
+
+/** How a node that denotes a client reference is used, when that use reads into it; null when it is only rendered or passed on. */
+function misuseKind(node: ts.Node): "reading into" | "calling" | null {
+  const parent = node.parent;
+  if (!parent) return null;
+  if (ts.isPropertyAccessExpression(parent) && parent.expression === node) return "reading into";
+  if (ts.isElementAccessExpression(parent) && parent.expression === node) return "reading into";
+  if ((ts.isCallExpression(parent) || ts.isNewExpression(parent)) && parent.expression === node) return "calling";
+  if (ts.isTaggedTemplateExpression(parent) && parent.tag === node) return "calling";
+  if (ts.isVariableDeclaration(parent) && parent.initializer === node && !ts.isIdentifier(parent.name)) return "reading into"; // const { a } = X, const [a] = X
+  if (ts.isBinaryExpression(parent) && parent.right === node && parent.operatorToken.kind === ts.SyntaxKind.InKeyword) return "reading into";
+  if (ts.isBinaryExpression(parent) && parent.right === node && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken && (ts.isObjectLiteralExpression(parent.left) || ts.isArrayLiteralExpression(parent.left))) return "reading into"; // ({ a } = X)
+  if ((ts.isSpreadAssignment(parent) || ts.isSpreadElement(parent)) && parent.expression === node) return "reading into";
+  if ((ts.isForInStatement(parent) || ts.isForOfStatement(parent)) && parent.expression === node) return "reading into";
+  if (ts.isCallExpression(parent) && parent.arguments.includes(node as ts.Expression)) {
+    const callee = parent.expression;
+    if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && callee.expression.text === "Object" && ENUMERATING_OBJECT_METHODS.has(callee.name.text)) return "reading into";
+  }
+  return null;
+}
+
 /** One line per forbidden use of a client export in a source file that is not itself a client module. */
 export function clientReferenceMisuse(srcDir: string, file: string, source = readFileSync(file, "utf8")): string[] {
   if (declaresUseClient(source)) return [];
-  const findings: string[] = [];
-  const importFree = stripNonCode(source.replace(/^\s*(?:import|export)\s[\s\S]*?\sfrom\s+["'][^"']*["'];?/gm, (m) => m.replace(/[^\n]/g, " ")));
-  for (const { local, imported, spec } of namedImports(source)) {
-    const target = resolveFirstParty(srcDir, file, spec);
+  const sf = parse(file, source);
+  const refs = new Set<string>(); // local names that ARE client references
+  const namespaces = new Map<string, ClientExports>(); // `import * as C`: members that are client references
+  for (const imp of importsOf(sf)) {
+    const target = resolveFirstParty(srcDir, file, imp.spec);
     if (!target) continue;
     const exports = clientExportsOf(srcDir, target);
-    if (!exports.all && !exports.names.has(imported)) continue;
-    const id = local.replace(/\$/g, "\\$");
-    const lines = importFree.split("\n");
-    lines.forEach((line, i) => {
-      if (new RegExp(`(?<![\\w$.])${id}\\s*(?:\\?\\.|\\.(?!\\.\\.)|\\[)`).test(line)) findings.push(`${path.relative(srcDir, file)}:${i + 1}: ${local} is a client reference; reading into it throws on the server`);
-      else if (new RegExp(`(?<![\\w$.<])${id}\\s*\\(`).test(line) && !new RegExp(`(?:function|class)\\s+${id}\\b`).test(line)) findings.push(`${path.relative(srcDir, file)}:${i + 1}: ${local} is a client reference; calling it throws on the server`);
-    });
+    if (imp.imported === "*") {
+      if (exports.all || exports.names.size > 0) namespaces.set(imp.local, exports);
+    } else if (exports.all || exports.names.has(imp.imported)) refs.add(imp.local);
   }
+  if (refs.size === 0 && namespaces.size === 0) return [];
+
+  const rel = path.relative(srcDir, file);
+  const findings: string[] = [];
+  const report = (node: ts.Node, label: string, kind: "reading into" | "calling") => {
+    const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
+    findings.push(`${rel}:${line}: ${label} is a client reference; ${kind === "calling" ? "calling it" : "reading into it"} throws on the server`);
+  };
+  const visit = (node: ts.Node): void => {
+    if (ts.isImportDeclaration(node) || ts.isJsxClosingElement(node)) return; // an import binds; a closing tag repeats its opening tag
+    if (ts.isIdentifier(node) && refs.has(node.text)) {
+      const kind = misuseKind(node);
+      if (kind) report(node, node.text, kind);
+    } else if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression) && namespaces.has(node.expression.text)) {
+      const ns = namespaces.get(node.expression.text)!;
+      if (ns.all || ns.names.has(node.name.text)) {
+        const kind = misuseKind(node);
+        if (kind) report(node, `${node.expression.text}.${node.name.text}`, kind);
+      }
+    } else if (ts.isIdentifier(node) && namespaces.has(node.text)) {
+      // The namespace object itself enumerated or tested with `in`; plain member reads are handled above.
+      const parent = node.parent;
+      const enumerated = ts.isSpreadAssignment(parent) || ts.isSpreadElement(parent) || ts.isForInStatement(parent) || ts.isForOfStatement(parent) || (ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.InKeyword && parent.right === node) || (ts.isCallExpression(parent) && parent.arguments.includes(node as ts.Expression) && misuseKind(node) !== null);
+      if (enumerated) report(node, node.text, "reading into");
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
   return findings;
 }
 
