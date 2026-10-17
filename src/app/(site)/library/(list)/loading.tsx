@@ -1,16 +1,16 @@
 import { Skeleton } from "@/components/ui";
 
-// Mirrors the library page: same container, heading and one-line sub, and the same three-up card grid with a type
-// pill, title, byline and a footer line. Six cards is two full rows at the widest layout. Static fills, no pulse.
-function CardBlock() {
+// Mirrors the library page: same container, heading and one-line sub, then a ruled list of rows, each with a title,
+// two meta lines and a progress bar on the right. Static fills, no pulse.
+function RowBlock() {
   return (
-    <div className="card flex h-full flex-col p-6">
-      <Skeleton className="h-5 w-20 self-start" />
-      <Skeleton className="mt-4 h-6 w-4/5" />
-      <Skeleton className="mt-2 h-4 w-2/5" />
-      <div className="mt-auto pt-5">
-        <Skeleton className="h-3 w-3/5" />
+    <div className="flex flex-col gap-3 px-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <div className="min-w-0 flex-1">
+        <Skeleton className="h-5 w-3/5" />
+        <Skeleton className="mt-2 h-4 w-2/5" />
+        <Skeleton className="mt-2 h-4 w-1/3" />
       </div>
+      <Skeleton className="h-1.5 w-full sm:w-64 sm:shrink-0" />
     </div>
   );
 }
@@ -21,11 +21,11 @@ export default function LibraryLoading() {
       <span role="status" className="sr-only">Loading your library</span>
       <div aria-hidden="true">
         <Skeleton className="h-9 w-48" />
-        <Skeleton className="mt-2.5 h-4 w-72 max-w-full" />
-        <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }, (_, i) => (
+        <Skeleton className="mt-2.5 mb-6 h-4 w-72 max-w-full" />
+        <ul className="divide-y divide-line border-y border-line">
+          {Array.from({ length: 5 }, (_, i) => (
             <li key={i}>
-              <CardBlock />
+              <RowBlock />
             </li>
           ))}
         </ul>

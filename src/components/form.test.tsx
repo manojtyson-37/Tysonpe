@@ -7,6 +7,7 @@ import {
   Input,
   InputGroup,
   RadioCard,
+  CheckboxCard,
   Select,
   SubmitButton,
   Switch,
@@ -310,6 +311,70 @@ describe("RadioCard", () => {
     expect(html).toMatch(/<input[^>]*\sdisabled/);
     expect(html).toContain("peer-disabled:opacity-50");
     expect(html).toMatch(/^<label class="[^"]*col-span-2/);
+  });
+});
+
+describe("CheckboxCard", () => {
+  it("is a native checkbox under a label, with the selected look drawn from peer-checked, title and description", () => {
+    const html = render(<CheckboxCard name="a" value="1" title="Cash" description="An asset." defaultChecked />);
+    expect(html).toMatch(/^<label /);
+    expect(attr(html, "input", "type")).toBe("checkbox");
+    expect(attr(html, "input", "name")).toBe("a");
+    expect(attr(html, "input", "value")).toBe("1");
+    expect(attr(html, "input", "class")).toContain("peer");
+    expect(attr(html, "input", "class")).toContain("sr-only");
+    expect(html).toMatch(/<input[^>]*\schecked/);
+    expect(html).toContain("peer-checked:border-ink");
+    expect(html).toContain("peer-checked:bg-ink");
+    expect(html).toContain("peer-focus-visible:outline");
+    expect(html).toContain("Cash");
+    expect(html).toContain("An asset.");
+  });
+
+  it("draws a check icon (not a glyph) that only shows when checked", () => {
+    const html = render(<CheckboxCard name="a" value="1" title="Cash" />);
+    expect(html).toMatch(/<svg[^>]*aria-hidden="true"[^>]*class="[^"]*opacity-0[^"]*peer-checked:opacity-100/);
+    expect(html).not.toMatch(/[\u2713\u2714]/);
+  });
+
+  it("is not checked unless asked", () => {
+    expect(render(<CheckboxCard name="a" value="1" title="Cash" />)).not.toMatch(/<input[^>]*\schecked/);
+    expect(render(<CheckboxCard name="a" value="1" title="Cash" checked onChange={() => {}} />)).toMatch(/<input[^>]*\schecked/);
+  });
+
+  it("names the checkbox by the title and describes it by the description", () => {
+    const html = render(<CheckboxCard name="g" value="a" title="Debtors" description="Owed to you" />);
+    const input = html.match(/<input\b[^>]*>/)?.[0] ?? "";
+    const labelledby = input.match(/aria-labelledby="([^"]*)"/)?.[1];
+    const describedby = input.match(/aria-describedby="([^"]*)"/)?.[1];
+    expect(html.match(new RegExp(`id="${labelledby}"[^>]*>Debtors<`))).not.toBeNull();
+    expect(html.match(new RegExp(`id="${describedby}"[^>]*>Owed to you<`))).not.toBeNull();
+  });
+
+  it("renders trailing after the text, drops the aria links with no title or description, and keeps the touch floor", () => {
+    const html = render(<CheckboxCard name="g" value="a" title="Cash" trailing={<span>Asset</span>} />);
+    expect(html.indexOf("Cash")).toBeLessThan(html.indexOf("Asset"));
+    expect(html).toContain("pointer-coarse:min-h-11");
+    const bare = render(<CheckboxCard name="w" value="1">Plain</CheckboxCard>);
+    expect(bare).not.toContain("aria-labelledby");
+    expect(bare).not.toContain("aria-describedby");
+  });
+
+  it("passes disabled through, dims the card, and merges className on the label", () => {
+    const html = render(<CheckboxCard name="g" value="a" title="T" disabled className="col-span-2" />);
+    expect(html).toMatch(/<input[^>]*\sdisabled/);
+    // the card body and the check box each dim: two spans, so one surviving class cannot satisfy this
+    expect(html.match(/peer-disabled:opacity-50/g)).toHaveLength(2);
+    expect(html).toContain("peer-disabled:cursor-not-allowed");
+    expect(html).toMatch(/^<label class="[^"]*col-span-2/);
+  });
+
+  it("uses explicit transition properties and no hover motion", () => {
+    const html = render(<CheckboxCard name="g" value="a" title="T" />);
+    expect(html).toContain("transition-colors");
+    expect(html).not.toMatch(/\btransition(?![-\w])/);
+    expect(html).not.toContain("scale");
+    expect(html).not.toContain("translate");
   });
 });
 

@@ -120,12 +120,14 @@ describe("console loading", () => {
 describe("library loading", () => {
   const html = render(<LibraryLoading />);
 
-  it("mirrors the library page: same container, heading and sub lines, six cards in the three-up grid", () => {
+  it("mirrors the library page: same container, heading and sub lines, five rows in a ruled list (no cards)", () => {
     expect(html).toMatch(/^<div class="mx-auto max-w-6xl px-4 py-10 sm:px-6">/);
-    expect(html).toContain("mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3");
-    expect(count(html, "<li>")).toBe(6);
-    expect(count(html, 'class="card flex h-full flex-col p-6"')).toBe(6);
-    expect(count(html, "mt-auto pt-5")).toBe(6);
+    expect(html).toContain('<ul class="divide-y divide-line border-y border-line">');
+    expect(count(html, "<li>")).toBe(5);
+    expect(count(html, "px-3 py-4")).toBe(5); // the row padding the page uses
+    expect(count(html, "sm:w-64")).toBe(5); // the progress bar slot
+    expect(html).not.toContain('class="card');
+    expect(html).not.toContain("lg:grid-cols-3");
   });
 
   it("is static and hidden from assistive tech, with one status line", () => {

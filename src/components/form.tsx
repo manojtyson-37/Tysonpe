@@ -12,7 +12,7 @@ import {
 import { useFormStatus } from "react-dom";
 import type { FormState } from "@/app/actions/auth";
 import { Button, type ButtonSize, type ButtonVariant } from "./ui/button";
-import { IconChevronDown } from "./icons";
+import { IconCheck, IconChevronDown } from "./icons";
 
 type State = (FormState & { values?: Record<string, string> }) | undefined;
 const Ctx = createContext<State>(undefined);
@@ -403,6 +403,72 @@ export function RadioCard({ title, description, trailing, children, className, .
           "absolute left-4 top-[1.125rem] size-4 rounded-full border border-muted bg-surface",
           "transition-colors duration-(--dur-fast) ease-(--ease-standard)",
           "peer-checked:border-[5px] peer-checked:border-ink peer-disabled:opacity-50",
+        )}
+      />
+    </label>
+  );
+}
+
+export type CheckboxCardProps = Omit<ComponentProps<"input">, "type" | "title" | "children" | "prefix"> & {
+  title?: ReactNode;
+  description?: ReactNode;
+  /** Right-aligned content, e.g. a badge or a price. */
+  trailing?: ReactNode;
+  /** Free content under the description. */
+  children?: ReactNode;
+  /** Lands on the outer <label> so grid placement works. */
+  className?: string;
+};
+
+/**
+ * RadioCard's multi-select sibling: the same card, a native checkbox underneath (sr-only), and the selected look
+ * drawn from `:checked` through peers (a filled ink box with a check, so it never relies on colour alone). Use it
+ * where several options can be on at once; use RadioCard where exactly one can.
+ */
+export function CheckboxCard({ title, description, trailing, children, className, ...rest }: CheckboxCardProps) {
+  const uid = useId();
+  const titleId = `${uid}-title`;
+  const descId = `${uid}-desc`;
+  return (
+    <label className={join("relative block cursor-pointer", className)}>
+      <input
+        {...rest}
+        type="checkbox"
+        className="peer sr-only"
+        aria-labelledby={title ? titleId : undefined}
+        aria-describedby={description ? descId : undefined}
+      />
+      <span
+        className={join(
+          "flex items-start justify-between gap-3 rounded-card border border-line bg-surface py-4 pl-11 pr-4 pointer-coarse:min-h-11",
+          "transition-colors duration-(--dur-fast) ease-(--ease-standard)",
+          "peer-enabled:hover:border-line-strong",
+          "peer-checked:border-ink peer-checked:bg-surface-2",
+          "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink",
+          "peer-disabled:cursor-not-allowed peer-disabled:opacity-50",
+        )}
+      >
+        <span className="min-w-0 flex-1">
+          {title ? <span id={titleId} className="block text-sm font-semibold text-ink">{title}</span> : null}
+          {description ? <span id={descId} className="mt-0.5 block text-sm text-muted">{description}</span> : null}
+          {children}
+        </span>
+        {trailing ? <span className="shrink-0">{trailing}</span> : null}
+      </span>
+      <span
+        aria-hidden="true"
+        className={join(
+          "absolute left-4 top-[1.125rem] size-4 rounded-sm border border-muted bg-surface",
+          "transition-colors duration-(--dur-fast) ease-(--ease-standard)",
+          "peer-checked:border-ink peer-checked:bg-ink peer-disabled:opacity-50",
+        )}
+      />
+      <IconCheck
+        size={16}
+        className={join(
+          "absolute left-4 top-[1.125rem] text-brand-ink opacity-0",
+          "transition-opacity duration-(--dur-fast) ease-(--ease-standard)",
+          "peer-checked:opacity-100",
         )}
       />
     </label>

@@ -2,21 +2,24 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { completeLesson } from "@/app/actions/learning";
+import { IconArrowLeft, IconArrowRight, IconCheck, IconExternal, IconLock } from "@/components/icons";
 import { QuizPlayer } from "@/components/QuizPlayer";
+import { Button, ButtonLink, Callout, Progress } from "@/components/ui";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { formatDateTime } from "@/lib/format";
 import type { DripState } from "@/lib/learning/drip";
 import { loadCourse, loadLesson, type OutlineLesson } from "@/lib/learning/service";
 import { toEmbedUrl } from "@/lib/validation";
 
 export const metadata: Metadata = { title: "Learn" };
 
-const fmt = (d: Date) =>
-  new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }).format(d);
+// Focus ring and touch floor shared by the small text links on this screen.
+const LINK = "inline-flex items-center gap-1.5 text-sm font-medium pointer-coarse:min-h-11 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink";
 
 function lockText(s: DripState): string {
   if (s.unlocked) return "";
-  if (s.reason === "date") return `Opens ${fmt(s.unlockAt)}`;
+  if (s.reason === "date") return `Opens ${formatDateTime(s.unlockAt, { year: true })}`;
   if (s.reason === "after_previous") return "Finish the previous lesson to unlock";
   return "Not available";
 }
@@ -51,57 +54,67 @@ export default async function LearnPage({ params, searchParams }: PageProps<"/li
   const nextHref = next ? `/library/${productId}?lesson=${next.id}` : null;
   // Fixed messages keyed by a code: the URL can't be used to put arbitrary text in an alert box.
   const NOTICES: Record<string, string> = { locked: "That lesson isn't available yet.", unavailable: "That lesson isn't available." };
-  const notice = typeof sp.notice === "string" ? (NOTICES[sp.notice] ?? null) : null;
+  // Own keys only: a bare lookup would let ?notice=constructor (or toString, __proto__) resolve to an Object.prototype member.
+  const notice = typeof sp.notice === "string" && Object.hasOwn(NOTICES, sp.notice) ? NOTICES[sp.notice] : null;
   const safe = (u: string) => (/^https?:\/\//i.test(u) ? u : "#"); // render-time guard in addition to write-time validation
   const { progress } = course;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <Link href="/library" className="text-sm font-medium text-muted hover:text-ink">← My library</Link>
-      <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold sm:text-3xl">{course.product.title}</h1>
-          <p className="text-sm text-muted">by {course.product.creator.displayName}</p>
+      <Link href="/library" className={`${LINK} text-muted transition-colors duration-(--dur-fast) ease-(--ease-standard) hover:text-ink`}>
+        <IconArrowLeft size={16} />
+        My library
+      </Link>
+      <div className="mt-3 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold sm:text-3xl">{course.product.title}</h1>
+          <p className="mt-1 text-sm text-muted">by {course.product.creator.displayName}</p>
         </div>
-        <div className="flex items-center gap-4">
-          <Link className="text-sm font-semibold text-brand hover:underline" href={`/c/${course.product.creator.handle}/community`}>Community</Link>
-          {order && <Link className="text-sm font-semibold text-brand hover:underline" href={`/orders/${order.orderId}/invoice`}>Invoice</Link>}
+        <div className="flex items-center gap-5">
+          <Link className={`${LINK} underline-offset-4 hover:underline`} href={`/c/${course.product.creator.handle}/community`}>Community</Link>
+          {order && <Link className={`${LINK} underline-offset-4 hover:underline`} href={`/orders/${order.orderId}/invoice`}>Invoice</Link>}
         </div>
       </div>
 
       {progress.total > 0 && (
-        <div className="mt-5">
-          <div className="flex items-center justify-between text-sm">
-            <span className="font-medium">{progress.done} of {progress.total} lessons complete</span>
-            <span className="tabular-nums text-muted">{progress.pct}%</span>
-          </div>
-          <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-valuenow={progress.pct} aria-valuemin={0} aria-valuemax={100} aria-label="Course progress">
-            <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${progress.pct}%` }} />
-          </div>
+        <div className="mt-5 flex items-center gap-3">
+          <Progress
+            className="flex-1"
+            value={progress.done}
+            max={progress.total}
+            label="Course progress"
+            valueText={`${progress.done} of ${progress.total} lessons complete`}
+            tone={progress.complete ? "good" : "ink"}
+          />
+          <span className="text-sm font-medium tabular-nums">{progress.pct}%</span>
         </div>
       )}
 
       {progress.complete && (
-        <div className="mt-5 rounded-2xl border border-good/30 bg-good-soft px-5 py-4">
-          <p className="font-bold text-good">🎉 You finished this course!</p>
-          {course.certificate ? (
-            <Link href={`/certificates/${course.certificate.publicId}`} className="btn btn-primary btn-sm mt-3">View your certificate</Link>
-          ) : (
-            <p className="mt-1 text-sm text-muted">Nice work. Keep revisiting any lesson whenever you like.</p>
-          )}
-        </div>
+        <Callout
+          tone="good"
+          className="mt-5"
+          action={
+            course.certificate ? (
+              <ButtonLink href={`/certificates/${course.certificate.publicId}`} size="sm">View your certificate</ButtonLink>
+            ) : undefined
+          }
+        >
+          <p>You finished this course.</p>
+          {!course.certificate && <p className="mt-0.5 font-normal">Keep revisiting any lesson whenever you like.</p>}
+        </Callout>
       )}
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[300px_minmax(0,1fr)]">
         <nav aria-label="Course content" className="lg:sticky lg:top-24 lg:self-start">
           {course.lessons.length === 0 ? (
-            <p className="card p-5 text-sm text-muted">The creator hasn&apos;t added any content yet. It will show up here as soon as they do.</p>
+            <p className="rounded-card border border-line bg-surface p-5 text-sm text-muted">The creator hasn&apos;t added any content yet. It will show up here as soon as they do.</p>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-5">
               {course.groups.map((g) => (
                 <div key={g.id ?? "loose"}>
-                  {g.title && <h2 className="mb-1.5 px-1 text-xs font-bold uppercase tracking-wide text-muted">{g.title}</h2>}
-                  <ul className="card divide-y divide-line overflow-hidden">
+                  {g.title && <h2 className="t-label mb-1.5 px-1">{g.title}</h2>}
+                  <ul className="divide-y divide-line border-y border-line">
                     {g.lessons.map((l) => {
                       const active = l.id === current?.id;
                       const locked = !l.state.unlocked;
@@ -110,13 +123,16 @@ export default async function LearnPage({ params, searchParams }: PageProps<"/li
                           <Link
                             href={`/library/${productId}?lesson=${l.id}`}
                             aria-current={active ? "page" : undefined}
-                            className={`flex items-start gap-3 px-3.5 py-3 text-sm transition ${active ? "bg-brand-soft" : "hover:bg-surface-2"}`}
+                            className={`flex items-start gap-3 border-l-2 py-3 pl-3 pr-3.5 text-sm pointer-coarse:min-h-11 transition-colors duration-(--dur-fast) ease-(--ease-standard) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ink ${active ? "border-ink bg-surface-2" : "border-transparent hover:bg-surface-2"}`}
                           >
-                            <span aria-hidden className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] ${l.completed ? "bg-good text-bg" : locked ? "bg-surface-2 text-muted" : "border border-line"}`}>
-                              {l.completed ? "✓" : locked ? "🔒" : ""}
+                            <span aria-hidden className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full ${l.completed ? "bg-ink text-bg" : locked ? "text-muted" : "border border-line-strong"}`}>
+                              {l.completed ? <IconCheck size={12} /> : locked ? <IconLock size={16} /> : null}
                             </span>
                             <span className="min-w-0">
-                              <span className={`block truncate ${active ? "font-semibold" : "font-medium"} ${locked ? "text-muted" : ""}`}>{l.title}</span>
+                              <span className={`block truncate ${active ? "font-semibold" : "font-medium"} ${locked ? "text-muted" : ""}`}>
+                                {l.completed && <span className="sr-only">Completed: </span>}
+                                {l.title}
+                              </span>
                               <span className="block text-xs text-muted">
                                 {l.kind === "quiz" ? "Quiz" : l.kind}{!l.required && " · optional"}{locked && ` · ${lockText(l.state)}`}
                               </span>
@@ -133,18 +149,25 @@ export default async function LearnPage({ params, searchParams }: PageProps<"/li
         </nav>
 
         <article className="min-w-0">
-          {notice && <p role="alert" className="mb-4 rounded-xl bg-bad-soft px-4 py-3 text-sm font-medium text-bad">{notice}</p>}
+          {notice && <Callout tone="bad" className="mb-4">{notice}</Callout>}
           {!lesson ? null : lesson.locked ? (
-            <div className="card p-8 text-center">
-              <p aria-hidden className="text-3xl">🔒</p>
-              <h2 className="mt-3 text-xl font-bold">{lesson.title}</h2>
-              <p className="mt-1 text-muted">{lockText(lesson.state)}</p>
+            <div className="card flex items-start gap-3 p-6">
+              <IconLock size={20} className="mt-1 shrink-0 text-muted" />
+              <div className="min-w-0">
+                <h2 className="text-xl font-bold">{lesson.title}</h2>
+                <p className="mt-1 text-sm text-muted">{lockText(lesson.state)}</p>
+              </div>
             </div>
           ) : (
             <div className="card p-5 sm:p-7">
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <h2 className="flex-1 text-xl font-bold sm:text-2xl">{lesson.title}</h2>
-                {lesson.completed && <span className="badge badge-good">Completed</span>}
+                {lesson.completed && (
+                  <span className="inline-flex items-center gap-1 text-sm font-medium text-good">
+                    <IconCheck size={16} />
+                    Completed
+                  </span>
+                )}
               </div>
 
               <div className="mt-5">
@@ -152,14 +175,18 @@ export default async function LearnPage({ params, searchParams }: PageProps<"/li
                   (() => {
                     const embed = toEmbedUrl(lesson.url);
                     return embed ? (
-                      <div className="relative aspect-video overflow-hidden rounded-xl bg-black">
+                      <div className="relative aspect-video overflow-hidden rounded-card bg-ink">
                         <iframe src={embed} title={lesson.title} className="h-full w-full" allow="fullscreen; picture-in-picture" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen />
                         {/* Deterrent watermark: leaked recordings trace back to the account. */}
-                        <span aria-hidden className="pointer-events-none absolute left-3 top-3 select-none text-xs font-semibold text-white/35 [text-shadow:0_0_2px_#000]">{user.email}</span>
-                        <span aria-hidden className="pointer-events-none absolute bottom-12 right-3 select-none text-xs font-semibold text-white/35 [text-shadow:0_0_2px_#000]">{user.email}</span>
+                        <span aria-hidden className="pointer-events-none absolute left-3 top-3 select-none text-xs font-semibold text-white/35 [text-shadow:0_0_2px_var(--ink)]">{user.email}</span>
+                        <span aria-hidden className="pointer-events-none absolute bottom-12 right-3 select-none text-xs font-semibold text-white/35 [text-shadow:0_0_2px_var(--ink)]">{user.email}</span>
                       </div>
                     ) : (
-                      <a href={safe(lesson.url)} target="_blank" rel="noopener noreferrer" className="btn btn-secondary">Watch video ↗</a>
+                      <a href={safe(lesson.url)} target="_blank" rel="noopener noreferrer" className="btn btn-secondary">
+                        Watch video
+                        <IconExternal size={16} />
+                        <span className="sr-only">(opens in a new tab)</span>
+                      </a>
                     );
                   })()
                 ) : lesson.kind === "text" ? (
@@ -173,7 +200,9 @@ export default async function LearnPage({ params, searchParams }: PageProps<"/li
                   )
                 ) : (
                   <a href={safe(lesson.url)} target="_blank" rel="noopener noreferrer" className="btn btn-secondary">
-                    {lesson.kind === "pdf" ? "Open PDF" : "Open link"} ↗
+                    {lesson.kind === "pdf" ? "Open PDF" : "Open link"}
+                    <IconExternal size={16} />
+                    <span className="sr-only">(opens in a new tab)</span>
                   </a>
                 )}
               </div>
@@ -181,10 +210,15 @@ export default async function LearnPage({ params, searchParams }: PageProps<"/li
               {lesson.kind !== "quiz" && (
                 <div className="mt-7 flex flex-wrap items-center gap-3 border-t border-line pt-5">
                   {lesson.completed ? (
-                    nextHref && <Link href={nextHref} className="btn btn-primary">Next lesson →</Link>
+                    nextHref && (
+                      <ButtonLink href={nextHref}>
+                        Next lesson
+                        <IconArrowRight size={16} />
+                      </ButtonLink>
+                    )
                   ) : (
                     <form action={completeLesson.bind(null, lesson.id)}>
-                      <button className="btn btn-primary" type="submit">{idx < all.length - 1 ? "Mark complete & continue" : "Mark complete"}</button>
+                      <Button type="submit">{idx < all.length - 1 ? "Mark complete & continue" : "Mark complete"}</Button>
                     </form>
                   )}
                 </div>

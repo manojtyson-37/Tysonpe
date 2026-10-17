@@ -439,14 +439,13 @@ function modulesWalkedBySomeTest(): Set<string> {
 
 // Routes that import a client module and have NO functionProps walk yet. This is recorded debt, not a verdict: every
 // entry is an unverified server/client boundary. The test below fails both ways, so the list can only shrink by adding
-// a walk (like checkout/[productId], checkout/pay/[orderId] and orders/[orderId]/invoice, which are walked in src/app/*.test.tsx).
+// a walk (like checkout/[productId], checkout/pay/[orderId], orders/[orderId]/invoice and library/[productId], which are walked in src/app/*.test.tsx).
 const UNWALKED_ROUTES: string[] = [
   "app/(site)/c/[handle]/community/[channel]/p/[postId]/page.tsx",
   "app/(site)/c/[handle]/community/[channel]/page.tsx",
   "app/(site)/c/[handle]/community/layout.tsx",
   "app/(site)/certificates/[publicId]/page.tsx",
   "app/(site)/demo/page.tsx",
-  "app/(site)/library/[productId]/page.tsx",
   "app/(site)/login/page.tsx",
   "app/(site)/page.tsx",
   "app/(site)/signup/page.tsx",
