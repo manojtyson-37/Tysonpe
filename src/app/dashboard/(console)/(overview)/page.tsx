@@ -70,7 +70,9 @@ export default async function Overview() {
 
       <div className="-mt-2 mb-6 max-w-md">
         <p className="t-label">Your store link</p>
-        <CopyLink path={storeUrl} />
+        <div className="mt-2">
+          <CopyLink path={storeUrl} />
+        </div>
       </div>
 
       <StatStrip
@@ -90,70 +92,68 @@ export default async function Overview() {
         <BarChart className="mt-4" data={series} label={chartLabel} positiveMoney />
       </section>
 
-      <div className={`mt-10 grid gap-x-10 gap-y-10 ${setupIncomplete ? "lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]" : ""}`}>
-        <section aria-labelledby="overview-recent" className="min-w-0">
+      {setupIncomplete && (
+        <section aria-labelledby="overview-setup" className="mt-10 min-w-0">
           <div className="flex items-baseline justify-between gap-3">
-            <h2 id="overview-recent" className="text-base font-semibold">Recent orders</h2>
-            <Link href="/dashboard/orders" className="text-sm font-medium underline-offset-4 hover:underline">View all</Link>
+            <h2 id="overview-setup" className="text-base font-semibold">Get set up</h2>
+            <p className="text-sm text-muted tabular-nums">{doneCount} of {steps.length} done</p>
           </div>
-          <Table caption="Recent orders" stack className="mt-2">
-            <thead>
-              <tr>
-                <Th>Product</Th>
-                <Th>Learner</Th>
-                <Th>Status</Th>
-                <Th align="right">Amount</Th>
-                <Th>Date</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {recent.length === 0 ? (
-                <EmptyRow
-                  colSpan={5}
-                  title="No orders yet"
-                  body="Share your store link to get your first sale."
-                  action={<ButtonLink variant="secondary" href={storeUrl}>View your store</ButtonLink>}
-                />
-              ) : (
-                recent.map((o) => (
-                  <Tr key={o.id}>
-                    <Td label="Product" className="font-medium"><span className="block min-w-0 max-w-56 truncate">{o.product.title}</span></Td>
-                    <Td label="Learner"><span className="block min-w-0 max-w-40 truncate">{o.user.name}</span></Td>
-                    <Td label="Status"><StatusBadge status={o.status} /></Td>
-                    <MoneyCell label="Amount" paise={o.totalPaise} />
-                    <DateCell label="Date" date={o.createdAt} />
-                  </Tr>
-                ))
-              )}
-            </tbody>
-          </Table>
+          <ol className="mt-2 divide-y divide-line border-y border-line">
+            {steps.map((s) => (
+              <li key={s.label} className="flex items-center gap-3 py-3 text-sm">
+                <span
+                  aria-hidden="true"
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${s.done ? "bg-good text-surface" : "border border-line-strong"}`}
+                >
+                  {s.done && <IconCheck size={12} />}
+                </span>
+                <Link href={s.href} className={s.done ? "text-muted hover:text-ink" : "font-medium hover:underline"}>
+                  <span className="sr-only">{s.done ? "Done: " : "To do: "}</span>
+                  {s.label}
+                </Link>
+              </li>
+            ))}
+          </ol>
         </section>
+      )}
 
-        {setupIncomplete && (
-          <section aria-labelledby="overview-setup" className="min-w-0">
-            <div className="flex items-baseline justify-between gap-3">
-              <h2 id="overview-setup" className="text-base font-semibold">Get set up</h2>
-              <p className="text-sm text-muted tabular-nums">{doneCount} of {steps.length} done</p>
-            </div>
-            <ol className="mt-2 divide-y divide-line border-y border-line">
-              {steps.map((s) => (
-                <li key={s.label} className="flex items-center gap-3 py-3 text-sm">
-                  <span
-                    aria-hidden="true"
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${s.done ? "bg-good text-surface" : "border border-line-strong"}`}
-                  >
-                    {s.done && <IconCheck size={12} />}
-                  </span>
-                  <Link href={s.href} className={s.done ? "text-muted hover:text-ink" : "font-medium hover:underline"}>
-                    <span className="sr-only">{s.done ? "Done: " : "To do: "}</span>
-                    {s.label}
-                  </Link>
-                </li>
-              ))}
-            </ol>
-          </section>
-        )}
-      </div>
+      <section aria-labelledby="overview-recent" className="mt-10 min-w-0">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 id="overview-recent" className="text-base font-semibold">Recent orders</h2>
+          <Link href="/dashboard/orders" className="text-sm font-medium underline-offset-4 hover:underline">View all</Link>
+        </div>
+        <Table caption="Recent orders" stack className="mt-2">
+          <thead>
+            <tr>
+              <Th>Product</Th>
+              <Th>Learner</Th>
+              <Th>Status</Th>
+              <Th align="right">Amount</Th>
+              <Th>Date</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {recent.length === 0 ? (
+              <EmptyRow
+                colSpan={5}
+                title="No orders yet"
+                body="Share your store link to get your first sale."
+                action={<ButtonLink variant="secondary" href={storeUrl}>View your store</ButtonLink>}
+              />
+            ) : (
+              recent.map((o) => (
+                <Tr key={o.id}>
+                  <Td label="Product" className="font-medium"><span className="block min-w-0 max-w-56 truncate">{o.product.title}</span></Td>
+                  <Td label="Learner"><span className="block min-w-0 max-w-40 truncate">{o.user.name}</span></Td>
+                  <Td label="Status"><StatusBadge status={o.status} /></Td>
+                  <MoneyCell label="Amount" paise={o.totalPaise} />
+                  <DateCell label="Date" date={o.createdAt} />
+                </Tr>
+              ))
+            )}
+          </tbody>
+        </Table>
+      </section>
     </>
   );
 }

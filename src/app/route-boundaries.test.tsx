@@ -99,11 +99,13 @@ describe("error boundary", () => {
 describe("console loading", () => {
   const html = render(<ConsoleLoading />);
 
-  it("mirrors the Overview rhythm: header, store link, ruled four-stat strip, chart, six order rows beside a checklist, no cards", () => {
+  it("mirrors the Overview rhythm: header, store link, ruled four-stat strip, chart, checklist, then six order rows, one column, no cards", () => {
     expect(html).toContain("grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-4 sm:flex"); // the StatStrip rule
-    expect(html).toContain("mt-10 grid gap-x-10 gap-y-10 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]");
+    expect(html).not.toContain("lg:grid-cols"); // one column: the checklist band sits above the orders, as on the page
+    expect(count(html, '<div class="mt-10">')).toBe(2); // checklist band, then orders
+    expect(html.indexOf("h-5 w-24")).toBeLessThan(html.indexOf("h-5 w-28")); // checklist heading before orders heading
     expect(count(html, "h-8 w-28")).toBe(4); // one value block per stat
-    expect(count(html, "h-52 w-full")).toBe(1); // the chart
+    expect(count(html, "h-48 w-full")).toBe(1); // the chart
     expect(count(html, "flex items-center justify-between gap-3 py-3")).toBe(6); // order rows
     expect(count(html, "h-5 w-5") + count(html, "width:20px;height:20px")).toBe(3); // checklist dots
     expect(count(html, "card")).toBe(0); // ruled with hairlines, like the page

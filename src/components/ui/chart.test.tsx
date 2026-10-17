@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToStaticMarkup, renderToString } from "react-dom/server";
 import { computeTicks, BarChart, Sparkline } from "./chart";
+import { formatINR } from "@/lib/money";
 import { BarChart as BarChartFromUi, Sparkline as SparklineFromUi } from "@/components/ui";
 
 const render = (el: React.ReactElement) => renderToStaticMarkup(el);
+const count = (html: string, needle: string) => html.split(needle).length - 1;
 
 // ── computeTicks (pure) ──────────────────────────────────────────────────────
 
@@ -101,6 +103,112 @@ describe("BarChart SSR", () => {
   it("uses brand/ink fill class by default", () => {
     const html = render(<BarChart data={data} label="Revenue" />);
     expect(html).toContain("var(--color-brand)");
+  });
+});
+
+// ── BarChart axes, titles and geometry (SSR) ────────────────────────────────
+
+describe("BarChart axes and markup", () => {
+  // 29 Oct .. 11 Nov: 14 days that cross a month boundary.
+  const days = Array.from({ length: 14 }, (_, i) => {
+    const d = 29 + i;
+    return { label: d <= 31 ? `${d} Oct` : `${d - 31} Nov`, value: (i + 1) * 10000 };
+  });
+  const render14 = () => render(<BarChart data={days} label="Revenue" positiveMoney />);
+  // Each x-axis row runs from its marker to the next marker (or the sr-only table).
+  const axisRows = (html: string) =>
+    html
+      .split("data-chart-x=")
+      .slice(1)
+      .map((r) => r.split("<table")[0]);
+  const spans = (row: string) => [...row.matchAll(/<span[^>]*>([^<]*)<\/span>/g)].map((m) => m[1]);
+
+  it("draws no SVG <text>: axis labels are HTML", () => {
+    expect(render14()).not.toContain("<text");
+  });
+
+  it("y-axis labels are HTML at the 12px meta floor (text-xs), tabular and muted", () => {
+    const html = render14();
+    const y = html.match(/<div[^>]*data-chart-y[^>]*>.*?<\/div>(?=<svg)/)![0];
+    expect(y).toContain("text-xs");
+    expect(y).toContain("tabular-nums");
+    expect(y).toContain("text-muted");
+    expect(y).toContain("₹");
+    expect(y).toContain('aria-hidden="true"');
+  });
+
+  it("x-axis labels are HTML at text-xs; the day number alone, with the month on the first label and at a month change", () => {
+    const rows = axisRows(render14());
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row).toContain("text-xs");
+      expect(row).toContain("tabular-nums");
+    }
+    expect(spans(rows[rows.length - 1])).toEqual(["29 Oct", "30", "31", "1 Nov", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"]);
+  });
+
+  it("thins to every 2nd label on narrow screens, always keeping the last, and re-derives the month for the labels it keeps", () => {
+    const rows = axisRows(render14());
+    expect(rows).toHaveLength(2);
+    // Indexes 13, 11, ... 1 are kept: 30 Oct, 1 Nov (month change), 3 ... 11.
+    expect(spans(rows[0])).toEqual(["30 Oct", "1 Nov", "3", "5", "7", "9", "11"]);
+    expect(rows[0]).toContain("sm:hidden");
+    expect(rows[1]).toContain("hidden sm:");
+  });
+
+  it("renders one axis row when everything fits at every width", () => {
+    const html = render(<BarChart data={days.slice(0, 5)} label="Revenue" />);
+    expect(axisRows(html)).toHaveLength(1);
+    expect(html).not.toContain("sm:hidden");
+  });
+
+  it("leaves non 'D Mon' labels as they are", () => {
+    const html = render(<BarChart data={[{ label: "Jan", value: 1 }, { label: "Feb", value: 2 }]} label="Revenue" />);
+    expect(spans(axisRows(html)[0])).toEqual(["Jan", "Feb"]);
+  });
+
+  it("has one <rect> per datum, no rx, a stretch-to-fit viewBox, and non-scaling gridlines", () => {
+    const html = render14();
+    expect(count(html, "<rect")).toBe(14);
+    expect(html).not.toMatch(/\brx=/);
+    expect(html).toContain('preserveAspectRatio="none"');
+    expect(html).toMatch(/viewBox="0 0 \d+ 100"/);
+    expect(html).toContain('vector-effect="non-scaling-stroke"');
+    expect(html).toMatch(/<svg[^>]*class="[^"]*h-40[^"]*w-full/);
+    expect(html).not.toMatch(/<svg[^>]*\sheight="/);
+  });
+
+  it("bars grow with the value and stay inside the plot", () => {
+    const hs = [...render14().matchAll(/<rect[^>]*height="([\d.]+)"/g)].map((m) => Number(m[1]));
+    expect(hs).toHaveLength(14);
+    for (let i = 1; i < hs.length; i++) expect(hs[i]).toBeGreaterThan(hs[i - 1]);
+    for (const h of hs) expect(h).toBeLessThanOrEqual(100);
+  });
+
+  it("every <title> is one string: no <!-- --> text-node separator in the hydrating markup", () => {
+    const html = renderToString(<BarChart data={days} label="Revenue" />);
+    const titles = [...html.matchAll(/<title[^>]*>(.*?)<\/title>/g)].map((m) => m[1]);
+    expect(titles).toHaveLength(15); // chart + 14 bars
+    for (const t of titles) expect(t).not.toContain("<!--");
+    expect(titles).toContain("29 Oct: " + formatINR(10000));
+  });
+
+  it("keeps per-bar focusable image groups and the sr-only table", () => {
+    const html = render14();
+    expect(count(html, 'tabindex="0"')).toBe(14);
+    expect(html).toContain('aria-label="29 Oct: ' + formatINR(10000) + '"');
+    expect(count(html, "<tr><td>")).toBe(14);
+    expect(html).toContain("<caption>Revenue</caption>");
+  });
+
+  it("an all-zero series still renders: one baseline gridline and flat bars", () => {
+    const html = render(<BarChart data={days.map((d) => ({ ...d, value: 0 }))} label="Revenue" />);
+    expect(count(html, "<rect")).toBe(14);
+    expect(count(html, "<line")).toBe(1);
+  });
+
+  it("empty data renders no bars and does not throw", () => {
+    expect(count(render(<BarChart data={[]} label="Revenue" />), "<rect")).toBe(0);
   });
 });
 

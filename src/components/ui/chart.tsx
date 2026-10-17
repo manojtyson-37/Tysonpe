@@ -59,11 +59,58 @@ export interface ChartDatum {
 
 // ── BarChart ─────────────────────────────────────────────────────────────────
 
-const BAR_PADDING = 44; // left margin for y-axis labels
-const BOTTOM_PADDING = 32; // height for x-axis labels
-const TOP_PADDING = 8;
-const CHART_HEIGHT = 200;
-const CHART_WIDTH = 480;
+// The plot is an SVG stretched to its container (preserveAspectRatio="none"), so it always fills the width and its
+// height is plain CSS (h-40). Text never lives in the SVG: it would scale with the stretch and drop below 12px on a
+// phone. Axis labels are HTML at text-xs instead. Bars sit in 10-wide slots (6 wide, centred) on a 0..100 y scale.
+const SLOT = 10;
+const BAR_W = 6;
+const PLOT_H = 100;
+const MIN_BAR_H = 1.25; // about 2px at the h-40 plot height, so a zero day still shows a baseline stub
+
+/** Labels that fit on a phone (~22px per label at 390) and at sm and up (~39px). Longer series thin out further. */
+const NARROW_MAX_LABELS = 7;
+const WIDE_MAX_LABELS = 14;
+
+/** Keep every `step`th label counting back from the last, so the newest day is always shown. */
+function keepEvery(count: number, step: number): boolean[] {
+  return Array.from({ length: count }, (_, i) => (count - 1 - i) % step === 0);
+}
+
+/** "4 Oct" -> { day: "4", month: "Oct" }. Anything else is shown whole, with no month. */
+function splitLabel(label: string): { day: string; month: string | null } {
+  const m = /^(\d{1,2})\s+(\S+)$/.exec(label);
+  return m ? { day: m[1], month: m[2] } : { day: label, month: null };
+}
+
+/** Axis text for the kept labels: the day, plus the month on the first one and wherever the month changes. */
+function axisTexts(data: ChartDatum[], keep: boolean[]): (string | null)[] {
+  let prevMonth: string | null | undefined;
+  return data.map((d, i) => {
+    if (!keep[i]) return null;
+    const { day, month } = splitLabel(d.label);
+    const showMonth = month !== null && (prevMonth === undefined || month !== prevMonth);
+    prevMonth = month;
+    return showMonth ? `${day} ${month}` : day;
+  });
+}
+
+function XAxis({ data, step, className }: { data: ChartDatum[]; step: number; className: string }) {
+  const texts = axisTexts(data, keepEvery(data.length, step));
+  return (
+    <div
+      data-chart-x=""
+      aria-hidden="true"
+      className={`${className} mt-2 text-xs tabular-nums text-muted`}
+      style={{ gridTemplateColumns: `repeat(${Math.max(data.length, 1)}, minmax(0, 1fr))` }}
+    >
+      {data.map((d, i) => (
+        <div key={d.label} className="flex min-w-0 justify-center">
+          {texts[i] !== null && <span className="whitespace-nowrap leading-4">{texts[i]}</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function BarChart({
   data,
@@ -82,94 +129,78 @@ export function BarChart({
   const titleId = `${uid}-chart-title`;
   const values = data.map((d) => d.value);
   const { min, max, tickValues } = computeTicks(values, tickCount);
-  const plotH = CHART_HEIGHT - TOP_PADDING - BOTTOM_PADDING;
-  const plotW = CHART_WIDTH - BAR_PADDING;
   const barFill = positiveMoney ? "var(--color-good)" : "var(--color-brand)";
+  const slots = Math.max(data.length, 1);
 
-  const yScale = (v: number) => {
-    if (max === min) return plotH;
-    return plotH - ((v - min) / (max - min)) * plotH;
-  };
+  // Distance from the plot floor, 0..PLOT_H.
+  const rise = (v: number) => (max === min ? 0 : ((Math.max(v, min) - min) / (max - min)) * PLOT_H);
 
-  const barWidth = data.length > 0 ? Math.max(4, plotW / data.length - 8) : 0;
-  const barSlot = data.length > 0 ? plotW / data.length : 0;
+  const narrowStep = Math.max(1, Math.ceil(data.length / NARROW_MAX_LABELS));
+  const wideStep = Math.max(1, Math.ceil(data.length / WIDE_MAX_LABELS));
 
   return (
     <div className={className}>
-      <svg
-        role="img"
-        aria-labelledby={titleId}
-        viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
-        width="100%"
-        height={CHART_HEIGHT}
-        style={{ overflow: "visible" }}
-      >
-        <title id={titleId}>{label}</title>
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 pt-2">
+        {/* Y-axis: zero-height rows pinned to the gridlines, each label centred on its line. */}
+        <div
+          data-chart-y=""
+          aria-hidden="true"
+          className="flex h-40 flex-col-reverse justify-between text-right text-xs tabular-nums text-muted"
+        >
+          {tickValues.map((tick, i) => (
+            <div key={i} className="flex h-0 items-center justify-end">
+              <span className="whitespace-nowrap leading-4">{formatINR(tick)}</span>
+            </div>
+          ))}
+        </div>
 
-        {/* Y-axis ticks */}
-        {tickValues.map((tick) => {
-          const y = TOP_PADDING + yScale(tick);
-          return (
-            <g key={tick}>
+        <svg
+          role="img"
+          aria-labelledby={titleId}
+          viewBox={`0 0 ${slots * SLOT} ${PLOT_H}`}
+          preserveAspectRatio="none"
+          className="block h-40 w-full overflow-visible"
+        >
+          <title id={titleId}>{label}</title>
+
+          {tickValues.map((tick, i) => {
+            const y = PLOT_H - rise(tick);
+            return (
               <line
-                x1={BAR_PADDING - 4}
-                x2={CHART_WIDTH}
+                key={i}
+                x1={0}
+                x2={slots * SLOT}
                 y1={y}
                 y2={y}
                 stroke="var(--color-line)"
                 strokeWidth={1}
+                vectorEffect="non-scaling-stroke"
               />
-              <text
-                x={BAR_PADDING - 8}
-                y={y + 4}
-                textAnchor="end"
-                fontSize={10}
-                fill="var(--color-muted)"
-                fontFamily="inherit"
-              >
-                {formatINR(tick)}
-              </text>
-            </g>
-          );
-        })}
+            );
+          })}
 
-        {/* Bars */}
-        {data.map((d, i) => {
-          const x = BAR_PADDING + i * barSlot + (barSlot - barWidth) / 2;
-          const yTop = TOP_PADDING + yScale(Math.max(d.value, min));
-          const barH = Math.max(2, plotH - yScale(Math.max(d.value, min)));
-          return (
-            <g
-              key={d.label}
-              tabIndex={0}
-              role="img"
-              aria-label={`${d.label}: ${formatINR(d.value)}`}
-            >
-              <title>
-                {d.label}: {formatINR(d.value)}
-              </title>
-              <rect
-                x={x}
-                y={yTop}
-                width={barWidth}
-                height={barH}
-                rx={2}
-                fill={barFill}
-              />
-              <text
-                x={x + barWidth / 2}
-                y={CHART_HEIGHT - BOTTOM_PADDING + 16}
-                textAnchor="middle"
-                fontSize={10}
-                fill="var(--color-muted)"
-                fontFamily="inherit"
-              >
-                {d.label}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
+          {data.map((d, i) => {
+            const h = Math.max(MIN_BAR_H, rise(d.value));
+            const text = `${d.label}: ${formatINR(d.value)}`;
+            return (
+              <g key={d.label} tabIndex={0} role="img" aria-label={text}>
+                <title>{text}</title>
+                <rect x={i * SLOT + (SLOT - BAR_W) / 2} y={PLOT_H - h} width={BAR_W} height={h} fill={barFill} />
+              </g>
+            );
+          })}
+        </svg>
+
+        <div />
+        {narrowStep === wideStep ? (
+          <XAxis data={data} step={wideStep} className="grid" />
+        ) : (
+          <>
+            <XAxis data={data} step={narrowStep} className="grid sm:hidden" />
+            <XAxis data={data} step={wideStep} className="hidden sm:grid" />
+          </>
+        )}
+      </div>
 
       {/* Screen-reader fallback table */}
       <table className="sr-only">

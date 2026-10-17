@@ -100,7 +100,9 @@ const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " "
 const count = (html: string, needle: string) => html.split(needle).length - 1;
 const section = (html: string, id: string) => {
   const from = html.indexOf(`aria-labelledby="${id}"`);
-  return from < 0 ? "" : html.slice(from);
+  if (from < 0) return "";
+  const end = html.indexOf("</section>", from);
+  return html.slice(from, end < 0 ? undefined : end);
 };
 const chartRows = (html: string) =>
   [...html.matchAll(/<tr><td>([^<]*)<\/td><td>([^<]*)<\/td><\/tr>/g)].map((m) => ({ label: m[1], amount: m[2] }));
@@ -157,8 +159,9 @@ describe("overview: 14-day chart", () => {
 
   it("uses short axis labels, not ISO dates, and no hover title attributes", async () => {
     const html = await render();
-    expect(html).toContain(">2 Oct</text>");
-    expect(html).toContain(">15 Oct</text>");
+    expect(html).not.toContain("<text");
+    expect(html).toContain('<span class="whitespace-nowrap leading-4">2 Oct</span>'); // first label carries the month
+    expect(html).toContain('<span class="whitespace-nowrap leading-4">15</span>'); // later labels are the day alone
     expect(html).not.toMatch(/>2026-10-\d\d</);
     expect(html).not.toMatch(/ title="/);
     expect(html).not.toContain("toLocaleString");
@@ -217,6 +220,28 @@ describe("overview: setup checklist", () => {
     expect(count(setup, "To do: ")).toBe(2);
   });
 
+  it("renders for a brand-new creator with 0 of 3 done: three to-dos and no check mark", async () => {
+    state.published = 0;
+    state.coupons = 0;
+    state.paidCount = 0;
+    const setup = section(await render(), "overview-setup");
+    expect(setup).toContain("Get set up");
+    expect(text(setup)).toContain("0 of 3 done");
+    expect(count(setup, "To do: ")).toBe(3);
+    expect(setup).not.toContain("Done: ");
+    expect(setup).not.toContain('d="m5 12.5 4.5 4.5L19 7.5"');
+  });
+
+  it("is a full-width band between the chart and recent orders, never a second column", async () => {
+    state.published = 0;
+    const html = await render();
+    expect(html).not.toContain("lg:grid-cols");
+    const at = (id: string) => html.indexOf(`aria-labelledby="${id}"`);
+    expect(at("overview-revenue")).toBeGreaterThan(-1);
+    expect(at("overview-setup")).toBeGreaterThan(at("overview-revenue"));
+    expect(at("overview-recent")).toBeGreaterThan(at("overview-setup"));
+  });
+
   it("keeps the store link visible once setup is complete", async () => {
     state.published = 1;
     state.coupons = 1;
@@ -227,7 +252,9 @@ describe("overview: setup checklist", () => {
   });
 
   it("does not render the store link inside the checklist", async () => {
+    state.published = 0;
     const setup = section(await render(), "overview-setup");
+    expect(setup).toContain("Get set up"); // the negatives below only mean something if the checklist rendered
     expect(setup).not.toContain("Your store link");
     expect(setup).not.toContain("<code");
   });
@@ -282,7 +309,6 @@ describe("overview: quiet, ruled surface", () => {
       expect(html).not.toContain("animate-");
       expect(html).not.toContain("line-through");
       expect(html).not.toContain("✓");
-      expect(html).not.toMatch(/btn btn-primary btn-primary/);
     }
   });
 

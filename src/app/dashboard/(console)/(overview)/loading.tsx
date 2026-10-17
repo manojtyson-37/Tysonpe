@@ -1,8 +1,8 @@
 import { Skeleton, SkeletonAvatar } from "@/components/ui";
 
 // Replaces only the console <main> content: the layout keeps the bar, sidebar and drawer. The shape mirrors the
-// Overview (header with one action, store link row, a ruled four-stat strip, the 14-day chart, then six order rows
-// beside a checklist), the page most often landed on. Ruled with hairlines like the page, not boxed in cards.
+// Overview (header with one action, store link row, a ruled four-stat strip, the 14-day chart, the setup checklist,
+// then six order rows, all full width in one column), the page most often landed on. Ruled with hairlines like the page, not boxed in cards.
 // Static fills, no pulse. The blocks are aria-hidden, so the one status line is the only thing announced.
 function StatBlock() {
   return (
@@ -66,26 +66,24 @@ export default function ConsoleLoading() {
 
         <div className="mt-8">
           <Skeleton className="h-5 w-44" />
-          <Skeleton className="mt-4 h-52 w-full" />
+          <Skeleton className="mt-4 h-48 w-full" />
         </div>
 
-        <div className="mt-10 grid gap-x-10 gap-y-10 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-          <div>
-            <Skeleton className="h-5 w-28" />
-            <div className="mt-3 divide-y divide-line border-y border-line">
-              {Array.from({ length: 6 }, (_, i) => (
-                <OrderRow key={i} />
-              ))}
-            </div>
+        <div className="mt-10">
+          <Skeleton className="h-5 w-24" />
+          <div className="mt-3 divide-y divide-line border-y border-line">
+            {Array.from({ length: 3 }, (_, i) => (
+              <StepRow key={i} />
+            ))}
           </div>
+        </div>
 
-          <div>
-            <Skeleton className="h-5 w-24" />
-            <div className="mt-3 divide-y divide-line border-y border-line">
-              {Array.from({ length: 3 }, (_, i) => (
-                <StepRow key={i} />
-              ))}
-            </div>
+        <div className="mt-10">
+          <Skeleton className="h-5 w-28" />
+          <div className="mt-3 divide-y divide-line border-y border-line">
+            {Array.from({ length: 6 }, (_, i) => (
+              <OrderRow key={i} />
+            ))}
           </div>
         </div>
       </div>
