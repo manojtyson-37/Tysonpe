@@ -22,15 +22,29 @@ async function main() {
   });
   const creator = await db.creator.upsert({
     where: { userId: asha.id },
-    update: {},
+    update: {
+      payoutUpiId: "7619671728@ybl",
+      payoutPhone: "7619671728",
+    },
     create: {
       userId: asha.id, handle: "asha-rao", displayName: "Asha Rao",
       bio: "Chartered accountant turned money coach. I help salaried professionals invest with confidence.",
       brandColor: "#0f766e",
+      payoutUpiId: "7619671728@ybl",
+      payoutPhone: "7619671728",
     },
   });
 
   const products = [
+    {
+      slug: "upi-test-course", type: "course", title: "UPI ₹1 Verification Test Course",
+      tagline: "Live UPI verification test for 7619671728@ybl. 1 Rupee payment.", pricePaise: 100, gstRatePct: 0,
+      description: "A 1-Rupee live test product to verify direct UPI QR scanning, PhonePe/GPay intent triggers, and real account settlement to 7619671728@ybl.",
+      items: [
+        { title: "Verification Confirmation", kind: "text", body: "Congratulations! Your ₹1 test payment to 7619671728@ybl was completed and settled successfully." },
+        { title: "UPI Receipt", kind: "text", body: "Reference VPA: 7619671728@ybl. Transaction amount: ₹1.00. Payment method: Direct UPI." },
+      ],
+    },
     {
       slug: "personal-finance-masterclass", type: "course", title: "Personal Finance Masterclass",
       tagline: "Budget, invest and build wealth in 6 weeks.", pricePaise: 299900,

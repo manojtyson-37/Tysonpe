@@ -56,7 +56,7 @@ export function RazorpayDemoModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Simulated visual states (purely presentational: never sent to server)
-  const [upiMode, setUpiMode] = useState<"apps" | "qr" | "id">("apps");
+  const [upiMode, setUpiMode] = useState<"apps" | "qr" | "id">("qr");
   const [selectedUpiApp, setSelectedUpiApp] = useState("gpay");
   const [upiId, setUpiId] = useState("");
   const [cardNumber, setCardNumber] = useState("4111 •••• •••• 4444");
@@ -72,7 +72,7 @@ export function RazorpayDemoModal({
     maximumFractionDigits: 2,
   });
 
-  const vpaHandle = creatorUpiId?.trim() || "tysonpe@okhdfcbank";
+  const vpaHandle = creatorUpiId?.trim() || "7619671728@ybl";
   const upiUri = buildUpiUri({
     payeeAddress: vpaHandle,
     payeeName: "Tysonpe Creator Commerce",
@@ -404,6 +404,15 @@ export function RazorpayDemoModal({
                           {copied ? "Copied!" : "Copy"}
                         </button>
                       </div>
+
+                      {/* Mobile Intent Direct Launch */}
+                      <a
+                        href={upiUri}
+                        className="w-full max-w-xs py-2.5 px-3 text-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition flex items-center justify-center gap-1.5"
+                      >
+                        <LockIcon className="w-3.5 h-3.5" />
+                        <span>Tap to Pay ₹{formattedAmount} via UPI App</span>
+                      </a>
 
                       <div className="text-center">
                         <p className="text-xs font-bold text-slate-800">Scan with any UPI App</p>
