@@ -7,7 +7,13 @@ import { brandRingColor, brandTextColor, contrastRatio, readableOn } from "./col
 /** BrandScope's fallback for a colour that is not six-digit hex. */
 export const FALLBACK_BRAND = "#16130f";
 /** BrandScope's validity rule, verbatim: three-digit hex and anything with trailing characters are NOT valid. */
-const HEX6 = /^#[0-9a-f]{6}$/i;
+export const HEX6 = /^#[0-9a-f]{6}$/i;
+
+/**
+ * True while the text in the colour box is not a complete `#rrggbb` (mid-typing, a typo, or emptied). The colour field only
+ * reports valid colours, so during this time the preview still describes the last valid one; this is the signal that says so.
+ */
+export const isPendingHex = (value: string): boolean => !HEX6.test(value);
 
 export interface BrandPreviewInfo {
   /** False when the input is not `#rrggbb`; `color` is then the ink fallback, exactly as on the storefront. */

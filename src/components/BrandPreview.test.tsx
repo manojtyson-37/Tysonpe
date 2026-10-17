@@ -78,13 +78,46 @@ describe("BrandPreview: findings in words (colour is never the only signal)", ()
     for (const bad of ["", "#fff", "nope", "#12345g"]) {
       const f = findings(render(bad));
       expect(f).toHaveLength(4);
-      expect(f[0]).toBe("That is not a six-digit hex colour like #5b3df5, so the storefront falls back to ink (#16130f).");
+      expect(f[0]).toBe("That is not a six-digit hex colour like #0f7b4d, so the storefront falls back to ink (#16130f).");
       expect(style(render(bad))).toContain("--brand:#16130f");
     }
   });
 
   it("a valid colour shows no fallback sentence", () => {
     expect(text(render("#5b3df5"))).not.toContain("falls back");
+  });
+});
+
+describe("BrandPreview: pending (the colour box holds a half-typed or mistyped hex)", () => {
+  const PENDING = "Not a six-digit hex yet; the preview shows your last valid colour.";
+  const renderPending = (color: string, pending: boolean) => renderToStaticMarkup(<BrandPreview color={color} storeName="Asha" pending={pending} />);
+
+  it("says so first in the list, with the alert icon, in copy distinct from the stored-value fallback sentence", () => {
+    const html = renderPending("#0f172a", true);
+    const f = findings(html);
+    expect(f).toHaveLength(4);
+    expect(f[0]).toBe(PENDING);
+    expect(f[0]).not.toContain("falls back");
+    expect(html.split("<li")[1]).toContain("text-bad");
+  });
+
+  it("keeps describing the last valid colour underneath", () => {
+    const html = renderPending("#0f172a", true);
+    expect(style(html)).toContain("--brand:#0f172a");
+    expect(findings(html)[1]).toMatch(/^Button text will be white/);
+  });
+
+  it("is absent when not pending (default and explicit false)", () => {
+    expect(text(render("#0f172a"))).not.toContain("Not a six-digit hex yet");
+    expect(text(renderPending("#0f172a", false))).not.toContain("Not a six-digit hex yet");
+    expect(findings(render("#0f172a"))).toHaveLength(3);
+  });
+
+  it("the stored-value sentence is a separate message with separate copy", () => {
+    const f = findings(renderPending("nope", true));
+    expect(f).toHaveLength(5);
+    expect(f[0]).toBe(PENDING);
+    expect(f[1]).toMatch(/falls back to ink/);
   });
 });
 

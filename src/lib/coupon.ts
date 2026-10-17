@@ -1,5 +1,6 @@
 // Pure coupon display helpers (no "use client", so server pages can import them).
-import type { BadgeTone } from "@/components/ui/badge";
+// Kept free of component imports so a lib never depends on the UI layer; the tones below are values of the Badge `tone` prop.
+type CouponTone = "good" | "neutral" | "warn";
 
 export type CouponStatus = "active" | "inactive" | "expired" | "used-up";
 
@@ -17,7 +18,7 @@ export function couponStatus(
   return "active";
 }
 
-export const COUPON_STATUS_BADGE: Record<CouponStatus, { label: string; tone: BadgeTone }> = {
+export const COUPON_STATUS_BADGE: Record<CouponStatus, { label: string; tone: CouponTone }> = {
   active: { label: "Active", tone: "good" },
   inactive: { label: "Inactive", tone: "neutral" },
   expired: { label: "Expired", tone: "warn" },

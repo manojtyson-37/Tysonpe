@@ -34,7 +34,7 @@ export default async function CouponsPage() {
           {coupons.length === 0 ? (
             <div className="border-y border-line py-10 text-center">
               <p className="text-sm font-semibold">No coupons yet</p>
-              <p className="mx-auto mt-1 max-w-sm text-sm text-muted">Create a code with the form below. Buyers enter it at checkout.</p>
+              <p className="mx-auto mt-1 max-w-sm text-sm text-muted">Create one with the New coupon form. Buyers enter it at checkout.</p>
             </div>
           ) : (
             <ul className="divide-y divide-line border-y border-line" aria-label="Coupons">

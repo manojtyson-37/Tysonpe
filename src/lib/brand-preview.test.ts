@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { brandRingColor, brandTextColor, contrastRatio, readableOn } from "./color";
-import { brandPreview, FALLBACK_BRAND, formatRatio } from "./brand-preview";
+import { brandPreview, FALLBACK_BRAND, formatRatio, isPendingHex } from "./brand-preview";
 
 describe("brandPreview: validity follows BrandScope's /^#[0-9a-f]{6}$/i rule", () => {
   it.each(["#5b3df5", "#F59E0B", "#000000", "#ffffff"])("%s is valid and passes through as typed", (hex) => {
@@ -108,4 +108,14 @@ describe("formatRatio", () => {
     [1, "1.0:1"],
     [7.06, "7.0:1"],
   ])("%d -> %s (truncated, never rounded up)", (n, text) => expect(formatRatio(n)).toBe(text));
+});
+
+describe("isPendingHex: is the text in the colour box not a valid #rrggbb yet", () => {
+  it.each(["#16130f", "#16130F", "#0f7b4d"])("%j is complete, not pending", (v) => expect(isPendingHex(v)).toBe(false));
+  it.each(["", "#", "#1", "#12345", "#fff", "#1234567", "#12345g", "16130f", " #16130f", "#16130f ", "#16130f\n", "red;x"])("%j is pending", (v) => expect(isPendingHex(v)).toBe(true));
+  it("agrees with brandPreview().valid for every probe (one rule)", () => {
+    for (const v of ["", "#", "#12345", "#fff", "#1234567", "#12345g", "#16130f", "#ABCDEF", "#16130f\n"]) {
+      expect(isPendingHex(v)).toBe(!brandPreview(v).valid);
+    }
+  });
 });

@@ -120,11 +120,12 @@ describe("coupons: list structure", () => {
     expect(t).not.toContain("/");
   });
 
-  it("an empty list says so without a card box, pointing at the form below", async () => {
+  it("an empty list says so without a card box, pointing at the form by name (layout-neutral: it is a right column from xl up)", async () => {
     mocks.findMany.mockResolvedValue([]);
     const html = await render();
     expect(text(html)).toContain("No coupons yet");
-    expect(text(html)).not.toMatch(/on the right/);
+    expect(text(html)).toContain("Create one with the New coupon form. Buyers enter it at checkout.");
+    expect(text(html)).not.toMatch(/on the right|form below/);
     expect(html).not.toContain("<details");
   });
 });

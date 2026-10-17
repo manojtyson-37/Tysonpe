@@ -48,9 +48,9 @@ describe("rupeesFieldValue", () => {
     for (let p = 1; p <= 100000; p++) expect(rupeesToPaise.parse(rupeesFieldValue(p))).toBe(p);
   });
 
-  it("never shows a float artefact (the float route prints 1.1 + 0.2 style tails)", () => {
-    expect(0.1 + 0.2).not.toBe(0.3); // the hazard this avoids
+  it("pads the paise part to two digits and keeps trailing zeros, from integer paise only", () => {
     expect(rupeesFieldValue(30)).toBe("0.30");
-    expect(rupeesFieldValue(110 + 20)).toBe("1.30");
+    expect(rupeesFieldValue(130)).toBe("1.30");
+    expect(rupeesFieldValue(5)).toBe("0.05");
   });
 });

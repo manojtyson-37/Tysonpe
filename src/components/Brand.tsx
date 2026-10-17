@@ -1,15 +1,14 @@
 import type { CSSProperties, ReactNode } from "react";
+import { FALLBACK_BRAND, HEX6 } from "@/lib/brand-preview";
 import { brandRingColor, brandTextColor, readableOn } from "@/lib/color";
 import { Avatar as UiAvatar } from "@/components/ui/avatar";
-
-/** Warm ink: the fallback when a stored colour is not a six-digit hex (the write side only allows that, but the DB can be written directly). */
-const FALLBACK_BRAND = "#16130f";
 
 /** Scopes a creator's brand colour to their storefront subtree. */
 export function BrandScope({ color, children }: { color: string; children: ReactNode }) {
   // The colour is interpolated into inline CSS, and React escapes style values but does not strip `;`, so it is validated here
   // and EVERY variable is derived from the validated value (a bad one would otherwise leave the avatar letter white on an invalid fill).
-  const safe = /^#[0-9a-f]{6}$/i.test(color) ? color : FALLBACK_BRAND;
+  // The rule and the ink fallback live in lib/brand-preview, shared with the settings preview so the two cannot drift.
+  const safe = HEX6.test(color) ? color : FALLBACK_BRAND;
   // --brand-text / --brand-ring are the contrast-safe variants of --brand for text (>=4.5:1) and non-text UI (>=3:1); --brand itself is unchanged.
   const style = {
     "--brand": safe,

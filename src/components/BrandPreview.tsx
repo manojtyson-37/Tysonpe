@@ -19,8 +19,15 @@ function Finding({ ok, children }: { ok: boolean; children: ReactNode }) {
  * What the picked colour does on the storefront, using the storefront's own derivation (BrandScope + lib/color via
  * `brandPreview`). The miniature is decorative (aria-hidden, nothing in it is interactive); the list under it says the
  * same things in words. No hooks and no browser APIs, so it renders on the server and the client alike.
+ *
+ * Two different "bad colour" messages, on purpose:
+ * - `pending` (the colour box holds a half-typed or mistyped hex): `color` is still the last valid colour, so the
+ *   preview and the findings describe THAT colour, and the first line says the box is not a colour yet.
+ * - `!p.valid` (the `color` prop itself is not `#rrggbb`): the storefront falls back to ink. The settings page only
+ *   gets here when the stored value in the database is corrupt (the write side accepts only `#rrggbb`), so this
+ *   sentence is a safety net, not something a creator reaches by typing.
  */
-export function BrandPreview({ color, storeName }: { color: string; storeName: string }) {
+export function BrandPreview({ color, storeName, pending = false }: { color: string; storeName: string; pending?: boolean }) {
   const p = brandPreview(color);
   return (
     <div role="group" aria-label="Storefront colour preview" className="border-y border-line py-4">
@@ -41,9 +48,10 @@ export function BrandPreview({ color, storeName }: { color: string; storeName: s
         </BrandScope>
       </div>
       <ul className="mt-3 space-y-2 text-sm">
+        {pending && <Finding ok={false}>Not a six-digit hex yet; the preview shows your last valid colour.</Finding>}
         {!p.valid && (
           <Finding ok={false}>
-            That is not a six-digit hex colour like #5b3df5, so the storefront falls back to ink ({p.color}).
+            That is not a six-digit hex colour like #0f7b4d, so the storefront falls back to ink ({p.color}).
           </Finding>
         )}
         <Finding ok={p.buttonOk}>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { BrandScope } from "@/components/Brand";
+import { brandPreview, FALLBACK_BRAND, HEX6 as PREVIEW_HEX6 } from "@/lib/brand-preview";
 import { contrastRatio } from "@/lib/color";
 
 const INK = "#16130f";
@@ -54,4 +55,13 @@ describe("BrandScope: a malformed colour never reaches the CSS", () => {
     expect(contrastRatio(v["--brand-text"], "#ffffff")).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(v["--brand-ring"], "#fbfaf7")).toBeGreaterThanOrEqual(3);
   });
+});
+
+describe("BrandScope and brandPreview share one validity rule", () => {
+  const probes = ["#f59e0b", "#F59E0B", "#fff", "", "#12345", "#1234567", "#gggggg", "red;background:url(x)", "#f59e0b;color:red", "#f59e0b\n", " #f59e0b"];
+  it.each(probes)("%j: the colour BrandScope writes is the colour brandPreview reports", (c) => {
+    expect(vars(c)["--brand"]).toBe(brandPreview(c).color);
+    expect(brandPreview(c).valid).toBe(PREVIEW_HEX6.test(c));
+  });
+  it("falls back to the same ink", () => expect(FALLBACK_BRAND).toBe(INK));
 });
