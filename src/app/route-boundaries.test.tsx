@@ -99,14 +99,14 @@ describe("error boundary", () => {
 describe("console loading", () => {
   const html = render(<ConsoleLoading />);
 
-  it("mirrors the Overview rhythm: header, four stats, chart card, checklist card, six order rows", () => {
-    expect(html).toContain("grid gap-4 sm:grid-cols-2 xl:grid-cols-4");
-    expect(html).toContain("mt-6 grid gap-6 lg:grid-cols-2");
+  it("mirrors the Overview rhythm: header, store link, ruled four-stat strip, chart, six order rows beside a checklist, no cards", () => {
+    expect(html).toContain("grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-4 sm:flex"); // the StatStrip rule
+    expect(html).toContain("mt-10 grid gap-x-10 gap-y-10 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]");
     expect(count(html, "h-8 w-28")).toBe(4); // one value block per stat
-    expect(count(html, "h-36 w-full")).toBe(1); // the chart
-    expect(count(html, "px-6 py-3")).toBe(6); // order rows
+    expect(count(html, "h-52 w-full")).toBe(1); // the chart
+    expect(count(html, "flex items-center justify-between gap-3 py-3")).toBe(6); // order rows
     expect(count(html, "h-5 w-5") + count(html, "width:20px;height:20px")).toBe(3); // checklist dots
-    expect(count(html, 'class="card')).toBe(3);
+    expect(count(html, "card")).toBe(0); // ruled with hairlines, like the page
   });
 
   it("is static and hidden from assistive tech, with one status line", () => {

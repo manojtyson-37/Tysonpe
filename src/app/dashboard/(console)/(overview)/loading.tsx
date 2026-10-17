@@ -1,9 +1,9 @@
 import { Skeleton, SkeletonAvatar } from "@/components/ui";
 
 // Replaces only the console <main> content: the layout keeps the bar, sidebar and drawer. The shape mirrors the
-// Overview (header with one action, four stats, the 14-day chart card, a checklist card beside a six-row list),
-// the page most often landed on. Static fills, no pulse. The blocks are aria-hidden, so the one status line is
-// the only thing announced.
+// Overview (header with one action, store link row, a ruled four-stat strip, the 14-day chart, then six order rows
+// beside a checklist), the page most often landed on. Ruled with hairlines like the page, not boxed in cards.
+// Static fills, no pulse. The blocks are aria-hidden, so the one status line is the only thing announced.
 function StatBlock() {
   return (
     <div>
@@ -16,7 +16,7 @@ function StatBlock() {
 
 function OrderRow() {
   return (
-    <div className="flex items-center justify-between gap-3 px-6 py-3">
+    <div className="flex items-center justify-between gap-3 py-3">
       <div className="min-w-0 flex-1">
         <Skeleton className="h-4 w-3/5" />
         <Skeleton className="mt-1.5 h-3 w-2/5" />
@@ -31,7 +31,7 @@ function OrderRow() {
 
 function StepRow() {
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-3 py-3">
       <SkeletonAvatar size={20} />
       <Skeleton className="h-4 w-48 max-w-full" />
     </div>
@@ -51,41 +51,39 @@ export default function ConsoleLoading() {
           <Skeleton className="h-10 w-28" />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="-mt-2 mb-6 max-w-md">
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="mt-2 h-9 w-full" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-4 sm:flex sm:gap-0 sm:divide-x sm:divide-line">
           {Array.from({ length: 4 }, (_, i) => (
-            <StatBlock key={i} />
+            <div key={i} className="sm:px-6 sm:first:pl-0">
+              <StatBlock />
+            </div>
           ))}
         </div>
 
-        <div className="card mt-6 p-6">
+        <div className="mt-8">
           <Skeleton className="h-5 w-44" />
-          <Skeleton className="mt-5 h-36 w-full" />
-          <div className="mt-2 flex justify-between">
-            <Skeleton className="h-3 w-20" />
-            <Skeleton className="h-3 w-20" />
-          </div>
+          <Skeleton className="mt-4 h-52 w-full" />
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-2">
-          <div className="card p-6">
-            <Skeleton className="h-5 w-24" />
-            <div className="mt-4 space-y-3">
-              {Array.from({ length: 3 }, (_, i) => (
-                <StepRow key={i} />
-              ))}
-            </div>
-            <Skeleton className="mt-5 h-3 w-24" />
-            <Skeleton className="mt-2 h-10 w-full" />
-          </div>
-
-          <div className="card overflow-hidden">
-            <div className="flex items-center justify-between px-6 pt-6">
-              <Skeleton className="h-5 w-28" />
-              <Skeleton className="h-4 w-14" />
-            </div>
-            <div className="mt-3 divide-y divide-line">
+        <div className="mt-10 grid gap-x-10 gap-y-10 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+          <div>
+            <Skeleton className="h-5 w-28" />
+            <div className="mt-3 divide-y divide-line border-y border-line">
               {Array.from({ length: 6 }, (_, i) => (
                 <OrderRow key={i} />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <Skeleton className="h-5 w-24" />
+            <div className="mt-3 divide-y divide-line border-y border-line">
+              {Array.from({ length: 3 }, (_, i) => (
+                <StepRow key={i} />
               ))}
             </div>
           </div>
