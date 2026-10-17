@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 // The creator is cr_1. vi.mock factories are hoisted, so the id is written inline there.
 const mocks = vi.hoisted(() => ({
   findMany: vi.fn<(a: Record<string, unknown>) => Promise<unknown>>(),
+  count: vi.fn<(a: Record<string, unknown>) => Promise<number>>(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -15,7 +16,7 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/products",
 }));
 vi.mock("@/lib/auth/session", () => ({ requireCreator: async () => ({ user: {}, creator: { id: "cr_1" } }) }));
-vi.mock("@/lib/db", () => ({ db: { product: { findMany: mocks.findMany } } }));
+vi.mock("@/lib/db", () => ({ db: { product: { findMany: mocks.findMany, count: mocks.count } } }));
 
 import { ButtonLink, EmptyRow, StatusBadge, Table } from "@/components/ui";
 import { formatINR } from "@/lib/format";
@@ -34,8 +35,17 @@ const product = (over: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   mocks.findMany.mockReset();
+  mocks.count.mockReset();
   mocks.findMany.mockResolvedValue([product()]);
+  // The total follows what findMany returns unless a test says the creator owns more than the page shows.
+  mocks.count.mockImplementation(async () => ((await mocks.findMany.mock.results.at(-1)?.value) as unknown[] | undefined)?.length ?? 0);
 });
+
+/** The creator owns `owned` products; the query returns at most the 200-row cap, as the database would. */
+function own(owned: number) {
+  mocks.findMany.mockImplementation(async () => Array.from({ length: Math.min(owned, 200) }, (_, i) => product({ id: `p_${i}` })));
+  mocks.count.mockResolvedValue(owned);
+}
 
 async function render(): Promise<string> {
   const tree: ReactNode = await ProductsPage();
@@ -48,7 +58,7 @@ const rowCells = (html: string) => {
 };
 
 describe("products list: structure", () => {
-  it("is a named, stacking table with the five columns in order", async () => {
+  it("is a named, stacking table with the five data columns in order, then a screen-reader Actions column", async () => {
     const html = await render();
     expect(html).toContain('aria-label="Products"');
     expect(html).toContain('data-stack="true"');
@@ -58,7 +68,9 @@ describe("products list: structure", () => {
       "Price",
       "Learners",
       "Status",
+      "Actions",
     ]);
+    expect(html).toMatch(/<th\b[^>]*><span class="sr-only">Actions<\/span><\/th>/);
   });
 
   it("has a New product button link in the header", async () => {
@@ -78,7 +90,27 @@ describe("products list: rows", () => {
   it("links the title to the product, and gives type, learners and status", async () => {
     const html = await render();
     expect(html).toMatch(/<a [^>]*href="\/dashboard\/products\/p_1"[^>]*>Bookkeeping for Small Shops<\/a>/);
-    expect(rowCells(html)).toEqual([["Bookkeeping for Small Shops 4 lessons", "Course", formatINR(49900), "12", "Published"]]);
+    expect(rowCells(html)).toEqual([["Bookkeeping for Small Shops 4 lessons", "Course", formatINR(49900), "12", "Published", "Edit"]]);
+  });
+
+  it("gives every row one visible Edit link to its editor, named for the product, with a touch-sized floor", async () => {
+    mocks.findMany.mockResolvedValue([
+      product({ id: "p_1", title: "Bookkeeping for Small Shops" }),
+      product({ id: "p_2", title: 'Tax "101" & GST' }),
+    ]);
+    const html = await render();
+    const edits = [...html.matchAll(/<a\b[^>]*>Edit<\/a>/g)].map((m) => m[0]);
+    expect(edits).toHaveLength(2);
+    expect(edits[0]).toContain('href="/dashboard/products/p_1"');
+    expect(edits[0]).toContain('aria-label="Edit Bookkeeping for Small Shops"');
+    expect(edits[1]).toContain('href="/dashboard/products/p_2"');
+    expect(edits[1]).toContain('aria-label="Edit Tax &quot;101&quot; &amp; GST"');
+    for (const e of edits) {
+      expect(e).toMatch(/class="[^"]*\bbtn-secondary\b[^"]*\bbtn-sm\b/);
+      expect(e).toContain("pointer-coarse:min-h-11");
+    }
+    // The title link stays too.
+    expect(html).toMatch(/<a [^>]*href="\/dashboard\/products\/p_1"[^>]*>Bookkeeping for Small Shops<\/a>/);
   });
 
   it("says '1 lesson' for one lesson and '0 lessons' for none", async () => {
@@ -125,7 +157,7 @@ describe("products list: empty state", () => {
     const html = await render();
     expect(text(html)).toContain("No products yet");
     expect(html).toMatch(/<a [^>]*href="\/dashboard\/products\/new"[^>]*>Create your first product<\/a>/);
-    expect(html).toContain('colSpan="5"');
+    expect(html).toContain('colSpan="6"');
   });
 });
 
@@ -144,10 +176,30 @@ describe("products list: query", () => {
     expect(args.take).toBe(200);
   });
 
-  it("only mentions the cap when it is reached", async () => {
-    expect(text(await render())).not.toContain("latest 200");
-    mocks.findMany.mockResolvedValue(Array.from({ length: 200 }, (_, i) => product({ id: `p_${i}` })));
-    expect(text(await render())).toContain("Showing your latest 200 products");
+  it("counts the creator's products with the same filter", async () => {
+    await render();
+    expect(mocks.count).toHaveBeenCalledTimes(1);
+    expect(mocks.count.mock.calls[0][0]).toEqual({ where: { creatorId: "cr_1" } });
+  });
+
+  // Boundary: the note must say nothing at 199 and at exactly 200 (all shown), and name the real total at 201.
+  it.each([1, 199, 200])("says nothing about a cap when the creator owns %i products", async (n) => {
+    own(n);
+    const t = text(await render());
+    expect(t).not.toMatch(/Showing your latest/);
+    expect(mocks.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("at 201 shows the first 200 rows and says '200 of 201'", async () => {
+    own(201);
+    const html = await render();
+    expect(rowCells(html)).toHaveLength(200);
+    expect(text(html)).toContain("Showing your latest 200 of 201 products.");
+  });
+
+  it("names the real total when far past the cap", async () => {
+    own(1234);
+    expect(text(await render())).toContain("Showing your latest 200 of 1234 products.");
   });
 });
 

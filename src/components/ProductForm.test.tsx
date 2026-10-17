@@ -126,7 +126,9 @@ describe("ProductForm: copy and submit", () => {
     expect(html).toContain(`<p id="${hintId}" class="hint">Monthly is a label for now; recurring billing ships later.</p>`);
   });
 
-  it("submits with the label it is given, as a primary submit Button", () => {
+  // Pins the rendered look, not the prop: SubmitButton's default className is already "btn btn-primary", so this
+  // also passes with `variant="primary"` omitted. It does go red if the variant is changed to another look.
+  it("submits with the label it is given, as a type=submit button that looks primary", () => {
     const html = render({ submitLabel: "Save changes" });
     const button = html.match(/<button\b[^>]*>Save changes<\/button>/)?.[0] ?? "";
     expect(button).toContain('type="submit"');
