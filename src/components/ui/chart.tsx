@@ -82,16 +82,26 @@ function splitLabel(label: string): { day: string; month: string | null } {
   return m ? { day: m[1], month: m[2] } : { day: label, month: null };
 }
 
-/** Axis text for the kept labels: the day, plus the month on the first one and wherever the month changes. */
+/**
+ * Axis text for the kept labels: the day, plus the month on the first one and wherever the month changes.
+ * Two neighbouring kept labels never both carry a month (they would touch at 320px): the earlier one drops
+ * it, so a crossing reads "30, 1 Nov".
+ */
 function axisTexts(data: ChartDatum[], keep: boolean[]): (string | null)[] {
   let prevMonth: string | null | undefined;
-  return data.map((d, i) => {
+  const parts = data.map((d, i) => {
     if (!keep[i]) return null;
     const { day, month } = splitLabel(d.label);
     const showMonth = month !== null && (prevMonth === undefined || month !== prevMonth);
     prevMonth = month;
-    return showMonth ? `${day} ${month}` : day;
+    return { day, month, showMonth };
   });
+  const keptIdx = parts.flatMap((p, i) => (p ? [i] : []));
+  const dropMonth = new Set<number>();
+  for (let k = 0; k + 1 < keptIdx.length; k++) {
+    if (parts[keptIdx[k]]!.showMonth && parts[keptIdx[k + 1]]!.showMonth) dropMonth.add(keptIdx[k]);
+  }
+  return parts.map((p, i) => (p === null ? null : p.showMonth && !dropMonth.has(i) ? `${p.day} ${p.month}` : p.day));
 }
 
 function XAxis({ data, step, className }: { data: ChartDatum[]; step: number; className: string }) {
@@ -104,7 +114,7 @@ function XAxis({ data, step, className }: { data: ChartDatum[]; step: number; cl
       style={{ gridTemplateColumns: `repeat(${Math.max(data.length, 1)}, minmax(0, 1fr))` }}
     >
       {data.map((d, i) => (
-        <div key={d.label} className="flex min-w-0 justify-center">
+        <div key={`${i}-${d.label}`} className="flex min-w-0 justify-center">
           {texts[i] !== null && <span className="whitespace-nowrap leading-4">{texts[i]}</span>}
         </div>
       ))}
@@ -112,6 +122,7 @@ function XAxis({ data, step, className }: { data: ChartDatum[]; step: number; cl
   );
 }
 
+// Values are expected to be non-negative: bars grow from the axis minimum (0 for non-negative data).
 export function BarChart({
   data,
   label,
@@ -183,7 +194,7 @@ export function BarChart({
             const h = Math.max(MIN_BAR_H, rise(d.value));
             const text = `${d.label}: ${formatINR(d.value)}`;
             return (
-              <g key={d.label} tabIndex={0} role="img" aria-label={text}>
+              <g key={`${i}-${d.label}`} tabIndex={0} role="img" aria-label={text}>
                 <title>{text}</title>
                 <rect x={i * SLOT + (SLOT - BAR_W) / 2} y={PLOT_H - h} width={BAR_W} height={h} fill={barFill} />
               </g>
@@ -212,8 +223,8 @@ export function BarChart({
           </tr>
         </thead>
         <tbody>
-          {data.map((d) => (
-            <tr key={d.label}>
+          {data.map((d, i) => (
+            <tr key={`${i}-${d.label}`}>
               <td>{d.label}</td>
               <td>{formatINR(d.value)}</td>
             </tr>

@@ -160,8 +160,8 @@ describe("overview: 14-day chart", () => {
   it("uses short axis labels, not ISO dates, and no hover title attributes", async () => {
     const html = await render();
     expect(html).not.toContain("<text");
-    expect(html).toContain('<span class="whitespace-nowrap leading-4">2 Oct</span>'); // first label carries the month
-    expect(html).toContain('<span class="whitespace-nowrap leading-4">15</span>'); // later labels are the day alone
+    expect(html).toContain('>2 Oct</span>'); // first label carries the month
+    expect(html).toContain('>15</span>'); // later labels are the day alone
     expect(html).not.toMatch(/>2026-10-\d\d</);
     expect(html).not.toMatch(/ title="/);
     expect(html).not.toContain("toLocaleString");

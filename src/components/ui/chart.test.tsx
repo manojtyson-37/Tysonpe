@@ -150,10 +150,29 @@ describe("BarChart axes and markup", () => {
   it("thins to every 2nd label on narrow screens, always keeping the last, and re-derives the month for the labels it keeps", () => {
     const rows = axisRows(render14());
     expect(rows).toHaveLength(2);
-    // Indexes 13, 11, ... 1 are kept: 30 Oct, 1 Nov (month change), 3 ... 11.
-    expect(spans(rows[0])).toEqual(["30 Oct", "1 Nov", "3", "5", "7", "9", "11"]);
+    // Indexes 13, 11, ... 1 are kept: 30, 1 Nov (month shown only where it changes), 3 ... 11.
+    expect(spans(rows[0])).toEqual(["30", "1 Nov", "3", "5", "7", "9", "11"]);
     expect(rows[0]).toContain("sm:hidden");
     expect(rows[1]).toContain("hidden sm:");
+  });
+
+  it("never shows two month labels side by side: 25 Oct..7 Nov, narrow row", () => {
+    const series = Array.from({ length: 14 }, (_, i) => ({ label: i + 25 <= 31 ? `${i + 25} Oct` : `${i + 25 - 31} Nov`, value: 1 }));
+    const rows = axisRows(render(<BarChart data={series} label="Revenue" />));
+    expect(rows).toHaveLength(2);
+    // Kept: 26 Oct, 28, 30 Oct, 1 Nov, 3 ... 7. "30 Oct" and "1 Nov" would touch, so only the change keeps its month.
+    expect(spans(rows[0])).toEqual(["26 Oct", "28", "30", "1 Nov", "3", "5", "7"]);
+    expect(spans(rows[1])).toEqual(["25 Oct", "26", "27", "28", "29", "30", "31", "1 Nov", "2", "3", "4", "5", "6", "7"]);
+  });
+
+  it("never shows two month labels side by side: 31 Oct..14 Nov, wide row thinned to every 2nd", () => {
+    const series = Array.from({ length: 15 }, (_, i) => ({ label: i === 0 ? "31 Oct" : `${i} Nov`, value: 1 }));
+    const rows = axisRows(render(<BarChart data={series} label="Revenue" />));
+    expect(rows).toHaveLength(2);
+    // Wide keeps indexes 0, 2, ... 14: 31 Oct and 2 Nov are neighbours, so 31 Oct loses its month.
+    expect(spans(rows[1])).toEqual(["31", "2 Nov", "4", "6", "8", "10", "12", "14"]);
+    // Narrow keeps indexes 2, 5, ... 14 (step 3): only the first carries a month.
+    expect(spans(rows[0])).toEqual(["2 Nov", "5", "8", "11", "14"]);
   });
 
   it("renders one axis row when everything fits at every width", () => {
