@@ -88,12 +88,24 @@ describe("learners: structure", () => {
 });
 
 describe("learners: queries", () => {
-  it("pins the creator on every query, in the same shape", async () => {
+  // One test per query, so a single dropped `creatorId` names which query lost its pin.
+  const where = { product: { creatorId: "cr_1" } };
+
+  it("pins the creator on the enrolment list query", async () => {
     await render();
-    const where = { product: { creatorId: "cr_1" } };
+    expect(mocks.findMany).toHaveBeenCalledTimes(1);
     expect(mocks.findMany.mock.calls[0][0].where).toEqual(where);
+  });
+
+  it("pins the creator on the enrolment count query", async () => {
+    await render();
+    expect(mocks.count).toHaveBeenCalledTimes(1);
     expect(mocks.count.mock.calls[0][0]).toEqual({ where });
-    // People are users who hold an enrolment in one of THIS creator's products.
+  });
+
+  it("pins the creator on the people count: users who hold an enrolment in one of THIS creator's products", async () => {
+    await render();
+    expect(mocks.userCount).toHaveBeenCalledTimes(1);
     expect(mocks.userCount.mock.calls[0][0]).toEqual({ where: { enrollments: { some: where } } });
   });
 

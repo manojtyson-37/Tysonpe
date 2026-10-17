@@ -2,12 +2,16 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { brandPreview, formatRatio } from "@/lib/brand-preview";
+import { IconAlert, IconCheck } from "./icons";
 import { legacyStyleFindings } from "@/test/style-scan";
 import { BrandPreview } from "./BrandPreview";
 
 const render = (color: string, storeName = "Asha Rao Academy") => renderToStaticMarkup(<BrandPreview color={color} storeName={storeName} />);
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").replace(/&#x27;/g, "'");
 const findings = (html: string) => [...html.matchAll(/<li\b[^>]*>(.*?)<\/li>/g)].map((m) => text(m[1]).trim());
+/** The icon markup each finding row would carry, so a test can tell a warning from a tick by its shape, not by a class. */
+const iconHtml = (Icon: typeof IconAlert) => renderToStaticMarkup(<Icon size={16} className="x" />).replace(/ class="[^"]*"/, "");
+const rowIcon = (html: string, row: number) => /<li\b[^>]*>(<svg\b.*?<\/svg>)/.exec(html.split("</li>")[row])![1].replace(/ class="[^"]*"/, "");
 const style = (html: string) => /<div style="([^"]*)">/.exec(html)![1];
 
 describe("BrandPreview: the miniature uses the storefront's BrandScope", () => {
@@ -59,6 +63,24 @@ describe("BrandPreview: findings in words (colour is never the only signal)", ()
     expect(f[2]).toContain("so they stay visible");
   });
 
+  it("the ring row prints the RING ratio, not the text ratio (they differ for a mid colour and for a light one)", () => {
+    // #808080: text is darkened to a 5.2:1 shade but the ring keeps the colour at 3.9:1. #fde68a: both darkened, 4.6:1 text vs 3.4:1 ring.
+    const mid = findings(render("#808080"));
+    expect(mid[1]).toContain("5.2:1 on white");
+    expect(mid[2]).toBe("Focus rings and progress bars use it as is (3.9:1 on white).");
+    const light = findings(render("#fde68a"));
+    expect(light[1]).toContain("(4.6:1 on white)");
+    expect(light[2]).toContain("(3.4:1 on white)");
+    expect(light[2]).not.toContain("4.6:1");
+  });
+
+  it("an upper-case colour that needs no change never says it uses a darker shade", () => {
+    const f = findings(render("#0F172A"));
+    expect(f[1]).toMatch(/^Text in your colour uses it as is/);
+    expect(f[2]).toMatch(/^Focus rings and progress bars use it as is/);
+    expect(text(render("#0F172A"))).not.toContain("darker shade");
+  });
+
   it("states the ratio truncated, never rounded up past what the colour reaches", () => {
     const info = brandPreview("#777777");
     expect(findings(render("#777777"))[0]).toContain(`(${formatRatio(info.buttonRatio)} on your colour)`);
@@ -72,6 +94,16 @@ describe("BrandPreview: findings in words (colour is never the only signal)", ()
     // A colour that passes gets no such sentence.
     expect(findings(render("#0f172a")).join(" ")).not.toContain("guideline");
     expect(html.split("<li")[1]).toContain("text-bad");
+    // The shape is the warning triangle, not the tick: the class alone could be repainted onto the wrong icon.
+    expect(rowIcon(html, 0)).toBe(iconHtml(IconAlert));
+    expect(rowIcon(html, 0)).not.toBe(iconHtml(IconCheck));
+  });
+
+  it("a passing button row carries the tick, and the text and ring rows always do", () => {
+    const html = render("#0f172a");
+    expect(iconHtml(IconAlert)).not.toBe(iconHtml(IconCheck));
+    for (const row of [0, 1, 2]) expect(rowIcon(html, row), `row ${row}`).toBe(iconHtml(IconCheck));
+    expect(html.split("<li")[1]).toContain("text-good");
   });
 
   it("an invalid colour falls back to ink and says why, first in the list", () => {

@@ -66,13 +66,41 @@ describe("brandPreview: derivations are the storefront's own helpers", () => {
     expect(p.textRatio).toBeGreaterThanOrEqual(4.5);
   });
 
-  it("a very dark colour: white button text and the colour is used as is", () => {
-    const p = brandPreview("#0f172a");
+  it.each(["#0f172a", "#0F172A"])("a very dark colour %s: white button text and the colour is used as is", (hex) => {
+    const p = brandPreview(hex);
     expect(p.buttonText).toBe("#ffffff");
     expect(p.buttonTextName).toBe("white");
     expect(p.textAdjusted).toBe(false);
-    expect(p.textColor).toBe("#0f172a");
+    expect(p.textColor.toLowerCase()).toBe("#0f172a");
     expect(p.ringAdjusted).toBe(false);
+  });
+
+  // The helpers hand back lower-case hex, so a case-sensitive comparison would call an unchanged upper-case colour "adjusted".
+  it("an unchanged upper-case colour is never reported as adjusted (comparison ignores case)", () => {
+    for (const hex of ["#0F172A", "#16130F", "#000000", "#1E3A8A"]) {
+      const p = brandPreview(hex);
+      expect(p.textAdjusted, hex).toBe(false);
+      expect(p.ringAdjusted, hex).toBe(false);
+    }
+    // Same colour in two cases gives the same verdict, adjusted or not.
+    for (const hex of ["#F59E0B", "#FDE68A", "#0F172A"]) {
+      const up = brandPreview(hex);
+      const low = brandPreview(hex.toLowerCase());
+      expect(up.textAdjusted, hex).toBe(low.textAdjusted);
+      expect(up.ringAdjusted, hex).toBe(low.ringAdjusted);
+    }
+  });
+
+  it("buttonOk is exactly ratio >= 4.5: colours just above the line pass, just below fail", () => {
+    // #767676 (white, 4.542:1) and #0078d2 (white, 4.548:1) sit in the 4.5 to 4.6 window; a threshold moved up to 4.6 would fail them.
+    for (const hex of ["#767676", "#0078d2"]) {
+      const p = brandPreview(hex);
+      expect(p.buttonRatio, hex).toBeGreaterThan(4.5);
+      expect(p.buttonRatio, hex).toBeLessThan(4.6);
+      expect(p.buttonOk, hex).toBe(true);
+    }
+    expect(formatRatio(brandPreview("#767676").buttonRatio)).toBe("4.5:1");
+    expect(brandPreview("#777777").buttonOk).toBe(false);
   });
 
   it("a mid colour sits on the crossover: white-or-ink is the best of two, so the button can still miss 4.5:1", () => {

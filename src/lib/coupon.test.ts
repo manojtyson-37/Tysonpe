@@ -40,6 +40,8 @@ describe("rupeesFieldValue", () => {
     [30, "0.30"],
     [1, "0.01"],
     [123456700, "1234567"],
+    [199999, "1999.99"],
+    [7, "0.07"],
   ])("%i paise -> %s", (paise, text) => expect(rupeesFieldValue(paise)).toBe(text));
 
   it.each([null, undefined, 0, -100, 1.5, NaN, Infinity])("%s -> empty", (v) => expect(rupeesFieldValue(v as number | null)).toBe(""));

@@ -34,6 +34,7 @@ vi.mock("@/app/actions/creator", () => ({
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { CouponForm } from "@/components/CouponForm";
 import { Badge, Button, ButtonLink, Money } from "@/components/ui";
+import { COUPON_STATUS_BADGE } from "@/lib/coupon";
 import { formatINR } from "@/lib/format";
 import { functionProps } from "@/test/rsc-safe";
 import { legacyStyleFindings } from "@/test/style-scan";
@@ -144,6 +145,19 @@ describe("coupons: status labels", () => {
     expect(s).toMatch(new RegExp(`<span class="badge badge-[a-z]+">${label}</span>`));
     // The old page mapped expired / used up to a "failed" status and lower-cased the words.
     expect(s).not.toMatch(/failed|>expired<|>used up<|>active<|>inactive</);
+  });
+
+  it("expired and used up are the warn tone, not good and not muted", async () => {
+    mocks.findMany.mockResolvedValue([
+      coupon({ id: "c_exp", code: "OLD", expiresAt: new Date(NOW - 1000) }),
+      coupon({ id: "c_cap", code: "CAP", maxRedemptions: 3, redeemed: 3 }),
+    ]);
+    const html = await render();
+    expect(html).toContain('badge badge-warn">Expired');
+    expect(html).toContain('badge badge-warn">Used up');
+    expect(html).not.toMatch(/badge-(good|muted|bad)">(Expired|Used up)/);
+    expect(COUPON_STATUS_BADGE.expired.tone).toBe("warn");
+    expect(COUPON_STATUS_BADGE["used-up"].tone).toBe("warn");
   });
 
   it("uses the Badge primitive, with distinct tones for good and for neutral", async () => {
