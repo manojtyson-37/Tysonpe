@@ -9,6 +9,7 @@ import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { formatDateTime } from "@/lib/format";
 import type { DripState } from "@/lib/learning/drip";
+import { NOTICES, noticeCode, resolveCurrentLesson } from "@/lib/learning/current";
 import { loadCourse, loadLesson, type OutlineLesson } from "@/lib/learning/service";
 import { toEmbedUrl } from "@/lib/validation";
 
@@ -95,19 +96,18 @@ export default async function LearnPage({ params, searchParams }: PageProps<"/li
   });
 
   const all = course.lessons;
-  const requested = typeof sp.lesson === "string" ? all.find((l) => l.id === sp.lesson) : undefined;
-  const firstOpen = all.find((l) => !l.completed && l.state.unlocked) ?? all[0];
-  const current: OutlineLesson | undefined = requested ?? firstOpen;
+  // The URL names the lesson; completion state never does (see resolveCurrentLesson). No usable ?lesson= redirects once.
+  const resolved = resolveCurrentLesson(productId, all, sp.lesson, sp.notice);
+  if (resolved.kind === "redirect") redirect(resolved.to);
+  const current: OutlineLesson | undefined = resolved.kind === "lesson" ? resolved.lesson : undefined;
   const lesson = current ? await loadLesson(user.id, current.id) : null;
 
   // Next lesson to offer after this one: the next unlocked, not-yet-completed lesson in course order.
-  const idx = current ? all.findIndex((l) => l.id === current.id) : -1;
+  const idx = resolved.kind === "lesson" ? resolved.index : -1;
   const next = idx >= 0 ? all.slice(idx + 1).find((l) => l.state.unlocked && !l.completed) ?? null : null;
   const nextHref = next ? `/library/${productId}?lesson=${next.id}` : null;
-  // Fixed messages keyed by a code: the URL can't be used to put arbitrary text in an alert box.
-  const NOTICES: Record<string, string> = { locked: "That lesson isn't available yet.", unavailable: "That lesson isn't available." };
-  // Own keys only: a bare lookup would let ?notice=constructor (or toString, __proto__) resolve to an Object.prototype member.
-  const notice = typeof sp.notice === "string" && Object.hasOwn(NOTICES, sp.notice) ? NOTICES[sp.notice] : null;
+  const code = noticeCode(sp.notice);
+  const notice = code ? NOTICES[code] : null;
   const safe = (u: string) => (/^https?:\/\//i.test(u) ? u : "#"); // render-time guard in addition to write-time validation
   const { progress } = course;
 

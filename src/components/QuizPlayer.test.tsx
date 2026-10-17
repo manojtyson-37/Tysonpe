@@ -7,7 +7,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }))
 vi.mock("@/app/actions/learning", () => ({ submitQuizAction: async () => ({ ok: false, error: "x" }) }));
 
 import type { QuizSubmission } from "@/lib/learning/service";
-import { QuizFailed, QuizForm, QuizPassed, QuizPlayer, QuizReview, QuizView, toggleAnswer, type QuizQuestion } from "./QuizPlayer";
+import { QuizFailed, QuizForm, QuizPassed, QuizPlayer, QuizReview, QuizView, announcement, toggleAnswer, type QuizQuestion } from "./QuizPlayer";
 
 const render = renderToStaticMarkup;
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
@@ -304,5 +304,29 @@ describe("focus is moved in an effect body, never a cleanup", () => {
     // Every `return () =>` in this file is an effect cleanup (no component here returns a function).
     const cleanups = [...src.matchAll(/return\s*\(\)\s*=>\s*(\{[\s\S]*?\}|[^;\n]*)/g)].map((m) => m[1]);
     for (const body of cleanups) expect(body).not.toContain(".focus(");
+  });
+});
+
+describe("one announcement per quiz result", () => {
+  const src = readFileSync(path.join(__dirname, "QuizPlayer.tsx"), "utf8");
+
+  // A failed attempt is already spoken: the bad Callout is role="alert" and focus lands on its wrapper. Repeating it in
+  // the live region made a screen reader read it up to three times. A pass has no role on its Callout, so only a pass
+  // writes to the live region. (The DOM behaviour is checked in a browser; this pins the decision.)
+  it("announcement(result): the pass line for a pass, nothing for a fail", () => {
+    expect(announcement(sub({ passed: true, scorePct: 100, correctCount: 2, total: 2 }))).toBe("Passed with 100%. 2 of 2 correct.");
+    expect(announcement(sub({ attemptsLeft: 2 }))).toBe("");
+    expect(announcement(sub({ attemptsLeft: 0 }))).toBe("");
+  });
+
+  it("submit() sets the announcement through announcement(), not through failedLine()", () => {
+    expect(src).toMatch(/setAnnounce\(announcement\(r\.result\)\)/);
+    expect(src).not.toMatch(/setAnnounce\([^)]*failedLine/);
+  });
+
+  it("a failed result still renders as the one role=alert and leaves the live region empty", () => {
+    const html = view({ result: sub(), announce: announcement(sub()) });
+    expect(html.match(/role="alert"/g)).toHaveLength(1);
+    expect(html).toMatch(LIVE);
   });
 });

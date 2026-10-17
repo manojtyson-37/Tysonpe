@@ -27,6 +27,13 @@ const failedLine = (r: QuizSubmission, passPct: number) =>
   `You scored ${r.scorePct}% (${r.correctCount} of ${r.total}). You need ${passPct}%.${r.attemptsLeft === 0 ? " You've used all your attempts." : " Review the material and try again."}`;
 
 /**
+ * What the live region says after a submit. Only a pass: its Callout has no role, so without this it is silent. A fail is
+ * already spoken (the bad Callout is role="alert" and focus lands on its wrapper), and repeating it here made a screen
+ * reader read it up to three times.
+ */
+export const announcement = (r: QuizSubmission) => (r.passed ? passedLine(r) : "");
+
+/**
  * The result, in a wrapper the player can focus. tabIndex -1 makes it focusable by script only (not a tab stop) and
  * scroll-mt-24 keeps it clear of the sticky header when focus() scrolls it into view.
  */
@@ -221,7 +228,7 @@ export function QuizPlayer(props: {
       const r = await submitQuizAction(props.itemId, answers);
       if (!r.ok) return setError(r.error);
       setResult(r.result);
-      setAnnounce(r.result.passed ? passedLine(r.result) : failedLine(r.result, props.passPct));
+      setAnnounce(announcement(r.result));
       router.refresh(); // sidebar progress + attempts
     });
   }

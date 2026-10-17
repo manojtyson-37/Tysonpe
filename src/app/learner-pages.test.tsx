@@ -276,9 +276,16 @@ function setCourse(lessons: Row[], over: Row = {}) {
 }
 const textLesson = (id: string, over: Row = {}) => ({ locked: false, id, title: `Lesson ${id}`, kind: "text", url: "", body: "Body text", completed: false, ...over });
 
-async function renderLearn(sp: Record<string, string> = {}): Promise<string> {
+// The page never chooses a lesson from completion state any more: without ?lesson= it redirects to an explicit id.
+// So tests of the page body arrive the way a browser does after that redirect, with the id the page would have chosen.
+async function renderLearnRaw(sp: Record<string, string> = {}): Promise<string> {
   const tree: ReactNode = await LearnPage({ params: Promise.resolve({ productId: "p1" }), searchParams: Promise.resolve(sp) } as never);
   return renderToStaticMarkup(<>{tree}</>);
+}
+async function renderLearn(sp: Record<string, string> = {}): Promise<string> {
+  const lessons = ((state.course?.lessons ?? []) as Array<{ id: string; completed: boolean; state: { unlocked: boolean } }>);
+  const first = lessons.find((l) => !l.completed && l.state.unlocked) ?? lessons[0];
+  return renderLearnRaw(sp.lesson || !first ? sp : { lesson: first.id, ...sp });
 }
 
 describe("course player: access", () => {
@@ -410,6 +417,60 @@ describe("course player: the outline does not push the lesson down on a phone", 
     expect(html.match(/<nav /g)).toHaveLength(2);
     expect(html).toContain("lg:hidden");
     expect(html).toContain("hidden lg:block");
+  });
+});
+
+describe("course player: the lesson never depends on completion state", () => {
+  // Found in a browser: entering without ?lesson=, passing the quiz made every lesson complete, the default flipped to
+  // the first lesson, and the quiz (and its result screen) unmounted. Now the URL always names the lesson.
+  const three = () => [outline("a", { completed: true }), outline("b"), outline("c")];
+
+  it("entering without ?lesson= redirects to the explicit id of the first open lesson", async () => {
+    setCourse(three());
+    state.lesson = textLesson("b");
+    await expect(renderLearnRaw()).rejects.toThrow("REDIRECT /library/p1?lesson=b");
+    expect(calls.loadLesson).not.toHaveBeenCalled();
+  });
+
+  it("a finished course redirects to its first lesson, so a finished course's URL is stable too", async () => {
+    setCourse([outline("a", { completed: true }), outline("b", { completed: true })]);
+    await expect(renderLearnRaw()).rejects.toThrow("REDIRECT /library/p1?lesson=a");
+  });
+
+  it("an unknown ?lesson= redirects once to a valid lesson, and following it renders without another redirect", async () => {
+    setCourse(three());
+    state.lesson = textLesson("b");
+    await expect(renderLearnRaw({ lesson: "someone-elses-lesson" })).rejects.toThrow("REDIRECT /library/p1?lesson=b");
+    expect(await renderLearnRaw({ lesson: "b" })).toContain("<article");
+  });
+
+  it("a valid ?lesson= does not redirect, and passing the quiz (all complete) keeps the same lesson current", async () => {
+    setCourse([outline("a", { completed: true }), outline("q", { kind: "quiz", completed: true })]);
+    state.lesson = textLesson("q", { kind: "quiz", completed: true, questions: [], passPct: 60, attemptsLeft: 1, lastScorePct: 100 });
+    const html = await renderLearnRaw({ lesson: "q" });
+    expect(html).toContain("<article");
+    expect(calls.loadLesson).toHaveBeenCalledWith("u1", "q");
+  });
+
+  it("a course with no lessons renders the empty state with no redirect", async () => {
+    setCourse([]);
+    state.lesson = null;
+    const html = await renderLearnRaw();
+    expect(text(html)).toContain("The creator hasn't added any content yet");
+    expect(calls.loadLesson).not.toHaveBeenCalled();
+  });
+
+  it("carries a known ?notice= across the redirect and never an arbitrary one", async () => {
+    setCourse(three());
+    await expect(renderLearnRaw({ notice: "locked" })).rejects.toThrow("REDIRECT /library/p1?lesson=b&notice=locked");
+    await expect(renderLearnRaw({ notice: "<script>" })).rejects.toThrow(/^REDIRECT \/library\/p1\?lesson=b$/);
+    await expect(renderLearnRaw({ notice: "constructor" })).rejects.toThrow(/^REDIRECT \/library\/p1\?lesson=b$/);
+  });
+
+  it("the not-enrolled redirect still comes first", async () => {
+    state.course = null;
+    state.product = { id: "p1", slug: "bookkeeping", creator: { handle: "meera" } };
+    await expect(renderLearnRaw()).rejects.toThrow("REDIRECT /c/meera/bookkeeping");
   });
 });
 
@@ -545,14 +606,14 @@ describe("course player: renders from a server component", () => {
   it("reports exactly one function prop on a lesson page: the bound server action on the <form>", async () => {
     setCourse([outline("a"), outline("b")]);
     state.lesson = textLesson("a");
-    const tree = await LearnPage({ params: Promise.resolve({ productId: "p1" }), searchParams: Promise.resolve({}) } as never);
+    const tree = await LearnPage({ params: Promise.resolve({ productId: "p1" }), searchParams: Promise.resolve({ lesson: "a" }) } as never);
     expect(functionProps(tree, [Link, QuizPlayer])).toEqual(["<form>.action"]);
   });
 
   it("reports none on a completed lesson (no form) and none across the QuizPlayer boundary", async () => {
     setCourse([outline("a", { completed: true }), outline("q", { kind: "quiz" })]);
     state.lesson = textLesson("a", { completed: true });
-    const done = await LearnPage({ params: Promise.resolve({ productId: "p1" }), searchParams: Promise.resolve({}) } as never);
+    const done = await LearnPage({ params: Promise.resolve({ productId: "p1" }), searchParams: Promise.resolve({ lesson: "a" }) } as never);
     expect(functionProps(done, [Link, QuizPlayer])).toEqual([]);
 
     state.lesson = {
