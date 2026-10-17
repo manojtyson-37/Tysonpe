@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Avatar, BrandScope } from "@/components/Brand";
-import { Money, TYPE_LABEL } from "@/components/ui";
+import { ButtonLink, Callout, Price, Surface, TYPE_LABEL } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 
@@ -21,6 +21,8 @@ export async function generateMetadata({ params }: PageProps<"/c/[handle]/[slug]
 
 const kindLabel: Record<string, string> = { video: "Video", pdf: "PDF", text: "Reading", link: "Link", quiz: "Quiz" };
 
+const fastColor = "transition-colors duration-(--dur-fast) ease-(--ease-standard)";
+
 export default async function ProductPage({ params }: PageProps<"/c/[handle]/[slug]">) {
   const { handle, slug } = await params;
   const [product, user] = await Promise.all([getProduct(handle, slug), getCurrentUser()]);
@@ -34,40 +36,53 @@ export default async function ProductPage({ params }: PageProps<"/c/[handle]/[sl
     : false;
   const c = product.creator;
 
+  const typeName = TYPE_LABEL[product.type] ?? product.type;
+  const isPaid = product.pricePaise > 0;
+  // A course is taught in lessons; the other types hold files, sessions or posts, so they count "items".
+  const unit = product.type === "course" ? "lesson" : "item";
+  const n = product.items.length;
+  const typeLine = n > 0 ? `${typeName} \u00b7 ${n} ${unit}${n === 1 ? "" : "s"}` : typeName;
+
   return (
     <BrandScope color={c.brandColor}>
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
         {product.status !== "published" && (
-          <p className="mb-6 rounded-xl bg-warn-soft px-4 py-3 text-sm font-medium">
+          <Callout tone="warn" className="mb-6">
             Draft preview. Only you can see this page until you publish.
-          </p>
+          </Callout>
         )}
-        <Link href={`/c/${c.handle}`} className="inline-flex items-center gap-3 text-sm font-medium text-muted hover:text-ink">
+        <Link
+          href={`/c/${c.handle}`}
+          className={`inline-flex items-center gap-3 text-sm font-medium text-muted hover:text-ink pointer-coarse:min-h-11 ${fastColor}`}
+        >
           <Avatar name={c.displayName} size={32} /> {c.displayName}
         </Link>
 
-        <div className="mt-6 grid gap-10 lg:grid-cols-[1fr_380px]">
-          <div>
-            <span className="badge badge-brand">{TYPE_LABEL[product.type] ?? product.type}</span>
-            <h1 className="mt-4 text-3xl font-extrabold leading-tight sm:text-5xl">{product.title}</h1>
-            {product.tagline && <p className="mt-3 text-lg text-muted">{product.tagline}</p>}
+        {/* Flex column below lg, grid from lg: the aside's containing block is then the whole column of content, so its
+            mobile `sticky bottom-0` has room to stick and to come to rest above the footer. In a grid the aside's own
+            grid area would be exactly its height and sticky would do nothing. */}
+        <div className="mt-6 flex flex-col gap-10 lg:grid lg:grid-cols-[1fr_380px] lg:gap-14">
+          <div className="min-w-0">
+            <h1 className="t-display break-words">{product.title}</h1>
+            {product.tagline && <p className="t-body mt-3 max-w-prose text-muted">{product.tagline}</p>}
+            <p className="t-meta mt-3">{typeLine}</p>
 
             {product.description && (
               <section className="mt-10">
-                <h2 className="text-xl font-bold">About this {(TYPE_LABEL[product.type] ?? "product").toLowerCase()}</h2>
-                <p className="mt-3 whitespace-pre-wrap leading-relaxed text-ink/90">{product.description}</p>
+                <h2 className="t-heading">About this {typeName.toLowerCase()}</h2>
+                <p className="t-body mt-3 max-w-prose whitespace-pre-wrap text-ink/90">{product.description}</p>
               </section>
             )}
 
-            {product.items.length > 0 && (
+            {n > 0 && (
               <section className="mt-10">
-                <h2 className="text-xl font-bold">What&apos;s included</h2>
-                <ol className="card mt-3 divide-y divide-line">
+                <h2 className="t-heading">What&apos;s included</h2>
+                <ol className="mt-4 divide-y divide-line border-y border-line">
                   {product.items.map((it, i) => (
-                    <li key={it.id} className="flex items-center gap-3 px-4 py-3 text-sm">
-                      <span className="w-6 text-muted tabular-nums">{i + 1}</span>
-                      <span className="flex-1 font-medium">{it.title}</span>
-                      <span className="badge badge-muted">{kindLabel[it.kind] ?? it.kind}</span>
+                    <li key={it.id} className="flex items-baseline gap-4 py-3.5">
+                      <span className="w-6 shrink-0 text-muted tabular-nums">{i + 1}</span>
+                      <span className="t-body min-w-0 flex-1 break-words font-medium">{it.title}</span>
+                      <span className="t-meta shrink-0">{kindLabel[it.kind] ?? it.kind}</span>
                     </li>
                   ))}
                 </ol>
@@ -75,36 +90,37 @@ export default async function ProductPage({ params }: PageProps<"/c/[handle]/[sl
             )}
           </div>
 
-          <aside className="lg:sticky lg:top-24 lg:self-start">
-            <div className="card p-6 shadow-sm">
-              <p className="text-3xl font-extrabold">
-                {product.pricePaise === 0 ? "Free" : <Money paise={product.pricePaise} />}
-                {product.billing === "monthly" && product.pricePaise > 0 && <span className="text-base font-medium text-muted"> / month</span>}
-              </p>
-              {product.pricePaise > 0 && <p className="mt-1 text-xs text-muted">Inclusive of {product.gstRatePct}% GST</p>}
+          {/* Below lg this is the buy bar: sticky to the bottom edge of the viewport while the content above is in view,
+              resting at the end of the column (above the footer) once it is reached. From lg it is the sticky side panel. */}
+          <aside className="sticky bottom-0 z-10 -mx-4 border-t border-line bg-bg px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:-mx-6 sm:px-6 lg:top-24 lg:bottom-auto lg:mx-0 lg:self-start lg:border-t-0 lg:bg-transparent lg:p-0">
+            <Surface
+              padding="lg"
+              className="flex items-center justify-between gap-4 max-lg:rounded-none max-lg:border-0 max-lg:bg-transparent max-lg:p-0! lg:block"
+            >
+              <Price
+                paise={product.pricePaise}
+                period={product.billing === "monthly" ? "month" : undefined}
+                gstNote={isPaid ? `incl. ${product.gstRatePct}% GST` : undefined}
+                size="xl"
+                className="min-w-0"
+              />
 
               {owned ? (
-                <Link href={`/library/${product.id}`} className="btn btn-primary btn-lg mt-5 w-full">Open in your library</Link>
+                <ButtonLink href={`/library/${product.id}`} size="lg" className="shrink-0 lg:mt-5 lg:w-full">Open in your library</ButtonLink>
               ) : isOwner ? (
-                <Link href={`/dashboard/products/${product.id}`} className="btn btn-secondary btn-lg mt-5 w-full">Edit product</Link>
+                <ButtonLink href={`/dashboard/products/${product.id}`} variant="secondary" size="lg" className="shrink-0 lg:mt-5 lg:w-full">Edit product</ButtonLink>
               ) : product.status === "published" ? (
-                <Link href={`/checkout/${product.id}`} className="btn btn-primary btn-lg mt-5 w-full">
-                  {product.pricePaise === 0 ? "Get it free" : "Buy now"}
-                </Link>
+                <ButtonLink href={`/checkout/${product.id}`} size="lg" className="shrink-0 lg:mt-5 lg:w-full">
+                  {isPaid ? "Buy now" : "Get it free"}
+                </ButtonLink>
               ) : null}
 
-              <ul className="mt-5 space-y-2 text-sm text-muted">
-                {product.pricePaise === 0 ? (
-                  <li>Instant access in your library</li>
-                ) : (
-                  <>
-                    <li>Pay with UPI, cards or netbanking</li>
-                    <li>Instant access after payment</li>
-                    <li>GST invoice for every order</li>
-                  </>
-                )}
+              <ul className="t-body mt-5 hidden space-y-2 text-muted lg:block">
+                <li>Instant access in your library</li>
+                {isPaid && <li>An invoice for every order</li>}
+                {isPaid && <li className="t-meta">Payments run in test mode.</li>}
               </ul>
-            </div>
+            </Surface>
           </aside>
         </div>
       </div>
