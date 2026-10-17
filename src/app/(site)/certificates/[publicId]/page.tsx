@@ -39,12 +39,13 @@ export default async function CertificatePage({ params }: PageProps<"/certificat
           <PrintButton />
         </div>
         {/* The sheet: paper document, hairline inner frame, no resting shadow. The outer rule uses --brand-ring (>=3:1) so a pale creator colour still frames it. */}
-        <article className="relative overflow-hidden rounded-card border-2 border-[color:var(--brand-ring)] bg-surface p-8 text-center sm:p-14 print:break-inside-avoid print:bg-white print:shadow-none">
+        <article className="relative overflow-hidden rounded-card border-2 border-[color:var(--brand-ring)] bg-surface p-8 text-center sm:p-14 print:break-inside-avoid">
           <div aria-hidden className="pointer-events-none absolute inset-3 rounded-control border border-line" />
           <div className="relative">
             {/* Logo has text-xl baked in; the child-selector variant outranks it by specificity, so no important flag is needed. */}
             <div className="[&>span]:text-base"><Logo className="justify-center opacity-70" /></div>
-            <h1 className="t-label mt-8 font-sans tracking-widest">Certificate of completion</h1>
+            {/* globals.css styles h1-h3 outside any layer, which beats every utility: keep all label typography on the inner span. */}
+            <h1 className="mt-8"><span className="t-label font-sans tracking-widest">Certificate of completion</span></h1>
             <p className="mt-8 text-base text-muted">This certifies that</p>
             <h2 className="mt-2 font-display text-4xl font-extrabold text-[color:var(--brand-text)] sm:text-5xl">{cert.learnerName}</h2>
             <p className="mt-6 text-base text-muted">has successfully completed</p>
