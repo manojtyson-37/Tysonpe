@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useReducer, useRef, type ReactNode } from "react";
-import { legacyButtonLook } from "@/components/form";
 import { Button, type ButtonSize, type ButtonVariant } from "@/components/ui/button";
 import { ConfirmDialog, confirmReducer } from "@/components/ui/dialog";
 
@@ -23,15 +22,36 @@ export function submitWithSubmitter<B extends { form: { requestSubmit(submitter?
 }
 
 /**
+ * Reads a legacy `btn btn-danger btn-sm ...` class string back into a variant and size, starting from ConfirmButton's
+ * own defaults (danger / sm), not the generic Button defaults, so a bare `btn` or a lone `btn-sm` still gets the
+ * destructive look. `btn` and the `btn-*` look tokens are consumed (the Button primitive emits them once); every other
+ * class is returned as extras. It does not need a `btn` token to be present.
+ */
+export function confirmButtonLook(cls: string | undefined): { variant: ButtonVariant; size: ButtonSize; className: string | undefined } {
+  let variant: ButtonVariant = "danger";
+  let size: ButtonSize = "sm";
+  const rest: string[] = [];
+  for (const token of (cls ?? "").split(/\s+/).filter(Boolean)) {
+    const v = /^btn-(primary|secondary|ghost|danger)$/.exec(token);
+    if (token === "btn") continue;
+    if (v) variant = v[1] as ButtonVariant;
+    else if (token === "btn-sm") size = "sm";
+    else if (token === "btn-lg") size = "lg";
+    else rest.push(token);
+  }
+  return { variant, size, className: rest.length ? rest.join(" ") : undefined };
+}
+
+/**
  * Submit button that asks before a destructive form action runs. The click that opens the dialog is cancelled so
  * the form does not submit first; on confirm the ORIGINAL form is submitted with this button as the submitter
  * (`requestSubmit(button)`), so formAction, name and value behave exactly as for a plain submit button.
  *
  * It renders the `Button` primitive: pass `variant` and `size` (default `danger` / `sm`). The older call sites pass a
- * full `btn btn-danger btn-sm` string in `className`; that is read back into a variant and size (an explicit
- * `variant` or `size` wins), and any other classes are kept as extras. A `className` without a `btn` token is only
- * extras. `message` is the dialog title; `confirmLabel` names the action on the dialog's confirm button and falls
- * back to the trigger's children, so pass it whenever the children are just "Delete".
+ * full `btn btn-danger btn-sm` string in `className`; that is read back into a variant and size, starting from
+ * danger / sm (an explicit `variant` or `size` wins), and any other classes are kept as extras. `message` is the
+ * dialog title; `confirmLabel` names the action on the dialog's confirm button and falls back to the trigger's
+ * children, so pass it whenever the children are just "Delete".
  */
 export function ConfirmButton({
   message,
@@ -60,8 +80,7 @@ export function ConfirmButton({
     submitWithSubmitter(button);
   }, [state.submit]);
 
-  const legacy = className && className.split(/\s+/).includes("btn") ? legacyButtonLook(className) : null;
-  const look = legacy ?? { variant: "danger" as ButtonVariant, size: "sm" as ButtonSize, className };
+  const look = confirmButtonLook(className);
 
   return (
     <>

@@ -68,9 +68,19 @@ describe("LessonForm quiz lessons", () => {
 
   it("shows Quiz as a static read-only row, not a dashed fake input, and has no url or body field", () => {
     expect(html).toMatch(/Type<\/span>/);
-    expect(html).toMatch(/>Quiz<\/p>/);
+    expect(html).toMatch(/>Quiz<\/div>/);
     expect(html).not.toContain("border-dashed");
     expect(names(html)).toEqual(["title", "kind", "required", "dripType"]);
+  });
+
+  it("names the static Type value by its label (aria-labelledby -> the label's id) and keeps the touch-height floor", () => {
+    const label = /<span id="([^"]+)" class="label">Type<\/span>/.exec(html);
+    expect(label).not.toBeNull();
+    const row = /<div role="group" aria-labelledby="([^"]+)" class="([^"]*)">Quiz<\/div>/.exec(html);
+    expect(row).not.toBeNull();
+    expect(row![1]).toBe(label![1]);
+    expect(row![2].split(" ")).toContain("pointer-coarse:min-h-11");
+    expect(html).toContain('<input type="hidden" name="kind" value="quiz"/>');
   });
 
   it("points an existing quiz at Edit questions instead of promising questions 'after creating'", () => {
@@ -78,7 +88,7 @@ describe("LessonForm quiz lessons", () => {
     expect(html).not.toContain("after creating");
   });
 
-  it("on the add form, choosing Quiz is the only place that says questions come after creating", () => {
+  it("the initial add form (Video selected) does not show the \"after creating\" quiz copy", () => {
     // The add form starts on Video, so the sentence is absent until the kind select is switched (client state).
     expect(add()).not.toContain("after creating");
   });

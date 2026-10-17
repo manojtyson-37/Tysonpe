@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import { createRef, type ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Button, ButtonLink, buttonClass } from "./button";
@@ -82,6 +82,21 @@ describe("Button", () => {
   it("attaches no handler at all when neither loading nor onClick is set", () => {
     const el = Button({ children: "Apply" }) as ReactElement<{ onClick?: unknown }>;
     expect(el.props.onClick).toBeUndefined();
+  });
+
+  // React 19 hands `ref` to a function component as an ordinary prop. If Button destructures it away, every caller
+  // that needs the DOM node (ConfirmButton's requestSubmit and dialog focus return) silently gets null.
+  it("forwards a ref prop onto the <button> element", () => {
+    const r = createRef<HTMLButtonElement>();
+    const el = Button({ ref: r, children: "x" }) as ReactElement<{ ref?: unknown }>;
+    expect(el.type).toBe("button");
+    expect(el.props.ref).toBe(r);
+  });
+
+  it("forwards a ref while loading too (the same <button> carries it)", () => {
+    const r = createRef<HTMLButtonElement>();
+    const el = Button({ ref: r, loading: true, children: "x" }) as ReactElement<{ ref?: unknown }>;
+    expect(el.props.ref).toBe(r);
   });
 
   it("keeps the real disabled attribute for the disabled prop, even while loading", () => {

@@ -8,7 +8,7 @@ import {
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ActionForm, Field, FormError, Select, SubmitButton } from "@/components/form";
 import { IconArrowDown, IconArrowUp, IconChevronDown, IconExternal } from "@/components/icons";
-import { LessonForm } from "@/components/LessonForm";
+import { KIND_LABEL, LessonForm } from "@/components/LessonForm";
 import { ProductForm } from "@/components/ProductForm";
 import { Badge, Button, ButtonLink, Callout, PageHeader, StatStrip, StatusBadge } from "@/components/ui";
 import { requireCreator } from "@/lib/auth/session";
@@ -175,7 +175,7 @@ export default async function EditProduct({ params, searchParams }: PageProps<"/
                                 <span className="min-w-0 flex-1 break-words font-medium">{it.title}</span>
                                 {it.dripType !== "none" && <Badge tone="warn">drip</Badge>}
                                 {!it.requiredForCompletion && <Badge>optional</Badge>}
-                                <Badge>{it.kind}</Badge>
+                                <Badge>{KIND_LABEL[it.kind] ?? it.kind}</Badge>
                                 {insights.enrolled > 0 && <span className="text-xs tabular-nums text-muted">{pct ?? 0}% done</span>}
                               </summary>
                               <div className="space-y-4 border-t border-line bg-surface-2/50 px-4 pb-5 pt-4">

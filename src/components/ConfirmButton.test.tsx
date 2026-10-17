@@ -1,6 +1,33 @@
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ConfirmButton, submitWithSubmitter } from "./ConfirmButton";
+
+// Spies between ConfirmButton and its two collaborators. Button is the real one (wrapped to record its props); the
+// ConfirmDialog is a stub that records its props and, when `seen.showDialog` is on, prints its confirm label, so the
+// closed dialog (which renders nothing in SSR) can still be asked what it was given. confirmReducer stays real.
+const seen = vi.hoisted(() => ({ button: [] as Array<Record<string, unknown>>, dialog: [] as Array<Record<string, unknown>>, showDialog: false }));
+vi.mock("@/components/ui/button", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/ui/button")>();
+  return { ...actual, Button: (props: Parameters<typeof actual.Button>[0]) => (seen.button.push(props), actual.Button(props)) };
+});
+vi.mock("@/components/ui/dialog", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/ui/dialog")>();
+  return {
+    ...actual,
+    ConfirmDialog: (props: Record<string, unknown>) => {
+      seen.dialog.push(props);
+      return seen.showDialog ? <output data-confirm-label="">{props.confirmLabel as ReactNode}</output> : null;
+    },
+  };
+});
+
+import { ConfirmButton, confirmButtonLook, submitWithSubmitter } from "./ConfirmButton";
+
+afterEach(() => {
+  seen.button.length = 0;
+  seen.dialog.length = 0;
+  seen.showDialog = false;
+});
 
 describe("ConfirmButton", () => {
   it("renders a submit button with the caller's class and label, and no dialog until clicked", () => {
@@ -17,7 +44,7 @@ describe("ConfirmButton", () => {
   it("puts aria-label on the trigger button (it names the action for screen readers) and renders no dialog", () => {
     const html = renderToStaticMarkup(
       <form>
-        <ConfirmButton message="Delete this coupon?" aria-label="Delete coupon WELCOME10" className="btn btn-danger btn-sm">
+        <ConfirmButton message="Delete this coupon?" aria-label="Delete coupon WELCOME10" className="btn">
           Delete
         </ConfirmButton>
       </form>,
@@ -54,10 +81,54 @@ describe("ConfirmButton look", () => {
     expect(html(<ConfirmButton message="m" className="ml-auto">Delete</ConfirmButton>)).toContain('class="btn btn-danger btn-sm ml-auto"');
   });
 
-  it("accepts an explicit confirmLabel without changing the trigger's visible label", () => {
+  it("what a bare `btn` renders: the single btn token with ConfirmButton's own danger / small look", () => {
+    const out = html(<ConfirmButton message="m" className="btn">Delete</ConfirmButton>);
+    expect(out).toBe('<form><button type="submit" class="btn btn-danger btn-sm">Delete</button></form>');
+  });
+
+  it("reads btn-danger / btn-sm even without a btn token, and still emits btn exactly once", () => {
+    const out = html(<ConfirmButton message="m" className="btn-danger btn-sm min-h-10">Delete</ConfirmButton>);
+    expect(out).toContain('class="btn btn-danger btn-sm min-h-10"');
+    expect(/class="([^"]*)"/.exec(out)![1].split(" ").filter((c) => c === "btn")).toHaveLength(1);
+  });
+
+  it("keeps a lone legacy variant on the default size, and a lone size on the default variant", () => {
+    expect(html(<ConfirmButton message="m" className="btn btn-secondary">Archive</ConfirmButton>)).toContain('class="btn btn-secondary btn-sm"');
+    expect(html(<ConfirmButton message="m" className="btn btn-lg">Delete</ConfirmButton>)).toContain('class="btn btn-danger btn-lg"');
+  });
+
+  it("confirmButtonLook starts from danger / sm and returns only the non-button classes as extras", () => {
+    expect(confirmButtonLook(undefined)).toEqual({ variant: "danger", size: "sm", className: undefined });
+    expect(confirmButtonLook("btn")).toEqual({ variant: "danger", size: "sm", className: undefined });
+    expect(confirmButtonLook("btn btn-ghost btn-lg ml-auto  w-full")).toEqual({ variant: "ghost", size: "lg", className: "ml-auto w-full" });
+    expect(confirmButtonLook("pointer-coarse:min-h-11")).toEqual({ variant: "danger", size: "sm", className: "pointer-coarse:min-h-11" });
+  });
+});
+
+describe("ConfirmButton confirmLabel", () => {
+  const html = (node: React.ReactNode) => renderToStaticMarkup(<form>{node}</form>);
+
+  it("gives the dialog's confirm button the explicit confirmLabel, not the trigger's children", () => {
+    seen.showDialog = true;
     const out = html(<ConfirmButton message="Delete this lesson?" confirmLabel="Delete lesson">Delete</ConfirmButton>);
-    expect(out).toContain(">Delete</button>");
-    expect(out).not.toContain("Delete lesson"); // the dialog is closed, so its label is not in the markup yet
+    expect(out).toContain('<output data-confirm-label="">Delete lesson</output>');
+    expect(out).toContain(">Delete</button>"); // the trigger's own label is unchanged
+    expect(seen.dialog.at(-1)).toMatchObject({ title: "Delete this lesson?", confirmLabel: "Delete lesson" });
+  });
+
+  it("falls back to the trigger's children when confirmLabel is omitted", () => {
+    seen.showDialog = true;
+    const out = html(<ConfirmButton message="Refund this order?">Mark refunded</ConfirmButton>);
+    expect(out).toContain('<output data-confirm-label="">Mark refunded</output>');
+  });
+});
+
+describe("ConfirmButton ref", () => {
+  it("hands one ref object to both the trigger Button and the dialog's focus return, so requestSubmit and focus-back find the node", () => {
+    renderToStaticMarkup(<form><ConfirmButton message="m">Delete</ConfirmButton></form>);
+    const ref = seen.button.at(-1)?.ref as { current: unknown } | undefined;
+    expect(ref).toEqual({ current: null }); // a ref object (SSR never attaches it)
+    expect(seen.dialog.at(-1)?.returnFocusRef).toBe(ref);
   });
 });
 

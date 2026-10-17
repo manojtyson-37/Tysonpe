@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { FormState } from "@/app/actions/auth";
 import { CONTENT_KINDS, DRIP_TYPES, LESSON_KINDS } from "@/lib/validation";
 import { ActionForm, Field, FormError, SavedNote, SubmitButton, useFormValues } from "./form";
 import { Callout } from "./ui/callout";
 
-const KIND_LABEL: Record<string, string> = { video: "Video", pdf: "PDF", text: "Text", link: "Link", quiz: "Quiz" };
+export const KIND_LABEL: Record<string, string> = { video: "Video", pdf: "PDF", text: "Text", link: "Link", quiz: "Quiz" };
 const DRIP_LABEL: Record<string, string> = {
   none: "Available immediately",
   days_after_enroll: "N days after the learner joins",
@@ -21,6 +21,7 @@ export type LessonDefaults = {
 
 function Fields({ lesson, sections }: { lesson?: LessonDefaults; sections?: Array<{ id: string; title: string }> }) {
   const submitted = useFormValues();
+  const typeLabelId = useId();
   const [pickedKind, setPickedKind] = useState<string | null>(null);
   const [pickedDrip, setPickedDrip] = useState<string | null>(null);
   // Derived from submitted values, not mirrored: React resets the form DOM after every action.
@@ -34,8 +35,8 @@ function Fields({ lesson, sections }: { lesson?: LessonDefaults; sections?: Arra
         {isQuizEdit ? (
           <div>
             {/* A quiz cannot become another kind, so Type is a static row. The hidden input keeps `kind=quiz` in the post. */}
-            <span className="label">Type</span>
-            <p className="flex items-center rounded-control border border-line bg-surface-2 px-3.5 py-2.5 text-sm text-muted pointer-coarse:min-h-11">Quiz</p>
+            <span id={typeLabelId} className="label">Type</span>
+            <div role="group" aria-labelledby={typeLabelId} className="flex items-center rounded-control border border-line bg-surface-2 px-3.5 py-2.5 text-sm text-muted pointer-coarse:min-h-11">Quiz</div>
             <input type="hidden" name="kind" value="quiz" />
           </div>
         ) : (

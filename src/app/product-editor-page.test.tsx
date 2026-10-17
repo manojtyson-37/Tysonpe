@@ -36,7 +36,7 @@ vi.mock("@/app/actions/curriculum", () => mocks.actions);
 
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ActionForm, Field, FormError, Select, SubmitButton } from "@/components/form";
-import { LessonForm } from "@/components/LessonForm";
+import { KIND_LABEL, LessonForm } from "@/components/LessonForm";
 import { ProductForm } from "@/components/ProductForm";
 import { PageHeader, StatStrip, StatusBadge } from "@/components/ui";
 import { functionProps } from "@/test/rsc-safe";
@@ -147,6 +147,9 @@ describe("editor: header", () => {
     expect(link).toContain('target="_blank"');
     expect(link).toContain("<svg");
     expect(text(link)).toContain("View page");
+    expect(link).toContain('rel="noreferrer"');
+    // The new-tab warning is for screen readers only: present in the link, hidden visually.
+    expect(link).toContain('<span class="sr-only"> (opens in a new tab)</span>');
     expect(html).not.toMatch(/[↗↑↓→]/);
   });
 
@@ -154,7 +157,9 @@ describe("editor: header", () => {
     current = product({ status: "draft" });
     const html = await render();
     expect(text(html)).toContain("Draft. Not visible to buyers.");
-    expect(text(tag(html, /<a [^>]*href="\/c\/meera\/bookkeeping"[^>]*>.*?<\/a>/))).toContain("Preview");
+    const link = tag(html, /<a [^>]*href="\/c\/meera\/bookkeeping"[^>]*>.*?<\/a>/);
+    expect(text(link)).toContain("Preview");
+    expect(link).toContain('<span class="sr-only"> (opens in a new tab)</span>');
   });
 
   it("a published product gets an Unpublish form (secondary), a draft gets a Publish form (primary), both bound to the id", async () => {
@@ -270,11 +275,18 @@ describe("editor: lesson rows", () => {
     const quiz = summaryOf(html, "Quiz time");
     expect(quiz).toContain('<span class="badge badge-warn">drip</span>');
     expect(quiz).toContain('<span class="badge badge-muted">optional</span>');
-    expect(quiz).toContain('<span class="badge badge-muted">quiz</span>');
+    expect(quiz).toContain('<span class="badge badge-muted">Quiz</span>');
     const plain = summaryOf(html, "Setup");
     expect(plain).not.toContain("drip");
     expect(plain).not.toContain("optional");
-    expect(plain).toContain('<span class="badge badge-muted">video</span>');
+    expect(plain).toContain('<span class="badge badge-muted">Video</span>');
+  });
+
+  it("labels the kind Badge with the same names as the Type select (LessonForm's KIND_LABEL), not the raw value", async () => {
+    const html = await render();
+    expect(summaryOf(html, "Wrap-up")).toContain('<span class="badge badge-muted">Text</span>');
+    expect(html).not.toMatch(/<span class="badge badge-muted">(?:video|quiz|text|pdf|link)<\/span>/);
+    expect(KIND_LABEL).toMatchObject({ video: "Video", pdf: "PDF", text: "Text", link: "Link", quiz: "Quiz" });
   });
 
   it("puts '<n>% done' in the row when learners exist (0% for a lesson with no data), as text not a tooltip", async () => {
@@ -430,6 +442,20 @@ describe("editor: confirmations", () => {
     expect(prod.props.children).toBe("Delete product");
   });
 
+  it("renders each trigger as the small danger button with only the touch floor as extra classes (the look comes from ConfirmButton)", async () => {
+    const html = await render();
+    const COARSE = "pointer-coarse:min-h-11";
+    const all = confirms(elements(await call()));
+    for (const c of all) {
+      expect(c.props.className).toBe(COARSE);
+      expect(c.props.variant).toBeUndefined();
+      expect(c.props.size).toBeUndefined();
+    }
+    expect(html).toContain(`<button type="submit" class="btn btn-danger btn-sm ${COARSE}" aria-label="Delete lesson Setup">Delete</button>`);
+    expect(html).toContain(`<button type="submit" class="btn btn-danger btn-sm ${COARSE}" aria-label="Delete section Module 1">Delete</button>`);
+    expect(html).toContain(`<button type="submit" class="btn btn-danger btn-sm ${COARSE}">Delete product</button>`);
+  });
+
   it("with orders the product button says Unpublish & archive and reassures buyers keep access", async () => {
     current = product({ _count: { orders: 3 } });
     const prod = confirms(elements(await call())).find((c) => actionOf(c)?.action === "deleteProduct")!;
@@ -493,10 +519,23 @@ describe("editor: source hygiene", () => {
     '<span title="Learners who completed this lesson">',
     '"View page ↗"',
     'className="sm:!hidden"',
+    'className="w-auto!"',
+    'className="px-2 sm:py-1.5! text-xs"',
+    "className={wide ? 'w-full' : 'w-auto!'}",
+    "className='mb-5 rounded-xl'",
+    "const cls = 'btn btn-secondary';",
+    '<span title={"Learners who completed this lesson"}>',
+    "<span title={'Learners who completed this lesson'}>",
+    "<span title='Learners'>",
   ];
 
   it("the scanner passes ordinary code and class names, including `!` in plain JS", () => {
     expect(legacyStyleFindings(clean.replace("btn-sm", "gap-2"))).toEqual([]);
+  });
+
+  it("the scanner does not mistake copy ending in `!`, apostrophes in prose or a variable title for a finding", () => {
+    expect(legacyStyleFindings('<p className="text-sm">Saved!</p> const m = "Saved!"; const n = \'Saved!\'; const t = "Done!";')).toEqual([]);
+    expect(legacyStyleFindings("// it's fine, we don't scan prose here\nconst a = 'gap-2 px-3'; <PageHeader title={product.title} />")).toEqual([]);
   });
 
   it.each(dirty)("the scanner catches %s", (line) => {
