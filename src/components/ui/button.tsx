@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ButtonHTMLAttributes, ComponentProps, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ComponentProps, ReactNode, Ref } from "react";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 export type ButtonSize = "sm" | "md" | "lg";
@@ -51,6 +51,8 @@ export type ButtonProps = Look &
      * Needs a client component; a server component must not pass `loading` or `onClick`.
      */
     loading?: boolean;
+    /** React 19 passes `ref` to a function component as a prop; it lands on the <button> through `...rest`. */
+    ref?: Ref<HTMLButtonElement>;
     children: ReactNode;
   };
 

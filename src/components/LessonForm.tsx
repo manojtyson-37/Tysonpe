@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { FormState } from "@/app/actions/auth";
 import { CONTENT_KINDS, DRIP_TYPES, LESSON_KINDS } from "@/lib/validation";
 import { ActionForm, Field, FormError, SavedNote, SubmitButton, useFormValues } from "./form";
+import { Callout } from "./ui/callout";
 
 const KIND_LABEL: Record<string, string> = { video: "Video", pdf: "PDF", text: "Text", link: "Link", quiz: "Quiz" };
 const DRIP_LABEL: Record<string, string> = {
@@ -32,8 +33,9 @@ function Fields({ lesson, sections }: { lesson?: LessonDefaults; sections?: Arra
         <Field name="title" label="Title" defaultValue={lesson?.title} placeholder="Lesson 1: Getting started" required />
         {isQuizEdit ? (
           <div>
+            {/* A quiz cannot become another kind, so Type is a static row. The hidden input keeps `kind=quiz` in the post. */}
             <span className="label">Type</span>
-            <p className="input !border-dashed text-muted">Quiz</p>
+            <p className="flex items-center rounded-control border border-line bg-surface-2 px-3.5 py-2.5 text-sm text-muted pointer-coarse:min-h-11">Quiz</p>
             <input type="hidden" name="kind" value="quiz" />
           </div>
         ) : (
@@ -53,7 +55,7 @@ function Fields({ lesson, sections }: { lesson?: LessonDefaults; sections?: Arra
       {kind === "text" ? (
         <Field name="body" label="Text" as="textarea" rows={5} defaultValue={lesson?.body} />
       ) : kind === "quiz" ? (
-        <p className="rounded-xl bg-surface-2 px-3.5 py-2.5 text-sm text-muted">Add the questions after creating the lesson.</p>
+        <Callout>{isQuizEdit ? "Use Edit questions to change this quiz's questions." : "Add the questions after creating the lesson."}</Callout>
       ) : (
         <Field name="url" label={kind === "video" ? "Video link" : kind === "pdf" ? "PDF link" : "Link"} type="url" defaultValue={lesson?.url}
           placeholder="https://" hint={kind === "video" ? "YouTube and Vimeo links play inside Tysonpe; others open in a new tab." : undefined} />
@@ -98,7 +100,7 @@ export function LessonForm({
       <Fields key={resetKey} lesson={lesson} sections={sections} />
       <FormError />
       <div className="flex items-center gap-3">
-        <SubmitButton className="btn btn-secondary btn-sm" pendingText="Saving…">{submitLabel}</SubmitButton>
+        <SubmitButton variant="secondary" size="sm" className="pointer-coarse:min-h-11" pendingText="Saving…">{submitLabel}</SubmitButton>
         <SavedNote />
       </div>
     </ActionForm>

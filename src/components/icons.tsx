@@ -40,6 +40,10 @@ export const IconArrowRight = make(<path d="M4.5 12h15M13.5 6l6 6-6 6" />, "Icon
 
 export const IconArrowLeft = make(<path d="M19.5 12h-15M10.5 6l-6 6 6 6" />, "IconArrowLeft");
 
+export const IconArrowUp = make(<path d="M12 19.5v-15M6 10.5l6-6 6 6" />, "IconArrowUp");
+
+export const IconArrowDown = make(<path d="M12 4.5v15M6 13.5l6 6 6-6" />, "IconArrowDown");
+
 export const IconChevronDown = make(<path d="m6 9.5 6 6 6-6" />, "IconChevronDown");
 
 export const IconPlus = make(<path d="M12 5v14M5 12h14" />, "IconPlus");
