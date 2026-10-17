@@ -148,3 +148,57 @@ describe("MemberCard: RSC and source", () => {
     expect(src).not.toMatch(/rounded-xl|border-dashed|\bcard\b/);
   });
 });
+
+describe("MemberCard: clamp, streak boundary, badge tone", () => {
+  it("caps the fill at 100 when the profile reports more progress than the level spans", () => {
+    const html = full(prof({ level: { level: 3, floor: 250, next: 500, into: 600, span: 500 } }));
+    expect(html).toContain('aria-valuenow="100"');
+    expect(html).toContain('aria-valuetext="100%"');
+    expect(html).not.toContain('aria-valuenow="120"');
+    expect(elements(<MemberCard profile={prof({ level: { level: 3, floor: 250, next: 500, into: 600, span: 500 } })} leaderboardHref={HREF} />).find((e) => e.type === Progress)!.props.value).toBe(100);
+  });
+
+  it("a one-day streak is a streak: '1-day streak' in the full card and the compact summary", () => {
+    const one = prof({ streak: 1 });
+    const t = text(full(one));
+    expect(t).toContain("1-day streak");
+    expect(t).toContain("Finish a lesson each day to keep it going.");
+    expect(t).not.toContain("No active streak");
+    expect(text(compact(one))).toContain("Your progress: Level 2 · 120 points · 1-day streak");
+  });
+
+  it("a zero streak is 'No active streak' and leaves the summary without a streak", () => {
+    const zero = prof({ streak: 0 });
+    expect(text(full(zero))).toContain("No active streak");
+    expect(text(full(zero))).toContain("Finish a lesson each day to start one.");
+    expect(text(full(zero))).not.toContain("keep it going");
+    expect(text(compact(zero))).toContain("Your progress: Level 2 · 120 points");
+    expect(text(compact(zero))).not.toContain("Your progress: Level 2 · 120 points ·");
+  });
+
+  it("the compact card's own leaderboard link goes to the href it was given", () => {
+    const link = elements(<MemberCardCompact profile={prof()} leaderboardHref="/c/zed/community/leaderboard" />).find((e) => e.type === ButtonLink)!;
+    expect(link.props.href).toBe("/c/zed/community/leaderboard");
+    expect(compact()).toContain(`href="${HREF}"`);
+    expect(compact(prof())).not.toContain("href=\"undefined\"");
+  });
+
+  it("earned badges read in ink with a good-tone tick; unearned ones are muted throughout (name and description)", () => {
+    const html = full();
+    const rows = [...html.matchAll(/<li class="py-2">(.*?)<\/li>/g)].map((m) => m[1]);
+    const classesOf = (row: string) => [...row.matchAll(/<p class="([^"]*)"/g)].map((m) => m[1].split(/\s+/));
+    const [earnedName, earnedDesc] = classesOf(rows.find((r) => r.includes("First lesson"))!);
+    expect(earnedName).toContain("text-ink");
+    expect(earnedName).not.toContain("text-muted");
+    expect(earnedDesc).toContain("text-ink");
+    expect(earnedDesc).not.toContain("text-muted");
+    expect(rows.find((r) => r.includes("First lesson"))).toMatch(/<svg [^>]*class="[^"]*\btext-good\b/);
+    for (const row of rows.filter((r) => !r.includes("First lesson"))) {
+      const [name, desc] = classesOf(row);
+      expect(name).toContain("text-muted");
+      expect(name).not.toContain("text-ink");
+      expect(desc).toContain("text-muted");
+      expect(desc).not.toContain("text-ink");
+    }
+  });
+});

@@ -49,9 +49,12 @@ vi.mock("@/app/actions/community", () => ({
 }));
 vi.mock("@/app/actions/community-admin", () => ({ banMemberAction: M.banMemberAction }));
 
+import { BrandScope } from "@/components/Brand";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ChannelNav } from "@/components/community/ChannelNav";
 import { LikeSubmit } from "@/components/community/LikeSubmit";
+import { MemberCard, MemberCardCompact } from "@/components/community/MemberCard";
+import { PostCard } from "@/components/community/PostCard";
 import { PostComposer } from "@/components/community/PostComposer";
 import { ButtonLink, Callout, EmptyState } from "@/components/ui";
 import { AppError } from "@/lib/errors";
@@ -400,5 +403,65 @@ describe("channel page: RSC boundary and source", () => {
     const src = readFileSync(PAGE_PATH, "utf8");
     expect(legacyStyleFindings(src)).toEqual([]);
     expect(src).not.toMatch(/\bbadge\b|\bbtn\b/);
+  });
+});
+
+describe("community layout: banned with nothing bought, brand and nav wiring", () => {
+  it("a banned viewer with no enrolments is told they were removed and is NOT sent to buy", async () => {
+    setup({ viewer: learner({ banned: true, enrolledProductIds: [] }), channels: [] });
+    const html = await renderLayout();
+    expect(text(html)).toContain("You've been removed from this community");
+    expect(text(html)).toContain("The creator has removed your access. Contact them if you think this is a mistake.");
+    expect(text(html)).not.toContain("bought from this creator");
+    expect(html).not.toContain("See what");
+    expect(elements(await layout()).some((e) => e.type === ButtonLink)).toBe(false);
+  });
+
+  it("scopes the page to the creator's brand colour", async () => {
+    setup({ c: creator({ brandColor: "#b45309" }) });
+    const scope = elements(await layout()).find((e) => e.type === BrandScope)!;
+    expect(scope.props.color).toBe("#b45309");
+    expect(await renderLayout()).toMatch(/^<div style="[^"]*--brand:#b45309/);
+  });
+
+  it("passes each channel's access through to the nav, and a gated channel shows its Gated hint", async () => {
+    setup({ channels: [channel(), channel({ id: "ch_2", slug: "vip", name: "VIP", access: "product_gated" })] });
+    const nav = elements(await layout()).find((e) => e.type === ChannelNav)!;
+    expect(nav.props.channels.map((c: { slug: string; access: string }) => [c.slug, c.access])).toEqual([["general", "open"], ["vip", "product_gated"]]);
+    const html = await renderLayout();
+    const vip = [...html.matchAll(/<a\b[^>]*href="\/c\/meera\/community\/vip"[^>]*>(.*?)<\/a>/g)][0][1];
+    expect(text(vip)).toContain("Gated");
+    const general = [...html.matchAll(/<a\b[^>]*href="\/c\/meera\/community\/general"[^>]*>(.*?)<\/a>/g)][0][1];
+    expect(text(general)).not.toContain("Gated");
+  });
+
+  it("gives both progress cards this creator's leaderboard address and the learner's profile", async () => {
+    const els = elements(await layout());
+    for (const type of [MemberCard, MemberCardCompact]) {
+      const card = els.find((e) => e.type === type)!;
+      expect(card.props.leaderboardHref).toBe("/c/meera/community/leaderboard");
+      expect(card.props.profile).toEqual(profile());
+    }
+  });
+});
+
+describe("channel page: who sees the creator's controls on the feed", () => {
+  const cards = async () => elements(await channelPage()).filter((e) => e.type === PostCard);
+
+  it("a member's feed is told viewerIsCreator=false and shows no Pin or Remove", async () => {
+    const found = await cards();
+    expect(found.length).toBeGreaterThan(0);
+    for (const c of found) expect(c.props.viewerIsCreator).toBe(false);
+    const html = await renderPage();
+    expect(html).not.toContain("Pin post by");
+    expect(html).not.toContain("Remove from community");
+  });
+
+  it("the creator's feed is told viewerIsCreator=true and shows Pin and Remove on a member's post", async () => {
+    setup({ viewer: learner({ isCreator: true }) });
+    for (const c of await cards()) expect(c.props.viewerIsCreator).toBe(true);
+    const html = await renderPage();
+    expect(html).toContain('aria-label="Pin post by Ravi Kumar"');
+    expect(html).toContain('aria-label="Remove from community: Ravi Kumar"');
   });
 });

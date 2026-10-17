@@ -2,9 +2,12 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-vi.mock("@/app/actions/community", () => ({ createPostAction: { bind: () => () => undefined } }));
+vi.mock("@/app/actions/community", () => ({
+  createPostAction: { bind: (_this: unknown, ...args: unknown[]) => Object.assign(() => undefined, { args }) },
+}));
 
-import { classTokens, text } from "@/test/community-fixtures";
+import { ActionForm, Field, FormError, SubmitButton } from "@/components/form";
+import { classTokens, elements as walk, text } from "@/test/community-fixtures";
 import { legacyStyleFindings } from "@/test/style-scan";
 import { PostComposer } from "./PostComposer";
 
@@ -39,5 +42,25 @@ describe("PostComposer", () => {
   it("passes the style scan and hand-types no button class", () => {
     const src = readFileSync(new URL("./PostComposer.tsx", import.meta.url), "utf8");
     expect(legacyStyleFindings(src)).toEqual([]);
+  });
+});
+
+describe("PostComposer: wiring", () => {
+  it("the body is a textarea of 4 rows and the title a single-line input", () => {
+    expect(tag("body")).toMatch(/^<textarea\b/);
+    expect(tag("body")).toContain('rows="4"');
+    expect(tag("title")).toMatch(/^<input\b/);
+    expect(html.match(/<textarea\b/g)).toHaveLength(1);
+  });
+
+  it("the form action is bound to THIS channel's id, and the button says 'Posting…' while pending", () => {
+    const boundaries = [ActionForm, Field, FormError, SubmitButton];
+    const els = walk(PostComposer({ channelId: "ch_42" }), boundaries);
+    const form = els.find((e) => e.type === ActionForm)!;
+    expect((form.props.action as unknown as { args: unknown[] }).args).toEqual(["ch_42"]);
+    const submit = els.find((e) => e.type === SubmitButton)!;
+    expect(submit.props.pendingText).toBe("Posting…");
+    const body = els.filter((e) => e.type === Field).find((e) => e.props.name === "body")!;
+    expect(body.props).toMatchObject({ as: "textarea", rows: 4, maxLength: 2000, required: true });
   });
 });

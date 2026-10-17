@@ -47,6 +47,7 @@ import { CommentForm } from "@/components/community/CommentForm";
 import { EditCommentForm } from "@/components/community/EditCommentForm";
 import { EditPostForm } from "@/components/community/EditPostForm";
 import { LikeSubmit } from "@/components/community/LikeSubmit";
+import { PostCard } from "@/components/community/PostCard";
 import { ButtonLink } from "@/components/ui";
 import { IconArrowLeft } from "@/components/icons";
 import { AppError } from "@/lib/errors";
@@ -305,5 +306,79 @@ describe("thread: RSC boundary and source", () => {
     const src = readFileSync(PAGE_PATH, "utf8");
     expect(legacyStyleFindings(src)).toEqual([]);
     expect(src).not.toMatch(/creatorBadge|\bbtn\b|\bbadge\b/);
+  });
+});
+
+describe("thread: wiring the viewer into the post and the comments", () => {
+  const postCardOf = (els: ReturnType<typeof elements>) => els.find((e) => e.type === PostCard)!;
+
+  it("a member does not get Pin or Remove on the post; the PostCard is told they are not the creator", async () => {
+    const els = elements(await page());
+    expect(postCardOf(els).props).toMatchObject({ viewerIsCreator: false, thread: true });
+    const html = await render();
+    expect(html).not.toContain("Pin post by");
+    expect(html).not.toContain("Remove from community");
+  });
+
+  it("the creator keeps Pin and Remove on the post", async () => {
+    setup({ viewer: learner({ isCreator: true }) });
+    expect(postCardOf(elements(await page())).props.viewerIsCreator).toBe(true);
+    const html = await render();
+    expect(html).toContain('aria-label="Pin post by Ravi Kumar"');
+    expect(html).toContain('aria-label="Remove from community: Ravi Kumar"');
+  });
+
+  it("the post's like state reaches its like button, and so does each comment's", async () => {
+    setup({ t: thread({ post: post({ likedByMe: true, likeCount: 4, commentCount: 2 }), comments: [comment({ likedByMe: true, likeCount: 7 }), comment({ id: "c_2", likedByMe: false })] }) });
+    const likes = elements(await page()).filter((e) => e.type === LikeSubmit);
+    expect(likes.map((l) => l.props)).toEqual([{ count: 4, liked: true }, { count: 7, liked: true }, { count: 1, liked: false }]);
+  });
+});
+
+describe("thread: heading count and the comment ban button", () => {
+  const heading = async () => /<section aria-label="Comments"[^>]*><h2 class="[^"]*">([^<]*)<\/h2>/.exec(await render())![1];
+
+  it("counts from the post's total, not from the comments on this page", async () => {
+    setup({ t: thread({ post: post({ commentCount: 5 }), comments: [comment(), comment({ id: "c_2" })] }) });
+    expect(await heading()).toBe("5 comments");
+    setup({ t: thread({ post: post({ commentCount: 1 }), comments: [comment(), comment({ id: "c_2" })] }) });
+    expect(await heading()).toBe("1 comment");
+    setup({ t: thread({ post: post({ commentCount: 0 }), comments: [comment()] }) });
+    expect(await heading()).toBe("0 comments");
+  });
+
+  it("the creator's remove-from-community button reads 'Remove from community' on the page, not only in its confirm label", async () => {
+    setup({ viewer: learner({ isCreator: true }) });
+    const bans = elements(await page()).filter((e) => e.type === ConfirmButton && e.ancestors.some((a) => a.type === "li") && e.props.confirmLabel === "Remove from community");
+    expect(bans).toHaveLength(2);
+    for (const b of bans) expect(b.props.children).toBe("Remove from community");
+    const items = commentItems(await render());
+    for (const item of items) expect(text(item)).toContain("Remove from community");
+  });
+
+  it("a member sees no remove button on any comment", async () => {
+    for (const item of commentItems(await render())) expect(item).not.toContain("Remove from community");
+  });
+});
+
+describe("thread: paging links, each on its own condition", () => {
+  const links = async (sp: Record<string, string>) => elements(await page(sp)).filter((e) => e.type === ButtonLink).map((l) => [l.props.children, l.props.href]);
+
+  it("a later page that is also the last offers only 'Back to the first comments'", async () => {
+    expect(await links({ after: "c_1" })).toEqual([["Back to the first comments", "/c/meera/community/general/p/p_1"]]);
+    const html = await render({ after: "c_1" });
+    expect(html).not.toContain("More comments");
+    expect(html).not.toContain("after=null");
+  });
+
+  it("a first page with more to come offers only 'More comments'", async () => {
+    setup({ t: thread({ nextCommentCursor: "c_2" }) });
+    expect(await links({})).toEqual([["More comments", "/c/meera/community/general/p/p_1?after=c_2"]]);
+    expect(await render()).not.toContain("Back to the first comments");
+  });
+
+  it("URL-encodes the next-comment cursor", async () => {
+    setup({ t: thread({ nextCommentCursor: "c/2=&x y" }) });
+    expect(await links({})).toEqual([["More comments", "/c/meera/community/general/p/p_1?after=c%2F2%3D%26x%20y"]]);
   });
 });

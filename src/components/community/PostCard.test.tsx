@@ -196,3 +196,20 @@ describe("PostCard: source", () => {
     expect(src).not.toMatch(/creatorBadge|chipActive|border-brand/);
   });
 });
+
+describe("PostCard: like state and the comment count label", () => {
+  it("hands the like button the post's own likedByMe, true and false", () => {
+    expect(els({ post: post({ likedByMe: true, likeCount: 5 }) }).find((x) => x.type === LikeSubmit)!.props).toEqual({ count: 5, liked: true });
+    expect(els({ post: post({ likedByMe: false, likeCount: 5 }) }).find((x) => x.type === LikeSubmit)!.props).toEqual({ count: 5, liked: false });
+  });
+
+  it.each([
+    [0, "0 comments"],
+    [1, "1 comment"],
+    [2, "2 comments"],
+  ])("labels %i comments as '%s' (only exactly one is singular)", (n, label) => {
+    const t = text(render({ post: post({ commentCount: n }) }));
+    expect(t).toContain(label);
+    if (n !== 1) expect(t).not.toMatch(/\b\d+ comment\b/);
+  });
+});

@@ -258,3 +258,31 @@ describe("leaderboard: RSC boundary and source", () => {
     expect(src).not.toMatch(/chipActive|chipIdle|\bbadge\b|\bcard\b/);
   });
 });
+
+describe("leaderboard: heading and column alignment", () => {
+  it("titles the page 'Leaderboard' at heading level 2 under the channel heading", async () => {
+    expect(await render()).toMatch(/<h2 class="text-xl font-bold">Leaderboard<\/h2>/);
+  });
+
+  it("right-aligns only the Points column, in the header and in every row (numbers line up on their right edge)", async () => {
+    const html = await render();
+    const ths = [...html.matchAll(/<th\b([^>]*)>(.*?)<\/th>/g)].map((m) => [text(m[2]).trim(), /class="([^"]*)"/.exec(m[1])![1].split(/\s+/)] as const);
+    for (const [label, cls] of ths) {
+      if (label === "Points") expect(cls).toContain("text-right");
+      else expect(cls, label).toContain("text-left");
+      if (label === "Points") expect(cls).not.toContain("text-left");
+    }
+    const tds = [...html.matchAll(/<td\b([^>]*)>/g)].map((m) => ({ label: /data-label="([^"]*)"/.exec(m[1])![1], cls: /class="([^"]*)"/.exec(m[1])![1].split(/\s+/) }));
+    expect(tds).toHaveLength(12);
+    for (const { label, cls } of tds) {
+      if (label === "Points") expect(cls).toContain("text-right");
+      else expect(cls, label).not.toContain("text-right");
+    }
+  });
+
+  it("the empty row spans all four columns", async () => {
+    M.getLeaderboard.mockResolvedValue(board([]));
+    expect(elements(await page()).find((e) => e.type === EmptyRow)!.props.colSpan).toBe(4);
+    expect(await render()).toContain('colSpan="4"');
+  });
+});

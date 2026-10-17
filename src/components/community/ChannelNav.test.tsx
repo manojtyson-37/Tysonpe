@@ -181,3 +181,13 @@ describe("ChannelNav: source", () => {
     expect(src).not.toMatch(/chipActive|chipIdle|focusRingInset/);
   });
 });
+
+describe("ChannelNav: the Leaderboard item", () => {
+  const leaderboardLink = (html: string) => [...html.matchAll(/<a\b([^>]*)>(.*?)<\/a>/g)].find((m) => /href="[^"]*\/leaderboard"/.test(m[1]));
+  it("is labelled exactly 'Leaderboard', with no hint, and only when points are on", () => {
+    const link = leaderboardLink(render())!;
+    expect(link[2].replace(/<[^>]+>/g, "")).toBe("Leaderboard");
+    expect(link[2]).not.toContain("badge");
+    expect(leaderboardLink(render({ showLeaderboard: false }))).toBeUndefined();
+  });
+});
