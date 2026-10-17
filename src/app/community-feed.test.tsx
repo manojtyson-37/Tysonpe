@@ -264,7 +264,7 @@ describe("channel page: header and notice", () => {
     expect(html).toMatch(/<h2 class="[^"]*">General<\/h2>/);
     expect(text(html)).toContain("Say hello.");
     expect(text(html)).toContain("Type: Discussion · Access: All customers");
-    expect(html).toMatch(/<p class="t-meta mt-1"><span class="sr-only">Type: <\/span>Discussion · <span class="sr-only">Access: <\/span>All customers<\/p>/);
+    expect(html).toMatch(/<p class="t-meta mt-1"><span class="sr-only">Type: <\/span>Discussion <span aria-hidden="true">·<\/span> <span class="sr-only">Access: <\/span>All customers<\/p>/);
     expect(classTokens(html)).not.toContain("badge");
     expect(html).not.toMatch(/badge-/);
   });

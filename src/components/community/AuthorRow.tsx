@@ -35,7 +35,7 @@ export function AuthorRow({
         </div>
         <p className="t-meta">
           <time dateTime={createdAt.toISOString()}>{stamp(createdAt)}</time>
-          {editedAt && <span> · edited</span>}
+          {editedAt && <span><span aria-hidden="true"> · </span>edited</span>}
         </p>
       </div>
     </div>

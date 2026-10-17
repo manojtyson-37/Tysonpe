@@ -49,7 +49,7 @@ export default async function ChannelPage({
         {/* Two facts about the channel, said once as a quiet line (the labels are for screen readers). */}
         <p className="t-meta mt-1">
           <span className="sr-only">Type: </span>
-          {channel.kind === "announcement" ? "Announcements" : "Discussion"} · <span className="sr-only">Access: </span>
+          {channel.kind === "announcement" ? "Announcements" : "Discussion"} <span aria-hidden="true">·</span> <span className="sr-only">Access: </span>
           {channel.access === "open" ? "All customers" : "Selected products"}
         </p>
       </div>

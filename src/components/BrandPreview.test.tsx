@@ -145,12 +145,12 @@ describe("BrandPreview: pending (the colour box holds a half-typed or mistyped h
     expect(findings(render("#0f172a"))).toHaveLength(3);
   });
 
-  it("lists the findings in a polite live region that is mounted before the message arrives, so typing announces it", () => {
-    const region = (html: string) => /<ul\b[^>]*aria-live="polite"[^>]*>(.*?)<\/ul>/.exec(html);
-    expect(region(renderPending("#0f172a", false)), "mounted while not pending").not.toBeNull();
-    expect(text(region(renderPending("#0f172a", false))![1])).not.toContain("Not a six-digit hex yet");
-    expect(text(region(renderPending("#0f172a", true))![1])).toContain(PENDING);
-    expect(findings(renderPending("#0f172a", true))).toHaveLength(4); // the live region IS the findings list, not a copy of it
+  it("is NOT a live region: the colour field's own alert announces the pending state, and a live list re-read 3 sentences on every valid change", () => {
+    expect(render("#0f172a")).not.toContain("aria-live");
+    expect(renderPending("#0f172a", true)).not.toContain("aria-live");
+    expect(text(renderPending("#0f172a", true))).toContain(PENDING);
+    expect(findings(renderPending("#0f172a", true))).toHaveLength(4);
+    expect(findings(renderPending("#0f172a", false))).toHaveLength(3);
   });
 
   it("the stored-value sentence is a separate message with separate copy", () => {

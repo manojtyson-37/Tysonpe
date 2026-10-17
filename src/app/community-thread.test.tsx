@@ -151,7 +151,7 @@ describe("thread: comments", () => {
   it("shows 'edited' only on an edited comment", async () => {
     setup({ t: thread({ comments: [comment({ editedAt: new Date("2026-10-16T00:00:00Z") }), comment({ id: "c_2" })] }) });
     const [first, second] = commentItems(await render());
-    expect(first).toContain("· edited");
+    expect(first).toContain('<span aria-hidden="true"> · </span>edited');
     expect(second).not.toContain("edited");
   });
 

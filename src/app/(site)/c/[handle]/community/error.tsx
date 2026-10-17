@@ -1,13 +1,20 @@
 "use client";
 
-import { focusRing } from "@/components/community/styles";
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
+import { touchButton } from "@/components/community/styles";
 
-export default function CommunityError({ reset }: { reset: () => void }) {
+// Next 16 passes `retry`, which re-fetches the server payload; the older callback only re-renders the same failed one,
+// so after a server-component failure it would leave the button looking dead (same contract as src/app/error.tsx).
+// The message and stack are never shown: they can carry internals.
+export default function CommunityError({ retry }: { error?: Error & { digest?: string }; retry: () => void }) {
   return (
-    <div role="alert" className="card px-6 py-8">
-      <p className="text-lg font-semibold">Couldn&apos;t load this page</p>
-      <p className="mt-1 text-sm text-muted">Something went wrong on our side. Try again in a moment.</p>
-      <button type="button" onClick={reset} className={`btn btn-primary mt-5 min-h-10 ${focusRing}`}>Try again</button>
+    <div className="border-y border-line py-6">
+      <Callout tone="bad">
+        <p className="font-semibold">Couldn&apos;t load this page</p>
+        <p className="mt-0.5 font-normal">Something went wrong on our side. Try again in a moment.</p>
+      </Callout>
+      <Button onClick={retry} className={`mt-5 ${touchButton}`}>Try again</Button>
     </div>
   );
 }

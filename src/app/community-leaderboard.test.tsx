@@ -73,6 +73,12 @@ describe("leaderboard: the period switch", () => {
     expect("onChange" in tabs.props).toBe(false);
   });
 
+  it("period links use the brand ring colour for focus (offset stays the global one: the row has room)", async () => {
+    const tabs = elements(await page()).find((e) => e.type === Tabs)!;
+    expect(tabs.props.className).toContain("[&>a:focus-visible]:outline-[color:var(--brand-ring)]");
+    expect(tabs.props.className).not.toContain("!");
+  });
+
   it("defaults to this week; anything but period=all means this week", async () => {
     for (const sp of [{}, { period: "week" }, { period: "ALL" }, { period: "x" }, { period: ["all", "week"] }, { period: undefined }]) {
       M.getLeaderboard.mockClear();
@@ -112,9 +118,9 @@ describe("leaderboard: the ranking table", () => {
   it("lists each member with an Avatar tile, name, level and points, ties sharing a rank", async () => {
     const html = await render();
     expect(rows(html).map((r) => r.cells)).toEqual([
-      ["1", "N Neha I.", "Level 3", "340"],
-      ["2", "R Ravi K. (you)", "Level 2", "120"],
-      ["2", "A Arjun R.", "Level 2", "120"],
+      ["1", "N Neha I.", "3", "340"],
+      ["2", "R Ravi K. (you)", "2", "120"],
+      ["2", "A Arjun R.", "2", "120"],
     ]);
     expect(elements(await page()).filter((e) => e.type === Avatar).map((e) => e.props.name)).toEqual(["Neha I.", "Ravi K.", "Arjun R."]);
   });
@@ -240,6 +246,10 @@ describe("leaderboard: RSC boundary and source", () => {
 
   it("positive control: a planted handler is reported", async () => {
     expect(functionProps(<>{await page()}<button onClick={() => {}}>x</button></>, BOUNDARIES)).toContain("<button>.onClick");
+  });
+
+  it("has no non-null assertion on the period lookup", () => {
+    expect(readFileSync(PAGE_PATH, "utf8")).not.toMatch(/\)!\./);
   });
 
   it("passes the style scan and no longer builds chips by hand", () => {

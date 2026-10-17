@@ -6,6 +6,11 @@ import NotFound from "./not-found";
 import ErrorPage from "./error";
 import ConsoleLoading from "./dashboard/(console)/(overview)/loading";
 import LibraryLoading from "./(site)/library/(list)/loading";
+import CommunityError from "./(site)/c/[handle]/community/error";
+import CommunityLoading from "./(site)/c/[handle]/community/loading";
+import { readFileSync } from "node:fs";
+import { legacyStyleFindings } from "@/test/style-scan";
+import { Callout } from "@/components/ui/callout";
 
 const render = (el: React.ReactElement) => renderToStaticMarkup(el);
 const hrefs = (html: string) => [...html.matchAll(/<a [^>]*href="([^"]*)"/g)].map((m) => m[1]);
@@ -137,5 +142,53 @@ describe("library loading", () => {
     expect(count(html, 'role="status"')).toBe(1);
     expect(html).toContain('<div aria-hidden="true">');
     expect(html).not.toMatch(/<main/); // the (site) layout owns main#main
+  });
+});
+
+describe("community error boundary", () => {
+  const PATH = new URL("./(site)/c/[handle]/community/error.tsx", import.meta.url);
+  const error = Object.assign(new Error("connect ECONNREFUSED 10.0.0.7:5432"), { digest: "d4f9a1" });
+
+  it("is a bad Callout with one Button wired to retry (Next 16 re-fetches the server payload; reset would look dead)", () => {
+    const retry = vi.fn();
+    const tree = CommunityError({ error, retry });
+    expect(find(tree, (el) => el.type === Callout).map((c) => (c.props as { tone: string }).tone)).toEqual(["bad"]);
+    const buttons = find(tree, (el) => el.type === Button);
+    expect(buttons).toHaveLength(1);
+    expect((buttons[0].props as { onClick: unknown }).onClick).toBe(retry);
+    const html = render(tree);
+    expect(count(html, 'role="alert"')).toBe(1);
+    expect(html).toMatch(/<button [^>]*type="button"[^>]*>Try again<\/button>/);
+  });
+
+  it("never prints the message or stack, and keeps the copy plain", () => {
+    const html = render(CommunityError({ error, retry: () => {} }));
+    expect(html).not.toMatch(/ECONNREFUSED|10\.0\.0\.7/);
+    expect(html).not.toMatch(/oops|!/i);
+  });
+
+  it("is a client component with no legacy .card / .btn classes and no reset", () => {
+    const src = readFileSync(PATH, "utf8");
+    expect(src.trimStart()).toMatch(/^"use client";/);
+    expect(legacyStyleFindings(src)).toEqual([]);
+    expect(src).not.toMatch(/\breset\b|\bcard\b|\bbtn\b/);
+  });
+});
+
+describe("community loading", () => {
+  const html = render(<CommunityLoading />);
+
+  it("mirrors the ruled feed: heading and sub line, then a divide-y list of three posts, no cards", () => {
+    expect(html).toContain('<ul class="divide-y divide-line">');
+    expect(count(html, "<li ")).toBe(3);
+    expect(html).not.toContain("card");
+  });
+
+  it("is static and hidden from assistive tech, with one status line", () => {
+    expect(html).not.toMatch(/animate-|spinner|pulse/);
+    expect(count(html, 'role="status"')).toBe(1);
+    expect(html).toContain('<div aria-hidden="true"');
+    expect(html).not.toMatch(/<main/);
+    expect(legacyStyleFindings(readFileSync(new URL("./(site)/c/[handle]/community/loading.tsx", import.meta.url), "utf8"))).toEqual([]);
   });
 });

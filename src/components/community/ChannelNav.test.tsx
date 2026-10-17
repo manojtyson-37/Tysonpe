@@ -20,6 +20,7 @@ const render = (over: { showLeaderboard?: boolean; channels?: typeof CHANNELS } 
 /** href -> aria-current of every link in the nav. */
 const current = (html: string) =>
   Object.fromEntries([...html.matchAll(/<a\b([^>]*)>/g)].map((m) => [/href="([^"]*)"/.exec(m[1])![1], /aria-current="([^"]*)"/.exec(m[1])?.[1] ?? null]));
+const navClasses = () => /^<nav [^>]*class="([^"]*)"/.exec(render())![1].replace(/&amp;/g, "&").replace(/&gt;/g, ">").split(/\s+/);
 const at = (path: string, over?: Parameters<typeof render>[0]) => {
   nav.path = path;
   return current(render(over));
@@ -47,6 +48,22 @@ describe("ChannelNav: the Tabs link mode", () => {
     expect(cls).toContain("flex-col");
     for (const c of ["max-lg:flex-row", "max-lg:overflow-x-auto", "max-lg:p-1", "max-lg:[&>a]:shrink-0"]) expect(cls, c).toContain(c);
     expect(cls).not.toContain("flex-wrap");
+  });
+
+  it("draws its focus ring INSIDE each link, in the brand ring colour (the lg+ wrapper scrolls and would clip an outside ring)", () => {
+    const cls = navClasses();
+    for (const c of ["[&>a:focus-visible]:-outline-offset-2", "[&>a:focus-visible]:outline-[color:var(--brand-ring)]"]) expect(cls, c).toContain(c);
+    expect(cls.some((c) => c.includes("!"))).toBe(false);
+  });
+
+  it("clip rule: a nav inside an overflow container must use an inset (negative) outline offset", () => {
+    const layout = readFileSync(new URL("../../app/(site)/c/[handle]/community/layout.tsx", import.meta.url), "utf8");
+    const wrapper = /<div className=\{`([^`]*)`\}>\s*<ChannelNav\b/.exec(layout);
+    expect(wrapper, "ChannelNav wrapper not found in the community layout").not.toBeNull();
+    expect(wrapper![1]).toMatch(/overflow-y-auto/); // if this stops being true the rule below is moot: update both together
+    const offsets = navClasses().filter((c) => /outline-offset/.test(c));
+    expect(offsets.length).toBeGreaterThan(0);
+    for (const c of offsets) expect(c, c).toMatch(/:-outline-offset-\d/);
   });
 
   it("lists the channels in the order given, then the Leaderboard when points are on", () => {
@@ -87,7 +104,7 @@ describe("ChannelNav: aria-current follows the route", () => {
     expect(c["/c/meera/community/leaderboard"]).toBeNull();
   });
 
-  it("marks the Leaderboard on its own route, with the query string ignored", () => {
+  it("marks the Leaderboard on its own route, and only it", () => {
     const c = at("/c/meera/community/leaderboard");
     expect(c["/c/meera/community/leaderboard"]).toBe("page");
     expect(Object.values(c).filter(Boolean)).toHaveLength(1);

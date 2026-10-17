@@ -41,6 +41,8 @@ export default async function LeaderboardPage({
       {/* The period lives in the query string; the server already resolved it, so `current` says which tab is on. */}
       <Tabs
         ariaLabel="Leaderboard period"
+        // Brand ring colour; the global outside offset stays (a horizontal row in the page flow, nothing clips it).
+        className="[&>a:focus-visible]:outline-[color:var(--brand-ring)]"
         items={periods.map((p) => ({ href: `${base}?period=${p.period}`, label: p.label, current: period === p.period }))}
       />
 
@@ -55,7 +57,7 @@ export default async function LeaderboardPage({
         </thead>
         <tbody>
           {lb.top.length === 0 ? (
-            <EmptyRow colSpan={4} title={periods.find((p) => p.period === period)!.empty} body="Complete a lesson or start a conversation to get on the board." />
+            <EmptyRow colSpan={4} title={(period === "all" ? periods[1] : periods[0]).empty} body="Complete a lesson or start a conversation to get on the board." />
           ) : (
             lb.top.map((r, i) => (
               // `isMe` is marked in words ("you") and in aria-current, with the tint only as reinforcement.
@@ -68,7 +70,7 @@ export default async function LeaderboardPage({
                     {r.isMe && <span className="shrink-0 text-xs font-semibold">(you)</span>}
                   </div>
                 </Td>
-                <Td label="Level" className="tabular-nums text-muted">Level {r.level}</Td>
+                <Td label="Level" className="tabular-nums text-muted">{r.level}</Td>
                 <Td label="Points" align="right" className="font-bold tabular-nums">{r.points}</Td>
               </Tr>
             ))

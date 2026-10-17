@@ -25,7 +25,9 @@ export function ChannelNav({ handle, channels, showLeaderboard }: { handle: stri
       ariaLabel="Community channels"
       orientation="vertical"
       // From lg a column; below it one scrolling row (padding keeps the focus ring inside the scroll box).
-      className="max-lg:flex-row max-lg:items-center max-lg:overflow-x-auto max-lg:p-1 max-lg:[&>a]:shrink-0"
+      // The focus ring is drawn INSIDE each link (-outline-offset-2) in the brand ring colour: from lg the nav sits in an
+      // overflow-y-auto wrapper with no gap to its edge, so the global outside ring (offset 2) would be clipped.
+      className="max-lg:flex-row max-lg:items-center max-lg:overflow-x-auto max-lg:p-1 max-lg:[&>a]:shrink-0 [&>a:focus-visible]:-outline-offset-2 [&>a:focus-visible]:outline-[color:var(--brand-ring)]"
       items={[
         ...channels.map((c) => item(`${base}/${c.slug}`, c.name, c.kind === "announcement" ? "News" : c.access === "product_gated" ? "Gated" : undefined)),
         ...(showLeaderboard ? [item(`${base}/leaderboard`, "Leaderboard")] : []),

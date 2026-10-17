@@ -72,7 +72,7 @@ describe("PostCard: the author row has no pills", () => {
   it("says 'edited' in muted text only when the post was edited", () => {
     expect(render()).not.toContain("edited");
     const html = render({ post: post({ editedAt: new Date("2026-10-16T00:00:00Z") }) });
-    expect(html).toMatch(/<p class="t-meta"><time [^>]*>[^<]*<\/time><span> · edited<\/span><\/p>/);
+    expect(html).toMatch(/<p class="t-meta"><time [^>]*>[^<]*<\/time><span><span aria-hidden="true"> · <\/span>edited<\/span><\/p>/);
   });
 
   it("wraps a long author name instead of cutting it", () => {
