@@ -2,13 +2,11 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 /**
- * Either a link (`href`) or a click handler, never both and never neither: `{ label }` alone would render a dead button.
- * `onClick` is client-only. A server component cannot pass a function across the boundary (the route would 500), so it
- * must use `href`.
+ * A link, always. There is deliberately no `onClick` variant: a function cannot cross from a server component into a
+ * client component, so a handler here would be fine to type-check and then 500 the route. An action that needs a
+ * handler belongs in its own "use client" component.
  */
-export type EmptyActionItem =
-  | { label: string; href: string; onClick?: never }
-  | { label: string; onClick: () => void; href?: never };
+export type EmptyActionItem = { label: string; href: string };
 
 export interface EmptyStateProps {
   icon?: ReactNode;
@@ -22,19 +20,12 @@ export interface EmptyStateProps {
   className?: string;
 }
 
-function ActionButton({ item, primary, className }: { item: EmptyActionItem; primary: boolean; className?: string }) {
+function ActionLink({ item, primary, className }: { item: EmptyActionItem; primary: boolean; className?: string }) {
   const cls = [primary ? "btn btn-primary" : "btn btn-secondary", className].filter(Boolean).join(" ");
-  if (item.href !== undefined) {
-    return (
-      <Link href={item.href} className={cls}>
-        {item.label}
-      </Link>
-    );
-  }
   return (
-    <button type="button" onClick={item.onClick} className={cls}>
+    <Link href={item.href} className={cls}>
       {item.label}
-    </button>
+    </Link>
   );
 }
 
@@ -63,8 +54,8 @@ export function EmptyState({
       {body && <p className="mt-1 max-w-sm text-sm text-muted">{body}</p>}
       {(action || secondaryAction) && (
         <div className="mt-5 flex flex-wrap justify-center gap-3">
-          {action && <ActionButton item={action} primary className={actionClassName} />}
-          {secondaryAction && <ActionButton item={secondaryAction} primary={false} className={actionClassName} />}
+          {action && <ActionLink item={action} primary className={actionClassName} />}
+          {secondaryAction && <ActionLink item={secondaryAction} primary={false} className={actionClassName} />}
         </div>
       )}
     </div>

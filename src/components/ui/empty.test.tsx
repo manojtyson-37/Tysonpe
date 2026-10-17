@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import Link from "next/link";
 import { renderToStaticMarkup } from "react-dom/server";
 import { EmptyState, type EmptyActionItem } from "./empty";
 import { functionProps } from "@/test/rsc-safe";
@@ -37,28 +38,21 @@ describe("EmptyState", () => {
     expect(html).toContain(">Add product<");
   });
 
-  it("primary action renders as a button when onClick is given", () => {
-    const html = render(
-      <EmptyState title="No products" action={{ label: "Add product", onClick: vi.fn() }} />
-    );
-    expect(html).toContain("<button");
-    expect(html).toContain(">Add product<");
-    expect(html).not.toContain("<a");
+  it("an action is always a link, so nothing function-valued can cross the server/client boundary", () => {
+    const tree = <EmptyState title="No products" action={{ label: "Add product", href: "/new" }} secondaryAction={{ label: "Docs", href: "/d" }} />;
+    expect(functionProps(tree, [Link])).toEqual([]);
+    expect(render(tree)).not.toContain("<button");
   });
 
-  it("a button action carries a handler, which makes it client-only; a link action does not", () => {
-    const withHandler = <EmptyState title="No products" action={{ label: "Add product", onClick: () => {} }} />;
-    expect(functionProps(withHandler)).toEqual(["<button>.onClick"]);
-    expect(functionProps(<EmptyState title="No products" action={{ label: "Add product", href: "/new" }} />)).toEqual([]);
-  });
-
-  it("requires exactly one of href or onClick (a bare label would be a dead button)", () => {
+  it("requires an href and has no handler variant (a bare label or an onClick would be a dead or client-only action)", () => {
     // Compile-time contract: each @ts-expect-error fails `npm run typecheck` if the line stops being an error.
-    // @ts-expect-error neither href nor onClick
+    // @ts-expect-error no href
     const neither: EmptyActionItem = { label: "Add" };
-    // @ts-expect-error both href and onClick
+    // @ts-expect-error a handler is not part of the type, so a server caller cannot even write one
+    const handler: EmptyActionItem = { label: "Add", onClick: () => {} };
+    // @ts-expect-error a handler next to an href is no better
     const both: EmptyActionItem = { label: "Add", href: "/a", onClick: () => {} };
-    expect([neither, both]).toHaveLength(2);
+    expect([neither, handler, both]).toHaveLength(3);
   });
 
   it("renders the secondary action alongside the primary", () => {
@@ -74,13 +68,11 @@ describe("EmptyState", () => {
   });
 
   // `.btn-outline` has never existed in globals.css, so the secondary action rendered unstyled. `.btn-secondary` does.
-  it("styles the secondary action with the real btn-secondary class, as an anchor or a button", () => {
-    for (const secondaryAction of [{ label: "Learn more", href: "/docs" }, { label: "Learn more", onClick: vi.fn() }]) {
-      const html = render(<EmptyState title="No data" action={{ label: "Import", href: "/import" }} secondaryAction={secondaryAction} />);
-      expect(html).toContain('class="btn btn-secondary"');
-      expect(html).toContain('class="btn btn-primary"');
-      expect(html).not.toContain("btn-outline");
-    }
+  it("styles the secondary action with the real btn-secondary class", () => {
+    const html = render(<EmptyState title="No data" action={{ label: "Import", href: "/import" }} secondaryAction={{ label: "Learn more", href: "/docs" }} />);
+    expect(html).toContain('class="btn btn-secondary"');
+    expect(html).toContain('class="btn btn-primary"');
+    expect(html).not.toContain("btn-outline");
   });
 
   it("lets the caller put a size floor on every action", () => {
@@ -89,7 +81,7 @@ describe("EmptyState", () => {
         title="No data"
         actionClassName="pointer-coarse:min-h-11"
         action={{ label: "Import", href: "/import" }}
-        secondaryAction={{ label: "Learn more", onClick: vi.fn() }}
+        secondaryAction={{ label: "Learn more", href: "/docs" }}
       />
     );
     expect(html).toContain('class="btn btn-primary pointer-coarse:min-h-11"');
