@@ -309,6 +309,8 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
   /* Enter and exit recipes for overlays and rare reveals. Never on dashboard tables, nav, headings or KPIs. */
   .enter { animation: enter var(--dur-overlay) var(--ease-overlay) both; }
   .exit { animation: exit var(--dur-exit) var(--ease-standard) both; }
+  /* The success moment (rare tier): the check mark pops in once at --dur-reveal. Transform and opacity only. */
+  .reveal-pop { animation: reveal-pop var(--dur-reveal) var(--ease-pop) 1 both; }
 }
 
 @keyframes enter {
@@ -316,6 +318,12 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
     opacity: 0;
     transform: translateY(var(--move-enter)) scale(var(--scale-enter-min));
     filter: blur(var(--blur-enter));
+  }
+}
+@keyframes reveal-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
   }
 }
 @keyframes exit {
@@ -378,5 +386,6 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
     scroll-behavior: auto !important;
   }
   .skeleton { animation: none; }
+  .reveal-pop { animation: none; }
   .status-ring-once::after { display: none; }
 }

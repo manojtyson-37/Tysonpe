@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PrintButton } from "@/components/PrintButton";
-import { Money, dateFmt } from "@/components/ui";
+import { MetricList, MetricRow, Money, Surface, dateFmt } from "@/components/ui";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 
@@ -24,7 +24,7 @@ export default async function InvoicePage({ params }: PageProps<"/orders/[orderI
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <div className="mb-4 flex justify-end"><PrintButton /></div>
-      <article className="card p-8 sm:p-10 print:border-0 print:p-0">
+      <Surface as="article" tone="paper" padding="lg" className="print:border-0 print:p-0">
         <header className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-6">
           <div>
             <h1 className="text-2xl font-extrabold">Tax invoice</h1>
@@ -55,18 +55,18 @@ export default async function InvoicePage({ params }: PageProps<"/orders/[orderI
           <tbody>
             <tr><td>{order.product.title}</td><td className="text-right"><Money paise={order.subtotalPaise} /></td></tr>
             {order.discountPaise > 0 && (
-              <tr><td>Discount{order.coupon ? ` (${order.coupon.code})` : ""}</td><td className="text-right">−<Money paise={order.discountPaise} /></td></tr>
+              <tr><td>Discount{order.coupon ? ` (${order.coupon.code})` : ""}</td><td className="text-right"><Money paise={-order.discountPaise} /></td></tr>
             )}
           </tbody>
         </table>
 
-        <dl className="ml-auto mt-4 w-full max-w-xs space-y-2 text-sm">
-          <div className="flex justify-between"><dt className="text-muted">Taxable value</dt><dd><Money paise={taxable} /></dd></div>
-          <div className="flex justify-between"><dt className="text-muted">GST @ {order.gstRatePct}% (included)</dt><dd><Money paise={order.gstPaise} /></dd></div>
-          <div className="flex justify-between border-t border-line pt-3 text-base font-bold"><dt>Total paid</dt><dd><Money paise={order.totalPaise} /></dd></div>
-        </dl>
-        <p className="mt-8 text-xs text-muted">Payment reference: {order.providerPaymentId ?? "—"} ({order.provider}). This is a system-generated invoice. Test-mode payments carry no tax liability.</p>
-      </article>
+        <MetricList className="ml-auto mt-4 w-full max-w-xs">
+          <MetricRow label="Taxable value" value={<Money paise={taxable} />} />
+          <MetricRow label={`GST @ ${order.gstRatePct}% (included)`} value={<Money paise={order.gstPaise} />} />
+          <MetricRow label="Total paid" value={<Money paise={order.totalPaise} />} strong />
+        </MetricList>
+        <p className="mt-8 text-xs text-muted">Payment reference: {order.providerPaymentId ?? "—"} ({order.provider}). This is a system-generated invoice. Payments in test mode are simulated; no real money moved.</p>
+      </Surface>
     </div>
   );
 }
