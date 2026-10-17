@@ -385,6 +385,24 @@ describe("course player: the outline does not push the lesson down on a phone", 
     expect(src.match(/<details\b/g)).toHaveLength(1);
   });
 
+  // A node suite cannot see an auto grid track expand: below lg the page grid has one implicit column, which sizes to the
+  // content's max-content, and the summary's nowrap text widened it to 545px (innerWidth 561 at a 390px viewport, found
+  // in a real browser). These class assertions are the only guard, so each is pinned and was proven red by removal.
+  it("the page grid's base column is minmax(0,1fr), so a wide child cannot widen the track below lg", async () => {
+    setCourse(five());
+    state.lesson = textLesson("c");
+    const html = await renderLearn();
+    expect(html).toMatch(/<div class="[^"]*\bgrid\b[^"]*(?<![:\w-])grid-cols-\[minmax\(0,1fr\)\][^"]*lg:grid-cols-\[300px_minmax\(0,1fr\)\]/);
+  });
+
+  it("the disclosure can shrink inside the grid (min-w-0), and its summary text keeps min-w-0 + truncate", async () => {
+    setCourse(five());
+    state.lesson = textLesson("c");
+    const d = disclosure(await renderLearn());
+    expect(d).toMatch(/^<details class="[^"]*\bmin-w-0\b[^"]*">/);
+    expect(d).toMatch(/<summary [^>]*><span class="[^"]*\bmin-w-0\b[^"]*\bflex-1\b[^"]*\btruncate\b/);
+  });
+
   it("keeps ONE navigation landmark in the accessibility tree: each copy is hidden by CSS at the other breakpoint", async () => {
     setCourse(five());
     state.lesson = textLesson("c");

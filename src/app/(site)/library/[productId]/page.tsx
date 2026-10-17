@@ -157,11 +157,11 @@ export default async function LearnPage({ params, searchParams }: PageProps<"/li
         </Callout>
       )}
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[300px_minmax(0,1fr)]">
+      <div className="mt-8 grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[300px_minmax(0,1fr)]">
         {/* Below lg the outline is a closed disclosure so the lesson is on screen at load; it sits before the article in
             the DOM (no CSS order, which would split tab order from reading order). The key resets it to closed when a
             lesson is picked: the open attribute is DOM state React would otherwise keep across a soft navigation. */}
-        <details key={current?.id} className="group lg:hidden">
+        <details key={current?.id} className="group min-w-0 lg:hidden">
           <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 rounded-card border border-line bg-surface px-3.5 py-2.5 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink [&::-webkit-details-marker]:hidden">
             <span className="min-w-0 flex-1 truncate">
               <span className="font-semibold">Course content</span>
