@@ -8,8 +8,14 @@ export const metadata: Metadata = { title: "New product" };
 export default function NewProduct() {
   return (
     <>
-      <PageHeader title="New product" sub="You can add lessons and publish after saving." />
-      <div className="card max-w-2xl p-6"><ProductForm action={createProduct} submitLabel="Create product" /></div>
+      <PageHeader
+        title="New product"
+        sub="You can add lessons and publish after saving."
+        back={{ label: "Products", href: "/dashboard/products" }}
+      />
+      <section aria-label="Product details" className="max-w-2xl border-t border-line pt-6">
+        <ProductForm action={createProduct} submitLabel="Create product" />
+      </section>
     </>
   );
 }
