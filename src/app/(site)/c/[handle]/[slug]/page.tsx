@@ -5,6 +5,7 @@ import { Avatar, BrandScope } from "@/components/Brand";
 import { Money, TYPE_LABEL } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { resetDemoEnrollmentAction } from "@/app/actions/checkout";
 
 async function getProduct(handle: string, slug: string) {
   const normHandle = handle.toLowerCase();
@@ -128,7 +129,17 @@ export default async function ProductPage({ params }: PageProps<"/c/[handle]/[sl
               {product.pricePaise > 0 && <p className="mt-1 text-xs text-muted">Inclusive of {product.gstRatePct}% GST</p>}
 
               {owned ? (
-                <Link href={`/library/${product.id}`} className="btn btn-primary btn-lg mt-5 w-full">Open in your library</Link>
+                <div className="space-y-2 mt-5">
+                  <Link href={`/library/${product.id}`} className="btn btn-primary btn-lg w-full">Open in your library</Link>
+                  <form action={async () => {
+                    "use server";
+                    await resetDemoEnrollmentAction(product.id, `/c/${c.handle}/${product.slug}`);
+                  }}>
+                    <button type="submit" className="w-full py-2 px-3 rounded-xl text-xs font-semibold text-muted hover:text-ink border border-line bg-surface-2 hover:bg-line transition active:scale-[0.98]">
+                      🔄 Reset Enrollment &amp; Re-test ₹1 Checkout
+                    </button>
+                  </form>
+                </div>
               ) : isOwner ? (
                 <Link href={`/dashboard/products/${product.id}`} className="btn btn-secondary btn-lg mt-5 w-full">Edit product</Link>
               ) : product.status === "published" ? (

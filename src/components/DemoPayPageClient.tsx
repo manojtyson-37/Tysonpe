@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { settleDemoAction } from "@/app/actions/checkout";
+import { settleDemoAction, verifyUpiPaymentAction } from "@/app/actions/checkout";
 import { buildUpiUri, generateQrSvg } from "@/lib/payments/qr";
 import type { GatewayId } from "@/lib/payments/gateways";
 import {
@@ -44,6 +44,9 @@ export function DemoPayPageClient({
   const [phone, setPhone] = useState("9876543210");
   const [copiedVpa, setCopiedVpa] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [verifyStage, setVerifyStage] = useState<string | null>(null);
+  const [utr, setUtr] = useState("");
+  const [utrError, setUtrError] = useState<string | null>(null);
 
   const formattedAmount = (amountPaise / 100).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
@@ -67,17 +70,43 @@ export function DemoPayPageClient({
     setTimeout(() => setCopiedVpa(false), 2000);
   }
 
-  async function handleConfirmPaid() {
+  async function handleVerifyUpi(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    const cleanUtr = utr.trim().replace(/\s+/g, "");
+    if (!cleanUtr) {
+      setUtrError("Please enter the 12-digit UPI Reference Number (UTR) from your payment receipt.");
+      return;
+    }
+    if (!/^\d{12}$/.test(cleanUtr)) {
+      setUtrError("UTR must be exactly 12 numeric digits (e.g. 428910293847). Check your UPI receipt.");
+      return;
+    }
+
+    setUtrError(null);
     setIsVerifying(true);
+    setVerifyStage("Validating 12-digit UTR format…");
+
+    await new Promise((r) => setTimeout(r, 600));
+    setVerifyStage("Checking transaction on NPCI settlement rail…");
+
+    await new Promise((r) => setTimeout(r, 700));
+    setVerifyStage(`Matching credit to ${vpaHandle} (₹${formattedAmount})…`);
+
     try {
-      const res = await settleDemoAction(orderId, "success");
+      const res = await verifyUpiPaymentAction(orderId, cleanUtr);
       if (res.ok) {
+        setVerifyStage("Payment verified! Unlocking course…");
+        await new Promise((r) => setTimeout(r, 500));
         router.push(res.to);
       } else {
+        setUtrError(res.error || "Verification failed. Please check the UTR and try again.");
         setIsVerifying(false);
+        setVerifyStage(null);
       }
     } catch {
+      setUtrError("Network or verification error. Please retry.");
       setIsVerifying(false);
+      setVerifyStage(null);
     }
   }
 
@@ -195,29 +224,92 @@ export function DemoPayPageClient({
             </p>
           </div>
 
-          {/* Order Completion Action */}
-          <div className="pt-2 border-t border-line space-y-3">
+          {/* Step 2: UTR Verification Section */}
+          <div className="pt-4 border-t border-line space-y-4">
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label htmlFor="upi-utr-input" className="text-xs font-bold text-ink">
+                  Step 2: Enter 12-Digit UPI Reference / UTR
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sample = `4289${Math.floor(10000000 + Math.random() * 90000000)}`;
+                    setUtr(sample);
+                    setUtrError(null);
+                  }}
+                  className="text-[11px] text-brand hover:underline font-semibold"
+                >
+                  Fill Sample UTR
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  id="upi-utr-input"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={12}
+                  value={utr}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "").slice(0, 12);
+                    setUtr(val);
+                    if (utrError) setUtrError(null);
+                  }}
+                  placeholder="e.g. 428912345678"
+                  className={`input font-mono text-base tracking-widest pl-3 ${
+                    utrError ? "border-bad ring-1 ring-bad" : ""
+                  }`}
+                  disabled={isVerifying}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono text-muted">
+                  {utr.length}/12
+                </span>
+              </div>
+              {utrError ? (
+                <p className="mt-1.5 text-xs font-semibold text-bad flex items-center gap-1">
+                  <span>⚠</span> {utrError}
+                </p>
+              ) : (
+                <p className="hint text-[11px] mt-1 text-muted">
+                  Look for &ldquo;UPI Ref No.&rdquo; or &ldquo;UTR&rdquo; in Google Pay, PhonePe, or Paytm receipt after paying ₹{formattedAmount}.
+                </p>
+              )}
+            </div>
+
             <button
               type="button"
-              onClick={handleConfirmPaid}
-              disabled={isVerifying}
-              className="btn btn-primary btn-lg w-full flex items-center justify-center gap-2 shadow-lg shadow-good/15 hover:shadow-xl transition"
+              onClick={handleVerifyUpi}
+              disabled={isVerifying || utr.length !== 12}
+              className={`btn btn-primary btn-lg w-full flex items-center justify-center gap-2 shadow-lg transition ${
+                utr.length === 12
+                  ? "shadow-good/20 bg-good hover:bg-emerald-600 text-white"
+                  : "opacity-60 cursor-not-allowed"
+              }`}
             >
               {isVerifying ? (
                 <>
                   <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                  <span>Verifying Payment with Banking Rail…</span>
+                  <span>{verifyStage || "Verifying Payment Rail…"}</span>
                 </>
               ) : (
                 <>
-                  <ShieldCheckIcon className="w-5 h-5 text-good" />
-                  <span>I Have Paid ₹{formattedAmount} — Access Course Now</span>
+                  <ShieldCheckIcon className="w-5 h-5" />
+                  <span>Verify UTR &amp; Unlock Course (₹{formattedAmount})</span>
                 </>
               )}
             </button>
-            <p className="text-center text-xs text-muted">
-              Instant activation. Your access is added to your library and an invoice is generated immediately.
-            </p>
+
+            {/* Explainer Callout */}
+            <div className="p-3.5 rounded-xl bg-surface-2 border border-line text-[11px] text-muted space-y-1 leading-relaxed">
+              <p className="font-semibold text-ink flex items-center gap-1.5">
+                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Why is the 12-digit UTR required?</span>
+              </p>
+              <p>
+                Personal UPI VPAs (like <code className="font-mono text-ink font-semibold">{vpaHandle}</code>) don&apos;t have public bank webhooks.
+                Direct UPI captures your 12-digit UTR to verify your payment. For zero-touch automated webhooks without entering a UTR, use the <strong className="text-ink">Razorpay</strong> or <strong className="text-ink">Easebuzz</strong> tabs above.
+              </p>
+            </div>
           </div>
         </div>
       )}

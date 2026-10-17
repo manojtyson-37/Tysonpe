@@ -11,7 +11,12 @@ export type DemoOutcome = (typeof DEMO_OUTCOMES)[number];
  * bank detail ever reaches the server. Success goes through the same signature-verified confirmPayment as a real
  * gateway callback, so paid orders, invoices, enrolment and the ledger behave exactly as in production.
  */
-export async function settleDemoPayment(input: { userId: string; orderId: string; outcome: DemoOutcome }) {
+export async function settleDemoPayment(input: {
+  userId: string;
+  orderId: string;
+  outcome: DemoOutcome;
+  utr?: string;
+}) {
   if (!simulatedPaymentsAllowed()) throw new Error("Demo payments are disabled in production.");
   if (!DEMO_OUTCOMES.includes(input.outcome)) throw new AppError("invalid_outcome");
   const order = await db.order.findFirst({ where: { id: input.orderId, userId: input.userId } });
@@ -23,7 +28,9 @@ export async function settleDemoPayment(input: { userId: string; orderId: string
       ? ({ status: "paid", to: `/checkout/success/${order.id}` } as const)
       : ({ status: "failed", to: `/checkout/pay/${order.id}?failed=1` } as const);
   }
-  const paymentId = `pay_demo_${order.id.slice(-10)}`;
+  const paymentId = input.utr?.trim()
+    ? `upi_utr_${input.utr.trim()}`
+    : `pay_demo_${order.id.slice(-10)}`;
   await confirmPayment({
     userId: input.userId,
     providerOrderId: order.providerOrderId,

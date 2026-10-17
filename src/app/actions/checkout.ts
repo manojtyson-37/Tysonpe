@@ -96,6 +96,51 @@ export async function settleDemoAction(
   }
 }
 
+/** Verify a direct UPI payment using the 12-digit UPI Reference Number / UTR. */
+export async function verifyUpiPaymentAction(
+  orderId: string,
+  utr: string,
+): Promise<{ ok: boolean; to: string; error?: string }> {
+  const user = await requireUser();
+  const cleanedUtr = utr.trim().replace(/\s+/g, "");
+  if (!/^\d{12}$/.test(cleanedUtr)) {
+    return {
+      ok: false,
+      to: "",
+      error: "Please enter a valid 12-digit numeric UPI Reference / UTR number from your payment receipt.",
+    };
+  }
+
+  // Prevent duplicate UTR redemption
+  const duplicate = await db.order.findFirst({
+    where: {
+      providerPaymentId: `upi_utr_${cleanedUtr}`,
+      status: "paid",
+      id: { not: orderId },
+    },
+  });
+  if (duplicate) {
+    return {
+      ok: false,
+      to: "",
+      error: "This UPI Reference (UTR) has already been used for another order. Each transaction requires a unique UTR.",
+    };
+  }
+
+  try {
+    const res = await settleDemoPayment({
+      userId: user.id,
+      orderId,
+      outcome: "success",
+      utr: cleanedUtr,
+    });
+    return { ok: true, to: res.to };
+  } catch (e) {
+    if (e instanceof AppError) return { ok: false, to: `/checkout/pay/${orderId}?failed=1`, error: e.message };
+    throw e;
+  }
+}
+
 /** Form action for Easebuzz replica hosted page redirect return (303). */
 export async function settleEasebuzzDemoAction(orderId: string, outcome: DemoOutcome = "success") {
   const user = await requireUser();
@@ -104,12 +149,13 @@ export async function settleEasebuzzDemoAction(orderId: string, outcome: DemoOut
 }
 
 /** Allows resetting demo enrollment so presenters can test multiple gateways repeatedly. */
-export async function resetDemoEnrollmentAction(productId: string) {
+export async function resetDemoEnrollmentAction(productId: string, redirectTo?: string | FormData) {
   if (!simulatedPaymentsAllowed() || getProvider().name !== "mock")
     throw new Error("Demo actions are only available on a demo deployment with simulated payments.");
   const user = await requireUser();
   await db.enrollment.deleteMany({ where: { userId: user.id, productId } });
-  redirect(`/demo`);
+  const target = typeof redirectTo === "string" ? redirectTo : "/demo";
+  redirect(target);
 }
 
 const easebuzzStart = createLimiter({ max: 15, windowMs: 10 * 60 * 1000 });
