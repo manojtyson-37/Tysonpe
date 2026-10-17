@@ -167,10 +167,13 @@ describe("orders: rows", () => {
     expect(rowCells(html)[0][2]).toBe("Bookkeeping for Small Shops DIWALI20");
   });
 
-  it("lets a long buyer email shrink and truncate instead of widening the row", async () => {
+  it("lets a long buyer email shrink and wrap instead of widening the row, with no ellipsis", async () => {
     const html = await render();
     expect(html).toMatch(/<div class="min-w-0[^"]*">/);
-    expect(html).toMatch(/<p class="[^"]*\btruncate\b[^"]*">asha@example.com<\/p>/);
+    const email = /<p class="([^"]*)">asha@example.com<\/p>/.exec(html)![1].split(/\s+/);
+    expect(email).toContain("break-all");
+    expect(email).not.toContain("truncate");
+    expect(email.some((c) => /^(?:text-ellipsis|line-clamp-\d+|overflow-hidden)$/.test(c))).toBe(false);
   });
 });
 
@@ -201,7 +204,7 @@ describe("orders: column fit", () => {
     expect(wrapper.some((c) => /overflow-(?:x-)?hidden/.test(c))).toBe(false);
   });
 
-  it("bounds the buyer column and truncates both lines, keeping the full address as the cell's text (no title tooltip)", async () => {
+  it("bounds the buyer column; the name is cut with an ellipsis but the email wraps in full (no title tooltip)", async () => {
     const html = await render();
     for (const row of cellsOf(html)) {
       const buyer = row[1];
@@ -210,7 +213,12 @@ describe("orders: column fit", () => {
       expect(box).toContain("max-w-28");
       expect(box).toContain("xl:max-w-40");
       expect(box).not.toContain("max-w-xs");
-      expect([...buyer.inner.matchAll(/<p class="[^"]*\btruncate\b/g)]).toHaveLength(2);
+      const [name, email] = [...buyer.inner.matchAll(/<p class="([^"]*)">/g)].map((m) => classes(`class="${m[1]}"`));
+      expect(name).toContain("truncate");
+      // The address is what a creator needs to read in full: it breaks anywhere (an email has no spaces) and is never clipped.
+      expect(email).toContain("break-all");
+      for (const c of ["truncate", "text-ellipsis", "overflow-hidden", "whitespace-nowrap"]) expect(email, c).not.toContain(c);
+      expect([...email].some((c) => c.startsWith("line-clamp"))).toBe(false);
       expect(buyer.inner).not.toContain("title=");
     }
     expect(cellsOf(html).map((r) => text(r[1].inner).trim())).toEqual([LONG[0], LONG[1], LONG[0], LONG[1]].map((e) => `Demo Buyer ${e}`));
@@ -332,6 +340,12 @@ describe("orders: refund", () => {
     expect(html).not.toContain("rounded-xl");
     expect(text(html)).toContain("Only paid orders can be refunded.");
     expect(html).not.toContain("x".repeat(200));
+    // Exactly the first 200 characters are kept: not 100, not 201. A counting string makes any off-by-one visible.
+    const long = Array.from({ length: 300 }, (_, i) => String.fromCharCode(97 + (i % 26))).join("");
+    const clipped = text(await render({ error: long }));
+    expect(clipped).toContain(long.slice(0, 200));
+    expect(clipped).not.toContain(long.slice(0, 201));
+    expect(await render({ error: long.slice(0, 200) })).toContain(long.slice(0, 200));
     expect(html).not.toContain('role="alert" class="mb-4 rounded-xl');
   });
 

@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { declaresUseClient } from "@/test/client-imports";
 import { legacyStyleFindings } from "@/test/style-scan";
 import { QuizEditor, type QuizDefaults } from "./QuizEditor";
-import { focusKeyAfterAddOption, focusKeyAfterAddQuestion, focusKeyAfterRemoveOption, focusKeyAfterRemoveQuestion } from "./quiz-editor-state";
+import { hasUnsavedChanges, isQuizDirty, focusKeyAfterAddOption, focusKeyAfterAddQuestion, focusKeyAfterRemoveOption, focusKeyAfterRemoveQuestion } from "./quiz-editor-state";
 
 const action = async () => undefined;
 const defaults = (over: Partial<QuizDefaults> = {}): QuizDefaults => ({
@@ -120,6 +120,32 @@ describe("QuizEditor: structure and accessible names", () => {
     expect(q1).not.toContain('type="checkbox"');
   });
 
+  it("gives each single-answer question its own radio group, so ticking one question never unchecks another's", () => {
+    const single = (prompt: string, correct: number) => ({
+      prompt, kind: "single" as const, explanation: "",
+      options: [0, 1, 2].map((i) => ({ text: `${prompt}${i}`, correct: i === correct })),
+    });
+    const two = render(defaults({ questions: [single("a", 0), single("b", 2)] }));
+    const sets = [...two.matchAll(/<fieldset\b[^>]*>.*?<\/fieldset>/g)].map((m) => m[0]);
+    expect(sets).toHaveLength(2);
+    const groups = sets.map((set) => [...set.matchAll(/<input\b[^>]*type="radio"[^>]*>/g)].map((m) => /name="([^"]+)"/.exec(m[0])![1]));
+    expect(groups.map((g) => g.length)).toEqual([3, 3]);
+    // Within a question: one shared name, so the browser makes the radios exclusive and arrow keys move among them.
+    for (const g of groups) expect(new Set(g).size).toBe(1);
+    // Across questions: different names, or a radio in question 2 would uncheck question 1's answer in a real browser.
+    expect(groups[0][0]).not.toBe(groups[1][0]);
+    expect(sets.map((set) => [...set.matchAll(/<input\b[^>]*type="radio"[^>]*>/g)].map((m) => /\schecked=""/.test(m[0])))).toEqual([[true, false, false], [false, false, true]]);
+  });
+
+  it('names the correct-answer control "Mark option N as correct" on a radio (single) and, separately, on a checkbox (multi)', () => {
+    const controls = (set: string, type: string) => [...set.matchAll(new RegExp(`<input\\b[^>]*type="${type}"[^>]*>`, "g"))].map((m) => /aria-label="([^"]*)"/.exec(m[0])?.[1]);
+    const [single, multi] = [...html.matchAll(/<fieldset\b[^>]*>.*?<\/fieldset>/g)].map((m) => m[0]);
+    expect(controls(single, "radio")).toEqual(["Mark option 1 as correct", "Mark option 2 as correct", "Mark option 3 as correct"]);
+    expect(controls(single, "checkbox")).toEqual([]);
+    expect(controls(multi, "checkbox")).toEqual(["Mark option 1 as correct", "Mark option 2 as correct", "Mark option 3 as correct"]);
+    expect(controls(multi, "radio")).toEqual([]);
+  });
+
   it("uses real checkboxes (the Checkbox primitive) for a multi-answer question, each ticked as loaded", () => {
     const rest = html.slice(html.indexOf("</fieldset>"));
     const boxes = [...rest.matchAll(/<input\b[^>]*type="checkbox"[^>]*>/g)].map((m) => m[0]);
@@ -181,7 +207,61 @@ describe("QuizEditor: limits", () => {
   });
 });
 
+describe("QuizEditor: limits at the boundary", () => {
+  // The caps are not exported (they are client-file constants), so the brief's literal values are used: 2..6 options, 1..100 questions.
+  const q = (options: number) => ({
+    prompt: "p", kind: "single" as const, explanation: "",
+    options: Array.from({ length: options }, (_, i) => ({ text: `o${i}`, correct: i === 0 })),
+  });
+  const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>/g)].map((m) => m[0]);
+  const flags = (html: string, label: RegExp) => buttons(html).filter((b) => label.test(b)).map((b) => b.includes('disabled=""'));
+  const addOption = (html: string) => [...html.matchAll(/<button\b[^>]*>(?:(?!<\/button>).)*Add option<\/button>/g)].map((m) => m[0].includes('disabled=""'));
+  const withOptions = (n: number) => render(defaults({ questions: [q(n)] }));
+
+  it("Remove option is off at exactly 2 options and on at exactly 3", () => {
+    expect(flags(withOptions(2), /aria-label="Remove option \d"/)).toEqual([true, true]);
+    expect(flags(withOptions(3), /aria-label="Remove option \d"/)).toEqual([false, false, false]);
+  });
+
+  it("Add option is on at exactly 5 options and off at exactly 6", () => {
+    expect(addOption(withOptions(5))).toEqual([false]);
+    expect(addOption(withOptions(6))).toEqual([true]);
+    expect(addOption(withOptions(4))).toEqual([false]);
+  });
+
+  it("Add question is on at 99 questions and off at exactly 100", () => {
+    const many = (n: number) => render(defaults({ questions: Array.from({ length: n }, () => q(2)) }));
+    const addQuestion = (html: string) => buttons(html).filter((b) => b.includes('data-focus-key="add-question"')).map((b) => b.includes('disabled=""'));
+    expect(addQuestion(many(99))).toEqual([false]);
+    expect(addQuestion(many(100))).toEqual([true]);
+    // Remove question stays on for every question once there is more than one.
+    expect(flags(many(100), /aria-label="Remove question \d+"/).every((d) => !d)).toBe(true);
+  });
+});
+
 describe("QuizEditor: unsaved changes", () => {
+  it("does not flag a brand-new quiz with no questions: the baseline is the blank question the editor starts with", () => {
+    const html = render(defaults({ questions: [] }));
+    expect(html).toMatch(/<span role="status" class="text-sm font-medium text-muted"><\/span>/);
+    expect(html).not.toContain("Unsaved changes");
+    // The same blank question is what is posted, so posted and baseline cannot differ before an edit.
+    const posted = unescape(/name="questions" value="([^"]*)"/.exec(html)![1]);
+    const blank = JSON.stringify([{ prompt: "", kind: "single", explanation: "", options: [{ text: "", correct: true }, { text: "", correct: false }] }]);
+    expect(hasUnsavedChanges(isQuizDirty(posted, blank), false)).toBe(false);
+    const src = readFileSync(new URL("./QuizEditor.tsx", import.meta.url), "utf8");
+    expect(src).toContain("useState(() => JSON.stringify(defaults.questions.length ? defaults.questions : [blankQ()]))");
+  });
+
+  it("the rendered words come from the dirty flag only, and the Saved note is gated on the same flag", () => {
+    // The initial render of any quiz is clean, so the words themselves are rendered and asserted in
+    // QuizEditor.interactions.test.tsx (stubbed hooks). Here: the pure rule that feeds the flag, and the wiring.
+    expect(hasUnsavedChanges(true, false)).toBe(true);
+    expect(hasUnsavedChanges(false, true)).toBe(true);
+    expect(hasUnsavedChanges(false, false)).toBe(false);
+    const src = readFileSync(new URL("./QuizEditor.tsx", import.meta.url), "utf8");
+    expect(src).toMatch(/<span role="status"[^>]*>\{dirty \? "Unsaved changes" : ""\}<\/span>\s*\{!dirty && <SavedNote \/>\}/);
+  });
+
   it("shows an always-mounted status region that is empty until something changes", () => {
     const html = render();
     expect(html).toMatch(/<span role="status" class="text-sm font-medium text-muted"><\/span>/);

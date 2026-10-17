@@ -28,7 +28,7 @@ vi.mock("@/lib/db", () => ({ db: { contentItem: { findFirst: mocks.findFirst } }
 vi.mock("@/lib/learning/admin", () => ({ listExhaustedLearners: mocks.exhausted }));
 vi.mock("@/app/actions/curriculum", () => ({ saveQuiz: mocks.saveQuiz, resetAttemptsAction: mocks.resetAttemptsAction }));
 
-import { QuizEditor } from "@/components/QuizEditor";
+import { QuizEditor, type QuizDefaults } from "@/components/QuizEditor";
 import { Button, PageHeader } from "@/components/ui";
 import { functionProps } from "@/test/rsc-safe";
 import { legacyStyleFindings } from "@/test/style-scan";
@@ -44,13 +44,19 @@ const quizItem = (over: Record<string, unknown> = {}) => ({
   title: "GST basics quiz",
   product: { creatorId: "cr_1" },
   quiz: {
-    passPct: 70,
-    maxAttempts: 3,
+    // Values that differ from the editor's own defaults (70 / 3), so a hardcoded copy of those cannot pass.
+    passPct: 80,
+    maxAttempts: 5,
     shuffle: true,
+    // Stored rows carry ids and positions the editor must not receive.
     questions: [
       {
-        prompt: "Rate for online courses?", kind: "single", explanation: "18%",
-        options: [{ text: "5%", correct: false }, { text: "18%", correct: true }],
+        id: "q_1", position: 0, prompt: "Rate for online courses?", kind: "single", explanation: "18%",
+        options: [{ id: "o_1", position: 0, text: "5%", correct: false }, { id: "o_2", position: 1, text: "18%", correct: true }],
+      },
+      {
+        id: "q_2", position: 1, prompt: "Valid UPI handles?", kind: "multi", explanation: "",
+        options: [{ id: "o_3", position: 0, text: "meera@okhdfc", correct: true }, { id: "o_4", position: 1, text: "meera", correct: false }, { id: "o_5", position: 2, text: "shop@ybl", correct: true }],
       },
     ],
   },
@@ -100,7 +106,10 @@ describe("quiz page: lookup", () => {
     expect(mocks.findFirst).toHaveBeenCalledTimes(1);
     const args = mocks.findFirst.mock.calls[0][0] as { where: unknown; include: Record<string, unknown> };
     expect(args.where).toEqual({ id: "i_1", productId: "p_1", kind: "quiz", product: { creatorId: "cr_1" } });
-    expect(JSON.stringify(args.include)).toContain('"orderBy":{"position":"asc"}');
+    // Both levels are ordered by position, each on its own: questions in the quiz, options in each question.
+    const questions = (args.include as { quiz: { include: { questions: { orderBy?: unknown; include: { options: { orderBy?: unknown } } } } } }).quiz.include.questions;
+    expect(questions.orderBy).toEqual({ position: "asc" });
+    expect(questions.include.options.orderBy).toEqual({ position: "asc" });
   });
 
   it("is a 404 for another product's item, another creator's, a non-quiz lesson, or a quiz with no body", async () => {
@@ -139,9 +148,23 @@ describe("quiz page: header and editor", () => {
     const bound = ed.props.action as unknown as { action: string; args: unknown[] };
     expect({ action: bound.action, args: bound.args }).toEqual({ action: "saveQuiz", args: ["i_1"] });
     expect(ed.props.defaults).toEqual({
-      passPct: 70, maxAttempts: 3, shuffle: true,
-      questions: [{ prompt: "Rate for online courses?", kind: "single", explanation: "18%", options: [{ text: "5%", correct: false }, { text: "18%", correct: true }] }],
+      passPct: 80, maxAttempts: 5, shuffle: true,
+      questions: [
+        { prompt: "Rate for online courses?", kind: "single", explanation: "18%", options: [{ text: "5%", correct: false }, { text: "18%", correct: true }] },
+        {
+          prompt: "Valid UPI handles?", kind: "multi", explanation: "",
+          options: [{ text: "meera@okhdfc", correct: true }, { text: "meera", correct: false }, { text: "shop@ybl", correct: true }],
+        },
+      ],
     });
+  });
+
+  it("maps the kind of each question as stored, and passes shuffle off and unlimited attempts through", async () => {
+    const ed = elements(await call()).find((e) => e.type === QuizEditor)!;
+    expect((ed.props.defaults as QuizDefaults).questions.map((q) => q.kind)).toEqual(["single", "multi"]);
+    current = quizItem({ quiz: { passPct: 60, maxAttempts: null, shuffle: false, questions: [] } });
+    const again = elements(await call()).find((e) => e.type === QuizEditor)!;
+    expect(again.props.defaults).toEqual({ passPct: 60, maxAttempts: null, shuffle: false, questions: [] });
   });
 
   it("renders the editor with the questions and settings", async () => {

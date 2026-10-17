@@ -35,8 +35,8 @@ const COARSE = "pointer-coarse:min-h-11";
 // Column budget. Content is 728px wide at the 1024px breakpoint and 856px at 1280px, minus the table's 20px
 // scroll-fade gutter, so the cells give up 4px of side padding each (a descendant selector, which outranks Td's own
 // px-3) and the two free-text columns are bounded: a long email would otherwise set the column's width
-// (Buyer is cut with `truncate`, the full address stays in the cell's text), while Product may wrap but not
-// collapse to a one-word column. Below xl the actions may wrap onto two lines instead of widening the table; from xl
+// (the Buyer name is cut with `truncate`, but the email wraps with `break-all` so a creator can always read the whole
+// address: wrapping adds height, not width), while Product may wrap but not collapse to a one-word column. Below xl the actions may wrap onto two lines instead of widening the table; from xl
 // they sit in one row. Either way both buttons are left-aligned, so Invoice has the same x on paid and refunded rows.
 const TABLE_FIT = "[&_td]:px-2 [&_th]:px-2";
 const BUYER_CELL = "min-w-0 max-w-28 xl:max-w-40";
@@ -104,7 +104,7 @@ export default async function OrdersPage({ searchParams }: PageProps<"/dashboard
                 <Td label="Buyer">
                   <div className={BUYER_CELL}>
                     <p className="truncate font-medium">{o.user.name}</p>
-                    <p className="t-meta truncate">{o.user.email}</p>
+                    <p className="t-meta break-all">{o.user.email}</p>
                   </div>
                 </Td>
                 <Td label="Product">
