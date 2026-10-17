@@ -237,7 +237,7 @@ export async function markOrderPaid(input: {
 
     const paidAt = new Date();
     const gate = await tx.order.updateMany({
-      where: { id: order.id, status: { in: ["created", "failed"] } },
+      where: { id: order.id, status: { in: ["created", "failed", "pending_approval", "pending_verification"] } },
       data: { status: "paid", paidAt, providerPaymentId: input.paymentId },
     });
     if (gate.count === 0) return tx.order.findUniqueOrThrow({ where: { id: order.id } });

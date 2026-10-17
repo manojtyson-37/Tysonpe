@@ -23,6 +23,7 @@ export default async function PayPage({ params, searchParams }: PageProps<"/chec
   });
   if (!order) notFound();
   if (order.status === "paid") redirect(`/checkout/success/${order.id}`);
+  if (order.status === "pending_approval") redirect(`/checkout/status/${order.id}`);
   if (order.status === "refunded") redirect("/library");
   if (!isOrderFresh(order.createdAt)) redirect(`/checkout/${order.productId}`);
 

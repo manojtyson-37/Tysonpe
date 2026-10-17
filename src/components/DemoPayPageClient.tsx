@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { settleDemoAction, verifyUpiPaymentAction } from "@/app/actions/checkout";
+import {
+  settleDemoAction,
+  submitUpiPaymentForVerificationAction,
+  verifyUpiPaymentAction,
+} from "@/app/actions/checkout";
 import { buildUpiUri, generateQrSvg } from "@/lib/payments/qr";
 import type { GatewayId } from "@/lib/payments/gateways";
 import {
@@ -86,25 +90,22 @@ export function DemoPayPageClient({
     setIsVerifying(true);
     setVerifyStage("Validating 12-digit UTR format…");
 
-    await new Promise((r) => setTimeout(r, 600));
-    setVerifyStage("Checking transaction on NPCI settlement rail…");
-
-    await new Promise((r) => setTimeout(r, 700));
-    setVerifyStage(`Matching credit to ${vpaHandle} (₹${formattedAmount})…`);
+    await new Promise((r) => setTimeout(r, 500));
+    setVerifyStage(`Recording transfer to ${vpaHandle}…`);
 
     try {
-      const res = await verifyUpiPaymentAction(orderId, cleanUtr);
+      const res = await submitUpiPaymentForVerificationAction(orderId, cleanUtr);
       if (res.ok) {
-        setVerifyStage("Payment verified! Unlocking course…");
-        await new Promise((r) => setTimeout(r, 500));
+        setVerifyStage("Payment submitted! Opening verification status…");
+        await new Promise((r) => setTimeout(r, 400));
         router.push(res.to);
       } else {
-        setUtrError(res.error || "Verification failed. Please check the UTR and try again.");
+        setUtrError(res.error || "Submission failed. Please check the UTR and try again.");
         setIsVerifying(false);
         setVerifyStage(null);
       }
     } catch {
-      setUtrError("Network or verification error. Please retry.");
+      setUtrError("Network or submission error. Please retry.");
       setIsVerifying(false);
       setVerifyStage(null);
     }
@@ -282,32 +283,33 @@ export function DemoPayPageClient({
               disabled={isVerifying || utr.length !== 12}
               className={`btn btn-primary btn-lg w-full flex items-center justify-center gap-2 shadow-lg transition ${
                 utr.length === 12
-                  ? "shadow-good/20 bg-good hover:bg-emerald-600 text-white"
+                  ? "shadow-good/20 bg-brand hover:bg-brand-hover text-brand-ink"
                   : "opacity-60 cursor-not-allowed"
               }`}
             >
               {isVerifying ? (
                 <>
                   <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                  <span>{verifyStage || "Verifying Payment Rail…"}</span>
+                  <span>{verifyStage || "Submitting to Creator…"}</span>
                 </>
               ) : (
                 <>
                   <ShieldCheckIcon className="w-5 h-5" />
-                  <span>Verify UTR &amp; Unlock Course (₹{formattedAmount})</span>
+                  <span>Submit Payment &amp; UTR for Verification (₹{formattedAmount})</span>
                 </>
               )}
             </button>
 
             {/* Explainer Callout */}
-            <div className="p-3.5 rounded-xl bg-surface-2 border border-line text-[11px] text-muted space-y-1 leading-relaxed">
+            <div className="p-3.5 rounded-xl bg-surface-2 border border-line text-[11px] text-muted space-y-1.5 leading-relaxed">
               <p className="font-semibold text-ink flex items-center gap-1.5">
                 <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Why is the 12-digit UTR required?</span>
+                <span>How Direct UPI Verification Works</span>
               </p>
               <p>
-                Personal UPI VPAs (like <code className="font-mono text-ink font-semibold">{vpaHandle}</code>) don&apos;t have public bank webhooks.
-                Direct UPI captures your 12-digit UTR to verify your payment. For zero-touch automated webhooks without entering a UTR, use the <strong className="text-ink">Razorpay</strong> or <strong className="text-ink">Easebuzz</strong> tabs above.
+                1. Transfer ₹{formattedAmount} to <code className="font-mono text-ink font-semibold">{vpaHandle}</code> via your UPI app.<br />
+                2. Enter your 12-digit UTR from your bank receipt and click Submit.<br />
+                3. The creator checks their bank account / PhonePe and activates your course access immediately.
               </p>
             </div>
           </div>

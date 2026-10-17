@@ -8,9 +8,15 @@ const statusStyle: Record<string, string> = {
   paid: "badge-good", published: "badge-good", active: "badge-good",
   created: "badge-warn", draft: "badge-muted", failed: "badge-bad",
   refunded: "badge-bad", inactive: "badge-muted",
+  pending_approval: "badge-warn", pending_verification: "badge-warn",
+};
+const statusLabel: Record<string, string> = {
+  pending_approval: "Awaiting Verification",
+  pending_verification: "Awaiting Verification",
+  created: "pending",
 };
 export const StatusBadge = ({ status }: { status: string }) => (
-  <span className={`badge ${statusStyle[status] ?? "badge-muted"}`}>{status}</span>
+  <span className={`badge ${statusStyle[status] ?? "badge-muted"}`}>{statusLabel[status] ?? status}</span>
 );
 
 export const TYPE_LABEL: Record<string, string> = {

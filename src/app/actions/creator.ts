@@ -7,7 +7,7 @@ import { requireCreator } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { slugify } from "@/lib/handles";
 import { pickProductSlug } from "@/lib/product-slug";
-import { AppError, refundOrder } from "@/lib/orders";
+import { AppError, markOrderFailed, markOrderPaid, refundOrder } from "@/lib/orders";
 import {
   GST_RATES,
   PRODUCT_TYPES,
@@ -258,4 +258,40 @@ export async function refundOrderAction(orderId: string) {
   }
   revalidatePath("/dashboard/orders");
   revalidatePath("/dashboard");
+}
+
+export async function approveUpiOrderAction(orderId: string) {
+  const { creator } = await requireCreator();
+  const order = await db.order.findFirst({
+    where: { id: orderId, creatorId: creator.id },
+  });
+  if (!order) throw new AppError("not_found", "Order not found.");
+  if (order.status === "paid") {
+    revalidatePath("/dashboard/orders");
+    return;
+  }
+
+  const paymentId = order.providerPaymentId || `upi_approved_${Date.now()}`;
+  await markOrderPaid({
+    providerOrderId: order.providerOrderId,
+    paymentId,
+  });
+
+  revalidatePath("/dashboard/orders");
+  revalidatePath("/dashboard");
+  revalidatePath(`/checkout/status/${order.id}`);
+  revalidatePath(`/library`);
+}
+
+export async function rejectUpiOrderAction(orderId: string) {
+  const { creator } = await requireCreator();
+  const order = await db.order.findFirst({
+    where: { id: orderId, creatorId: creator.id },
+  });
+  if (!order) throw new AppError("not_found", "Order not found.");
+  if (order.status === "paid") throw new AppError("invalid_state", "Cannot reject a paid order.");
+
+  await markOrderFailed({ providerOrderId: order.providerOrderId });
+  revalidatePath("/dashboard/orders");
+  revalidatePath(`/checkout/status/${order.id}`);
 }

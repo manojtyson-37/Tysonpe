@@ -141,6 +141,52 @@ export async function verifyUpiPaymentAction(
   }
 }
 
+/** Submit a direct UPI payment UTR for creator verification in their bank account. */
+export async function submitUpiPaymentForVerificationAction(
+  orderId: string,
+  utr: string,
+): Promise<{ ok: boolean; to: string; error?: string }> {
+  const user = await requireUser();
+  const cleanedUtr = utr.trim().replace(/\s+/g, "");
+  if (!/^\d{12}$/.test(cleanedUtr)) {
+    return {
+      ok: false,
+      to: "",
+      error: "Please enter a valid 12-digit numeric UPI Reference / UTR number from your payment receipt.",
+    };
+  }
+
+  // Prevent duplicate UTR redemption
+  const duplicate = await db.order.findFirst({
+    where: {
+      providerPaymentId: `upi_utr_${cleanedUtr}`,
+      status: { in: ["paid", "pending_approval"] },
+      id: { not: orderId },
+    },
+  });
+  if (duplicate) {
+    return {
+      ok: false,
+      to: "",
+      error: "This UPI Reference (UTR) has already been submitted for another order. Each transaction requires a unique UTR.",
+    };
+  }
+
+  const order = await db.order.findFirst({ where: { id: orderId, userId: user.id } });
+  if (!order) return { ok: false, to: "", error: "Order not found." };
+  if (order.status === "paid") return { ok: true, to: `/checkout/success/${order.id}` };
+
+  await db.order.update({
+    where: { id: order.id },
+    data: {
+      status: "pending_approval",
+      providerPaymentId: `upi_utr_${cleanedUtr}`,
+    },
+  });
+
+  return { ok: true, to: `/checkout/status/${order.id}` };
+}
+
 /** Form action for Easebuzz replica hosted page redirect return (303). */
 export async function settleEasebuzzDemoAction(orderId: string, outcome: DemoOutcome = "success") {
   const user = await requireUser();
