@@ -121,8 +121,11 @@ function useRovingSelection(values: string[], value: string, onChange: (value: s
   return { selectedIndex, keyboardDriven, getItemProps };
 }
 
+// `isolate` makes every item its own stacking context so the indicator can sit at -z-10 inside it: below the label
+// and below the item's own focus outline (an inset ring would otherwise paint under a z-auto indicator), but never
+// behind the track or page background. Labels are `relative`, so they paint above the indicator too.
 const ITEM_BASE =
-  "relative inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-control px-3.5 text-sm font-medium " +
+  "relative isolate inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-control px-3.5 text-sm font-medium " +
   "transition-[color,scale] duration-(--dur-fast) ease-(--ease-standard) active:scale-(--scale-press)";
 
 const ITEM_TONE = {
@@ -144,8 +147,8 @@ type Variant = "tabs" | "segmented";
 
 // Tabs: the active item gets a tone-step pill on the canvas. Segmented: a recessed track with a raised hairline thumb.
 const INDICATOR_CLASS: Record<Variant, string> = {
-  tabs: "absolute inset-0 rounded-control bg-surface-2",
-  segmented: "absolute inset-0 rounded-control border border-line-strong bg-surface",
+  tabs: "absolute inset-0 -z-10 rounded-control bg-surface-2",
+  segmented: "absolute inset-0 -z-10 rounded-control border border-line-strong bg-surface",
 };
 
 const LIST_CLASS: Record<Variant, string> = {

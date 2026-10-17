@@ -325,3 +325,59 @@ describe("SegmentedControl", () => {
     expect(tagAttrs(html, "div")[0].class).toContain("w-full");
   });
 });
+
+/**
+ * Paint order. A focus outline lives on the item (link or button) and, when inset, sits inside the same box as the
+ * absolutely positioned indicator. An indicator with z-index auto paints after the item's own outline and covers it
+ * (the active channel in the community nav lost its ring). A unit test cannot compute paint order, so this pins the
+ * two CSS facts that guarantee it: the item is its own stacking context, and the indicator sits at a negative z-index
+ * inside it, which paints below the item's content and outline while staying above anything behind the item.
+ */
+describe("indicator paint order", () => {
+  const classesOf = (attrs: Record<string, string>) => attrs.class.split(/\s+/);
+  const indicatorOf = (html: string) => tagAttrs(html, "span").find((attrs) => attrs["aria-hidden"] === "true")!;
+
+  it("link tabs: the link isolates a stacking context and the indicator sits below its content (-z-10)", () => {
+    mockPath = "/dashboard/orders";
+    const html = renderToStaticMarkup(<Tabs ariaLabel="Dashboard" items={[{ href: "/dashboard/orders", label: "Orders" }]} />);
+    expect(classesOf(tagAttrs(html, "a")[0])).toContain("isolate");
+    const indicator = classesOf(indicatorOf(html));
+    expect(indicator).toContain("-z-10");
+    expect(indicator).toContain("bg-surface-2");
+    expect(indicator).toContain("absolute");
+    expect(indicator).toContain("inset-0");
+  });
+
+  it("state tabs: the tab isolates a stacking context and the indicator sits below it", () => {
+    const html = renderToStaticMarkup(
+      <Tabs ariaLabel="Status" id="s" value="a" onChange={() => {}} items={[{ value: "a", label: "A" }, { value: "b", label: "B" }]} />,
+    );
+    const selected = tagAttrs(html, "button").find((attrs) => attrs["aria-selected"] === "true")!;
+    expect(classesOf(selected)).toContain("isolate");
+    expect(classesOf(indicatorOf(html))).toContain("-z-10");
+  });
+
+  it("segmented control: the thumb sits below its radio inside an isolated stacking context", () => {
+    const html = renderToStaticMarkup(
+      <SegmentedControl ariaLabel="Mode" value="a" onChange={() => {}} options={[{ value: "a", label: "A" }, { value: "b", label: "B" }]} />,
+    );
+    const checked = tagAttrs(html, "button").find((attrs) => attrs["aria-checked"] === "true")!;
+    expect(classesOf(checked)).toContain("isolate");
+    expect(classesOf(indicatorOf(html))).toContain("-z-10");
+  });
+
+  it("only the active item carries an indicator, and it still renders before the label (behind it in source order too)", () => {
+    mockPath = "/dashboard/orders";
+    const html = renderToStaticMarkup(
+      <Tabs ariaLabel="Dashboard" items={[{ href: "/dashboard", label: "Overview", match: "exact" }, { href: "/dashboard/orders", label: "Orders" }]} />,
+    );
+    expect(html.match(/aria-hidden="true"/g)).toHaveLength(1);
+    expect(html).toMatch(/aria-hidden="true"[^>]*><\/span><span class="relative">Orders<\/span>/);
+  });
+
+  it("the label stays a positioned element so it paints above the indicator", () => {
+    mockPath = "/dashboard/orders";
+    const html = renderToStaticMarkup(<Tabs ariaLabel="Dashboard" items={[{ href: "/dashboard/orders", label: "Orders" }]} />);
+    expect(html).toContain('<span class="relative">Orders</span>');
+  });
+});
