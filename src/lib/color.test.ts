@@ -58,4 +58,7 @@ describe("brandRingColor", () => {
     const r = brandRingColor("nonsense");
     for (const bg of ["#ffffff", PAPER, SURFACE_2]) expect(contrastRatio(r, bg)).toBeGreaterThanOrEqual(3);
   });
+  it("falls back to ink, never indigo, on bad input", () => {
+    for (const bad of ["nonsense", "not-a-colour", "", "#fff", "#12345"]) expect(brandRingColor(bad)).toBe("#16130f");
+  });
 });

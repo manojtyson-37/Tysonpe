@@ -66,10 +66,10 @@ export function brandTextColor(hex: string): string {
 /**
  * Brand colour usable for non-text UI (focus rings, progress fills): >= 3:1 (WCAG 1.4.11) on white, on paper (#fbfaf7)
  * and on the warm surface-2 track (#f3f0e9). Paper passes with little margin, so it is an explicit constraint: a token
- * tweak should fail color.test.ts rather than silently regress. Bad input -> ink-mixed default.
+ * tweak should fail color.test.ts rather than silently regress. Bad input -> ink (the palette has no indigo to fall back on).
  */
 export function brandRingColor(hex: string): string {
-  const rgb = parseHex(hex) ?? ([0x4f, 0x46, 0xe5] as RGB);
+  const rgb = parseHex(hex) ?? INK;
   return darkenUntil(
     rgb,
     (c) => contrastRatio(c, "#ffffff") >= 3 && contrastRatio(c, "#fbfaf7") >= 3 && contrastRatio(c, "#f3f0e9") >= 3,
