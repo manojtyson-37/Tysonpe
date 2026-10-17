@@ -11,7 +11,7 @@ export function PostComposer({ channelId }: { channelId: string }) {
       <Field name="body" label="Start a conversation" as="textarea" rows={4} maxLength={2000} required hint="Plain text, up to 2,000 characters." />
       <FormError />
       <div className="flex justify-end">
-        <SubmitButton variant="primary" size="md" pendingText="Posting…">Post</SubmitButton>
+        <SubmitButton variant="primary" size="md" className="pointer-coarse:min-h-11" pendingText="Posting…">Post</SubmitButton>
       </div>
     </ActionForm>
   );

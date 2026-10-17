@@ -7,10 +7,12 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { CommentForm } from "@/components/community/CommentForm";
 import { EditCommentForm } from "@/components/community/EditCommentForm";
 import { EditPostForm } from "@/components/community/EditPostForm";
-import { stamp } from "@/components/community/format";
+import { AuthorRow } from "@/components/community/AuthorRow";
 import { LikeButton } from "@/components/community/LikeButton";
 import { PostCard } from "@/components/community/PostCard";
-import { creatorBadge, focusRing } from "@/components/community/styles";
+import { focusRing, touchButton } from "@/components/community/styles";
+import { IconArrowLeft, IconChevronDown } from "@/components/icons";
+import { ButtonLink } from "@/components/ui";
 import { requireUser } from "@/lib/auth/session";
 import { getThread } from "@/lib/community/posts";
 import { resolveCommunity } from "@/lib/community/viewer";
@@ -45,45 +47,47 @@ export default async function ThreadPage({
   const here = `${back}/p/${postId}`;
 
   return (
-    <div className="space-y-4">
-      <Link href={back} className={`inline-flex min-h-10 min-w-0 items-center break-words rounded-lg text-sm font-medium text-muted transition-all duration-150 hover:text-ink active:scale-[0.98] ${focusRing}`}>
-        <span aria-hidden>←&nbsp;</span>{thread.channel.name}
+    <div className="space-y-5">
+      <Link href={back} className={`inline-flex min-w-0 items-center gap-1 break-words rounded-control text-sm text-muted transition-colors duration-150 hover:text-ink pointer-coarse:min-h-11 ${focusRing}`}>
+        <IconArrowLeft size={16} className="shrink-0" />
+        {thread.channel.name}
       </Link>
       <PostCard post={post} href="" viewerIsCreator={ctx.viewer.isCreator} thread />
 
       {post.canEdit && (
-        <details className="card px-5 py-3">
-          <summary className="cursor-pointer text-sm font-semibold">Edit your post</summary>
-          <div className="mt-3"><EditPostForm postId={post.id} title={post.title} body={post.body} /></div>
+        <details className="group border-y border-line">
+          <summary className={`flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden ${focusRing}`}>
+            Edit your post
+            <IconChevronDown size={16} className="shrink-0 text-muted transition-transform duration-(--dur-fast) ease-(--ease-standard) group-open:rotate-180" />
+          </summary>
+          <div className="pb-5 pt-1"><EditPostForm postId={post.id} title={post.title} body={post.body} /></div>
         </details>
       )}
 
-      <section aria-label="Comments" className="space-y-3">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-muted">{post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}</h2>
+      <section aria-label="Comments" className="space-y-4">
+        <h2 className="text-lg font-bold">{post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}</h2>
         {comments.length === 0 && !after ? (
-          <p className="card px-5 py-4 text-sm text-muted">No comments yet.</p>
+          <p className="border-y border-line py-4 text-sm text-muted">No comments yet.</p>
         ) : (
-          <ol className="space-y-3">
+          <ol className="divide-y divide-line border-y border-line">
             {comments.map((c) => {
               const mine = c.author.id === user.id;
               const canBan = ctx.viewer.isCreator && !c.author.isCreator;
               return (
-                <li key={c.id} className="card px-5 py-3.5">
-                  <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
-                    <span className="min-w-0 break-words text-sm font-semibold text-ink">{c.author.name}</span>
-                    {c.author.isCreator && <span className={creatorBadge}>Creator</span>}
-                    <time dateTime={c.createdAt.toISOString()}>{stamp(c.createdAt)}</time>
-                    {c.editedAt && <span>edited</span>}
-                  </div>
-                  <p className="mt-1.5 whitespace-pre-wrap break-words text-[15px] leading-relaxed">{c.body}</p>
-                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                <li key={c.id} className="py-4">
+                  <AuthorRow name={c.author.name} isCreator={c.author.isCreator} createdAt={c.createdAt} editedAt={c.editedAt} />
+                  <p className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-relaxed">{c.body}</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
                     <LikeButton kind="comment" id={c.id} count={c.likeCount} liked={c.likedByMe} />
                     <div className="ml-auto flex flex-wrap items-center gap-2">
                       {canBan && (
                         <form action={banMemberAction.bind(null, c.author.id)}>
                           <ConfirmButton
-                            className={`btn btn-danger btn-sm min-h-10 ${focusRing}`}
+                            variant="danger"
+                            size="sm"
+                            className={touchButton}
                             aria-label={`Remove from community: ${c.author.name}`}
+                            confirmLabel="Remove from community"
                             message={`Remove ${c.author.name} from this community? They lose access to every channel until you unban them.`}
                           >
                             Remove from community
@@ -92,7 +96,7 @@ export default async function ThreadPage({
                       )}
                       {c.canDelete && (
                         <form action={deleteCommentAction.bind(null, c.id)}>
-                          <ConfirmButton className={`btn btn-danger btn-sm min-h-10 ${focusRing}`} aria-label={`Delete comment by ${c.author.name}`} message="Delete this comment?">
+                          <ConfirmButton variant="danger" size="sm" className={touchButton} aria-label={`Delete comment by ${c.author.name}`} confirmLabel="Delete comment" message="Delete this comment?">
                             Delete
                           </ConfirmButton>
                         </form>
@@ -100,11 +104,12 @@ export default async function ThreadPage({
                     </div>
                   </div>
                   {mine && (
-                    <details className="mt-2.5 border-t border-line pt-2.5">
-                      <summary className={`inline-flex min-h-10 cursor-pointer items-center rounded-lg text-sm font-semibold ${focusRing}`}>
-                        Edit<span className="sr-only"> comment by {c.author.name}</span>
+                    <details className="group mt-3 border-t border-line">
+                      <summary className={`flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden ${focusRing}`}>
+                        <span>Edit<span className="sr-only"> comment by {c.author.name}</span></span>
+                        <IconChevronDown size={16} className="shrink-0 text-muted transition-transform duration-(--dur-fast) ease-(--ease-standard) group-open:rotate-180" />
                       </summary>
-                      <div className="mt-2"><EditCommentForm commentId={c.id} body={c.body} /></div>
+                      <div className="pb-2 pt-1"><EditCommentForm commentId={c.id} body={c.body} /></div>
                     </details>
                   )}
                 </li>
@@ -112,14 +117,16 @@ export default async function ThreadPage({
             })}
           </ol>
         )}
-        {nextCommentCursor && (
-          // Comments are oldest-first, so the cursor leads to LATER comments despite the "older" wording in the brief.
-          <Link href={`${here}?after=${encodeURIComponent(nextCommentCursor)}`} className={`btn btn-secondary min-h-10 ${focusRing}`}>More comments</Link>
+        {(nextCommentCursor || after) && (
+          <div className="flex flex-wrap items-center gap-2">
+            {nextCommentCursor && (
+              // Comments are oldest-first, so the cursor leads to LATER comments despite the "older" wording in the brief.
+              <ButtonLink href={`${here}?after=${encodeURIComponent(nextCommentCursor)}`} variant="secondary" className={touchButton}>More comments</ButtonLink>
+            )}
+            {after && <ButtonLink href={here} variant="ghost" className={touchButton}>Back to the first comments</ButtonLink>}
+          </div>
         )}
-        {after && (
-          <Link href={here} className={`btn btn-ghost min-h-10 ${focusRing}`}>Back to the first comments</Link>
-        )}
-        <div className="card px-5 pb-4 pt-5"><CommentForm postId={post.id} /></div>
+        <div className="border-t border-line pt-5"><CommentForm postId={post.id} /></div>
       </section>
     </div>
   );

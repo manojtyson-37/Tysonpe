@@ -2,42 +2,20 @@ import Link from "next/link";
 import { deletePostAction, setPinnedAction } from "@/app/actions/community";
 import { banMemberAction } from "@/app/actions/community-admin";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { IconPin } from "@/components/icons";
-import { Avatar, Button, ButtonLink } from "@/components/ui";
+import { Button, ButtonLink } from "@/components/ui";
 import type { PostView } from "@/lib/community/posts";
-import { stamp } from "./format";
+import { AuthorRow } from "./AuthorRow";
 import { LikeButton } from "./LikeButton";
 import { focusRing, touchButton } from "./styles";
 
-/**
- * One post: a ruled item, not a card (the feed draws the rules between posts). The author row has no pills: "Creator" and
- * "Pinned" are plain words, so the state is in the text and not in a coloured fill.
- */
+/** One post: a ruled item, not a card (the feed draws the rules between posts). */
 export function PostCard({ post, href, viewerIsCreator, thread = false }: { post: PostView; href: string; viewerIsCreator: boolean; thread?: boolean }) {
   // The thread page owns the h1/h2 outline: the post title is an h2 there, an h3 inside the channel feed.
   const Heading = thread ? "h2" : "h3";
   const by = post.author.name;
   return (
     <article className="min-w-0">
-      <div className="flex items-center gap-3">
-        <Avatar name={by} size="sm" />
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-baseline gap-x-2">
-            <span className="min-w-0 break-words text-sm font-semibold text-ink">{by}</span>
-            {post.author.isCreator && <span className="text-xs font-semibold text-ink">Creator</span>}
-            {post.pinned && (
-              <span className="inline-flex items-center gap-1 text-xs font-semibold text-ink">
-                <IconPin size={14} className="shrink-0" />
-                Pinned
-              </span>
-            )}
-          </div>
-          <p className="t-meta">
-            <time dateTime={post.createdAt.toISOString()}>{stamp(post.createdAt)}</time>
-            {post.editedAt && <span> · edited</span>}
-          </p>
-        </div>
-      </div>
+      <AuthorRow name={by} isCreator={post.author.isCreator} pinned={post.pinned} createdAt={post.createdAt} editedAt={post.editedAt} />
       {post.title && (
         <Heading className="mt-3 min-w-0 break-words text-lg font-bold leading-snug">
           {thread ? post.title : <Link href={href} className={`transition-colors duration-150 hover:text-[color:var(--brand-text)] ${focusRing}`}>{post.title}</Link>}

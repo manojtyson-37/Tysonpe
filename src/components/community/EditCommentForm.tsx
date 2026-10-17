@@ -9,7 +9,7 @@ export function EditCommentForm({ commentId, body }: { commentId: string; body: 
       <Field name="body" label="Edit comment" as="textarea" rows={3} maxLength={1000} defaultValue={body} required />
       <FormError />
       <div className="flex items-center gap-3">
-        <SubmitButton className="btn btn-primary btn-sm min-h-10" pendingText="Saving…">Save changes</SubmitButton>
+        <SubmitButton variant="primary" size="sm" className="pointer-coarse:min-h-11" pendingText="Saving…">Save changes</SubmitButton>
         <SavedNote />
       </div>
     </ActionForm>

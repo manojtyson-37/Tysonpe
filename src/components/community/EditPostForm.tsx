@@ -10,7 +10,7 @@ export function EditPostForm({ postId, title, body }: { postId: string; title: s
       <Field name="body" label="Post" as="textarea" rows={5} maxLength={2000} defaultValue={body} required />
       <FormError />
       <div className="flex items-center gap-3">
-        <SubmitButton className="btn btn-primary btn-sm min-h-10" pendingText="Saving…">Save changes</SubmitButton>
+        <SubmitButton variant="primary" size="sm" className="pointer-coarse:min-h-11" pendingText="Saving…">Save changes</SubmitButton>
         <SavedNote />
       </div>
     </ActionForm>

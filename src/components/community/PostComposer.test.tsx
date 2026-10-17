@@ -32,6 +32,7 @@ describe("PostComposer", () => {
     const button = /<button\b[^>]*type="submit"[^>]*>/.exec(html)![0];
     expect(button).toMatch(/class="btn btn-primary[^"]*"/);
     expect(button).not.toContain("btn-sm");
+    expect(button).toContain("pointer-coarse:min-h-11");
     expect(html).toMatch(/>Post<\/button>/);
   });
 

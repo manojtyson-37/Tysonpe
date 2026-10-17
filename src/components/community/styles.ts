@@ -5,5 +5,3 @@ export const touchButton = `${focusRing} pointer-coarse:min-h-11`;
 /** Active nav/tab chip: ink on the brand tint reads at any brand colour. */
 export const chipActive = "bg-brand-soft font-semibold text-ink";
 export const chipIdle = "text-muted hover:bg-surface-2 hover:text-ink";
-/** "Creator" pill: ink on the brand tint instead of brand-on-tint, which fails for light brands. */
-export const creatorBadge = "badge bg-brand-soft text-ink";
