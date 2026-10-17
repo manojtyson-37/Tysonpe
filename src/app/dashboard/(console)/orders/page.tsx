@@ -9,7 +9,6 @@ import {
   EmptyRow,
   MoneyCell,
   PageHeader,
-  RowActions,
   StatusBadge,
   Table,
   Tabs,
@@ -33,11 +32,22 @@ const FILTER_LABEL: Record<Filter, string> = { all: "All", paid: "Paid", refunde
 // orders match than are shown (a count, so exactly 200 says nothing).
 const ORDER_LIMIT = 200;
 const COARSE = "pointer-coarse:min-h-11";
+// Column budget. Content is 728px wide at the 1024px breakpoint and 856px at 1280px, minus the table's 20px
+// scroll-fade gutter, so the cells give up 4px of side padding each (a descendant selector, which outranks Td's own
+// px-3) and the two free-text columns are bounded: a long email would otherwise set the column's width
+// (Buyer is cut with `truncate`, the full address stays in the cell's text), while Product may wrap but not
+// collapse to a one-word column. Below xl the actions may wrap onto two lines instead of widening the table; from xl
+// they sit in one row. Either way both buttons are left-aligned, so Invoice has the same x on paid and refunded rows.
+const TABLE_FIT = "[&_td]:px-2 [&_th]:px-2";
+const BUYER_CELL = "min-w-0 max-w-28 xl:max-w-40";
+const PRODUCT_CELL = "min-w-28 max-w-xs";
+const ACTIONS = "flex flex-wrap items-center gap-2 xl:flex-nowrap";
 
 // What marking refunded really does (see refundOrder): access and payout effects only. No gateway is called, and the
-// gateway may be the demo one, so the copy names no provider.
+// gateway may be the demo one, so the copy names no provider. Access is "the access this order granted", not "the
+// buyer's access": refundOrder hands the enrolment to another paid order for the same product when there is one.
 const REFUND_CONFIRM =
-  "Mark this order refunded? The buyer loses access immediately. This does not return any money: refund it through your payment gateway.";
+  "Mark this order refunded? This removes the access this order granted. It does not return any money: refund it through your payment gateway.";
 
 export default async function OrdersPage({ searchParams }: PageProps<"/dashboard/orders">) {
   const { creator } = await requireCreator();
@@ -69,7 +79,7 @@ export default async function OrdersPage({ searchParams }: PageProps<"/dashboard
           current: status === f,
         }))}
       />
-      <Table aria-label="Orders" stack>
+      <Table aria-label="Orders" stack className={TABLE_FIT}>
         <thead>
           <tr>
             <Th>Date</Th>
@@ -92,44 +102,46 @@ export default async function OrdersPage({ searchParams }: PageProps<"/dashboard
               <Tr key={o.id}>
                 <DateCell date={o.createdAt} label="Date" className="text-muted" />
                 <Td label="Buyer">
-                  <div className="min-w-0 max-w-xs">
+                  <div className={BUYER_CELL}>
                     <p className="truncate font-medium">{o.user.name}</p>
                     <p className="t-meta truncate">{o.user.email}</p>
                   </div>
                 </Td>
                 <Td label="Product">
-                  <div className="flex min-w-0 max-w-xs flex-wrap items-center gap-x-2 gap-y-1">
+                  <div className={`flex flex-wrap items-center gap-x-2 gap-y-1 ${PRODUCT_CELL}`}>
                     <span className="break-words">{o.product.title}</span>
                     {o.coupon && <Badge>{o.coupon.code}</Badge>}
                   </div>
                 </Td>
                 <MoneyCell paise={o.totalPaise} label="Total" className="font-semibold" />
                 <Td label="Status"><StatusBadge status={o.status} /></Td>
-                <RowActions>
-                  {(o.status === "paid" || o.status === "refunded") && (
-                    <ButtonLink
-                      variant="ghost"
-                      size="sm"
-                      href={`/orders/${o.id}/invoice`}
-                      aria-label={`Invoice for ${o.product.title}, ${o.user.name}`}
-                      className={COARSE}
-                    >
-                      Invoice
-                    </ButtonLink>
-                  )}
-                  {o.status === "paid" && (
-                    <form action={refundOrderAction.bind(null, o.id)}>
-                      <ConfirmButton
+                <Td className="whitespace-nowrap">
+                  <div className={ACTIONS}>
+                    {(o.status === "paid" || o.status === "refunded") && (
+                      <ButtonLink
+                        variant="ghost"
+                        size="sm"
+                        href={`/orders/${o.id}/invoice`}
+                        aria-label={`Invoice for ${o.product.title}, ${o.user.name}`}
                         className={COARSE}
-                        aria-label={`Mark refunded: ${o.product.title}, ${o.user.name}`}
-                        message={REFUND_CONFIRM}
-                        confirmLabel="Mark refunded"
                       >
-                        Mark refunded
-                      </ConfirmButton>
-                    </form>
-                  )}
-                </RowActions>
+                        Invoice
+                      </ButtonLink>
+                    )}
+                    {o.status === "paid" && (
+                      <form action={refundOrderAction.bind(null, o.id)}>
+                        <ConfirmButton
+                          className={COARSE}
+                          aria-label={`Mark refunded: ${o.product.title}, ${o.user.name}`}
+                          message={REFUND_CONFIRM}
+                          confirmLabel="Mark refunded"
+                        >
+                          Mark refunded
+                        </ConfirmButton>
+                      </form>
+                    )}
+                  </div>
+                </Td>
               </Tr>
             ))
           )}
@@ -141,7 +153,7 @@ export default async function OrdersPage({ searchParams }: PageProps<"/dashboard
         </p>
       )}
       <p className="t-meta mt-3">
-        “Mark refunded” revokes the buyer&apos;s access and removes the order from payouts. It does not return any money: refund the buyer through your payment gateway.
+        “Mark refunded” removes the access this order granted and takes the order out of payouts. It does not return any money: refund the buyer through your payment gateway.
       </p>
     </>
   );

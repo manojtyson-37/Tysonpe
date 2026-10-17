@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { declaresUseClient } from "@/test/client-imports";
 import { legacyStyleFindings } from "@/test/style-scan";
-import { focusKeyAfterRemoveOption, focusKeyAfterRemoveQuestion, isQuizDirty, QuizEditor, type QuizDefaults } from "./QuizEditor";
+import { QuizEditor, type QuizDefaults } from "./QuizEditor";
+import { focusKeyAfterAddOption, focusKeyAfterAddQuestion, focusKeyAfterRemoveOption, focusKeyAfterRemoveQuestion } from "./quiz-editor-state";
 
 const action = async () => undefined;
 const defaults = (over: Partial<QuizDefaults> = {}): QuizDefaults => ({
@@ -186,36 +188,58 @@ describe("QuizEditor: unsaved changes", () => {
     expect(html).not.toContain("Unsaved changes");
   });
 
-  it("is dirty exactly when the questions differ from the last accepted JSON", () => {
-    const d = defaults();
-    const base = JSON.stringify(d.questions);
-    expect(isQuizDirty(d.questions, base)).toBe(false);
-    expect(isQuizDirty([{ ...d.questions[0], prompt: d.questions[0].prompt + "?" }, d.questions[1]], base)).toBe(true);
-    expect(isQuizDirty(d.questions.slice(0, 1), base)).toBe(true);
-    // Toggling a correct flag and toggling it back is clean again.
-    const flipped = structuredClone(d.questions);
-    flipped[0].options[0].correct = true;
-    expect(isQuizDirty(flipped, base)).toBe(true);
-    flipped[0].options[0].correct = false;
-    expect(isQuizDirty(flipped, base)).toBe(false);
+  it("flags edits to the settings fields (pass mark, max attempts, shuffle) and clears the flag only on a save", () => {
+    const src = readFileSync(new URL("./QuizEditor.tsx", import.meta.url), "utf8");
+    // The three settings fields sit in ONE wrapper that listens for both events.
+    const wrapper = /<div className="grid gap-3 sm:grid-cols-3"([^>]*)>([\s\S]*?)<\/div>\s*<FormError/.exec(src)!;
+    expect(wrapper[1]).toContain("onInput={editSettings}");
+    expect(wrapper[1]).toContain("onChange={editSettings}");
+    for (const name of ['name="passPct"', 'name="maxAttempts"', 'name="shuffle"']) expect(wrapper[2], name).toContain(name);
+    expect(src).toMatch(/const editSettings = \(\) => \{[^}]*setSettingsDirty\(true\)/);
+    expect(src).toMatch(/saveSucceeded\(res\)[^\n]*setSettingsDirty\(false\)/);
+  });
+
+  it("hides the Saved note while anything is unsaved, and shows Unsaved changes from the same flag", () => {
+    const src = readFileSync(new URL("./QuizEditor.tsx", import.meta.url), "utf8");
+    expect(src).toContain("const dirty = hasUnsavedChanges(isQuizDirty(serialised, saved), settingsDirty);");
+    expect(src).toContain('{dirty ? "Unsaved changes" : ""}');
+    expect(src).toContain("{!dirty && <SavedNote />}");
+  });
+
+  it("stringifies the questions once per render", () => {
+    const src = readFileSync(new URL("./QuizEditor.tsx", import.meta.url), "utf8");
+    expect(src.match(/JSON\.stringify\(qs\)/g)).toHaveLength(1);
+  });
+
+  it("moves the save baseline through baselineAfterSave, posting what the form posted", () => {
+    const src = readFileSync(new URL("./QuizEditor.tsx", import.meta.url), "utf8");
+    expect(src).toMatch(/setSaved\(\(baseline\) => baselineAfterSave\(res, String\(fd\.get\("questions"\) \?\? ""\), baseline\)\)/);
+  });
+
+  it("points add-question and add-option focus at the key of the control that was just added", () => {
+    const src = readFileSync(new URL("./QuizEditor.tsx", import.meta.url), "utf8");
+    expect(src).toContain("setFocusTo({ key: focusKeyAfterAddQuestion(qs.length) });");
+    expect(src).toContain("setFocusTo({ key: focusKeyAfterAddOption(qi, qs[qi].options.length) });");
+    // And those keys exist on the rendered controls once the list has grown by one.
+    const html = render();
+    const keys = [...html.matchAll(/data-focus-key="([^"]+)"/g)].map((m) => m[1]);
+    expect(keys).toContain(focusKeyAfterAddQuestion(1)); // a second question exists in the fixture: q1-prompt
+    expect(keys).toContain(focusKeyAfterAddOption(0, 2)); // the fixture's first question has option 2
+  });
+});
+
+describe("QuizEditor: the pure state module", () => {
+  it("is not a client module, so a server file or a test can call it", () => {
+    const src = readFileSync(new URL("./quiz-editor-state.ts", import.meta.url), "utf8");
+    expect(declaresUseClient(src)).toBe(false);
+    const editor = readFileSync(new URL("./QuizEditor.tsx", import.meta.url), "utf8");
+    expect(declaresUseClient(editor)).toBe(true);
+    // Nothing the editor used to export as a helper is exported from the client file any more.
+    expect([...editor.matchAll(/^export (?:async )?(?:function|const) (\w+)/gm)].map((m) => m[1])).toEqual(["QuizEditor"]);
   });
 });
 
 describe("QuizEditor: focus after removing", () => {
-  it("a removed question hands focus to the one that slid into its place, else the one before", () => {
-    expect(focusKeyAfterRemoveQuestion(0, 3)).toBe("q0-prompt");
-    expect(focusKeyAfterRemoveQuestion(1, 3)).toBe("q1-prompt");
-    expect(focusKeyAfterRemoveQuestion(2, 3)).toBe("q1-prompt");
-    expect(focusKeyAfterRemoveQuestion(0, 1)).toBe("add-question");
-  });
-
-  it("a removed option does the same, else the question's Add option button", () => {
-    expect(focusKeyAfterRemoveOption(2, 0, 3)).toBe("q2-option0");
-    expect(focusKeyAfterRemoveOption(2, 1, 3)).toBe("q2-option1");
-    expect(focusKeyAfterRemoveOption(2, 2, 3)).toBe("q2-option1");
-    expect(focusKeyAfterRemoveOption(2, 0, 1)).toBe("q2-add-option");
-  });
-
   it("every key the helpers can return is on a rendered control (prompt, option, Add option, Add question)", () => {
     const html = render();
     const keys = [...html.matchAll(/data-focus-key="([^"]+)"/g)].map((m) => m[1]);

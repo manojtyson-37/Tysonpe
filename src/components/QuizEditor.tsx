@@ -4,10 +4,24 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { FormState } from "@/app/actions/auth";
 import { ActionForm, Checkbox, Field, FormError, Input, SavedNote, Select, SubmitButton, Textarea } from "./form";
 import { IconPlus, IconX } from "./icons";
+import {
+  ADD_QUESTION_KEY,
+  addOptionKey,
+  baselineAfterSave,
+  focusKeyAfterAddOption,
+  focusKeyAfterAddQuestion,
+  focusKeyAfterRemoveOption,
+  focusKeyAfterRemoveQuestion,
+  hasUnsavedChanges,
+  isQuizDirty,
+  optionKey,
+  promptKey,
+  saveSucceeded,
+  type Opt,
+  type Q,
+} from "./quiz-editor-state";
 import { Button } from "./ui/button";
 
-type Opt = { text: string; correct: boolean };
-type Q = { prompt: string; kind: "single" | "multi"; explanation: string; options: Opt[] };
 export type QuizDefaults = { passPct: number; maxAttempts: number | null; shuffle: boolean; questions: Q[] };
 
 const blankQ = (): Q => ({ prompt: "", kind: "single", explanation: "", options: [{ text: "", correct: true }, { text: "", correct: false }] });
@@ -20,30 +34,8 @@ const COARSE = "pointer-coarse:min-h-11";
 // The field's label is the accessible name but the row already shows what it is: keep it for screen readers only.
 const NAME_ONLY = "[&>label]:sr-only";
 
-/** Where focus goes after the last add or remove. Each registered control has one key; see `reg` below. */
+/** Where focus goes after the last add or remove. Each registered control has one key; see quiz-editor-state.ts. */
 type FocusTarget = { key: string };
-const promptKey = (qi: number) => `q${qi}-prompt`;
-const optionKey = (qi: number, oi: number) => `q${qi}-option${oi}`;
-const addOptionKey = (qi: number) => `q${qi}-add-option`;
-const ADD_QUESTION_KEY = "add-question";
-
-/**
- * Focus after removing question `qi` of `count`: the question that slid into the slot, else the one before it, else
- * (cannot happen while Remove is off at one question) the Add question button.
- */
-export function focusKeyAfterRemoveQuestion(qi: number, count: number): string {
-  return qi < count - 1 ? promptKey(qi) : qi > 0 ? promptKey(qi - 1) : ADD_QUESTION_KEY;
-}
-
-/** Same rule for options; the fallback is the question's Add option button (Remove is off at two options). */
-export function focusKeyAfterRemoveOption(qi: number, oi: number, count: number): string {
-  return oi < count - 1 ? optionKey(qi, oi) : oi > 0 ? optionKey(qi, oi - 1) : addOptionKey(qi);
-}
-
-/** Unsaved when the questions now differ from the JSON the server last accepted (the loaded quiz, or the last save). */
-export function isQuizDirty(questions: Q[], savedJson: string): boolean {
-  return JSON.stringify(questions) !== savedJson;
-}
 
 /** The single-answer twin of `Checkbox`: a native radio (arrow keys move within the question's group), same size and hit area. */
 function CorrectRadio({ name, checked, onChange, label }: { name: string; checked: boolean; onChange: () => void; label: string }) {
@@ -67,7 +59,15 @@ export function QuizEditor({ action, defaults }: { action: (prev: FormState, fd:
   // What the server last stored, as the same JSON the form posts. Starts as the loaded quiz; moves on a successful save.
   const [saved, setSaved] = useState(() => JSON.stringify(defaults.questions.length ? defaults.questions : [blankQ()]));
   const serialised = JSON.stringify(qs);
-  const dirty = isQuizDirty(qs, saved);
+  // Pass mark, max attempts and shuffle live in the form, not in `qs`: the wrapper around them flags any edit.
+  const [settingsDirty, setSettingsDirty] = useState(false);
+  // Counts settings edits, so a save only clears the flag when nothing was typed while it was running.
+  const settingsEdits = useRef(0);
+  const editSettings = () => {
+    settingsEdits.current += 1;
+    setSettingsDirty(true);
+  };
+  const dirty = hasUnsavedChanges(isQuizDirty(serialised, saved), settingsDirty);
 
   // Controls that can receive focus after an add or remove carry `data-focus-key`; the effect finds them under this root.
   const root = useRef<HTMLDivElement>(null);
@@ -97,7 +97,7 @@ export function QuizEditor({ action, defaults }: { action: (prev: FormState, fd:
 
   const addQuestion = () => {
     setQs((p) => [...p, blankQ()]);
-    setFocusTo({ key: promptKey(qs.length) });
+    setFocusTo({ key: focusKeyAfterAddQuestion(qs.length) });
   };
   const removeQuestion = (qi: number) => {
     setQs((p) => p.filter((_, k) => k !== qi));
@@ -105,7 +105,7 @@ export function QuizEditor({ action, defaults }: { action: (prev: FormState, fd:
   };
   const addOption = (qi: number) => {
     set(qi, { options: [...qs[qi].options, { text: "", correct: false }] });
-    setFocusTo({ key: optionKey(qi, qs[qi].options.length) });
+    setFocusTo({ key: focusKeyAfterAddOption(qi, qs[qi].options.length) });
   };
   const removeOption = (qi: number, oi: number) => {
     set(qi, { options: qs[qi].options.filter((_, j) => j !== oi) });
@@ -114,9 +114,11 @@ export function QuizEditor({ action, defaults }: { action: (prev: FormState, fd:
 
   // The settings form posts the questions as JSON. When the server accepts them (the `saved` field), that exact
   // JSON becomes the baseline, so anything edited while the save was running still counts as unsaved.
-  const saveAction = async (prev: FormState, fd: FormData) => {
-    const res = await action(prev, fd);
-    if (res?.fields?.saved && !res.error) setSaved(String(fd.get("questions") ?? ""));
+  const saveAction = async (prevState: FormState, fd: FormData) => {
+    const editsAtSubmit = settingsEdits.current;
+    const res = await action(prevState, fd);
+    setSaved((baseline) => baselineAfterSave(res, String(fd.get("questions") ?? ""), baseline));
+    if (saveSucceeded(res) && settingsEdits.current === editsAtSubmit) setSettingsDirty(false);
     return res;
   };
 
@@ -221,7 +223,7 @@ export function QuizEditor({ action, defaults }: { action: (prev: FormState, fd:
       <ActionForm action={saveAction} className="space-y-4">
         <h2 className="font-semibold">Quiz settings</h2>
         <input type="hidden" name="questions" value={serialised} />
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-3" onInput={editSettings} onChange={editSettings}>
           <Field name="passPct" label="Pass mark (%)" type="number" defaultValue={defaults.passPct} required />
           <Field name="maxAttempts" label="Max attempts" type="number" defaultValue={defaults.maxAttempts ?? ""} hint="Empty = unlimited. Unlimited retakes let learners probe the answers by trial and error; 3 is a good default." />
           <Field name="shuffle" label="Shuffle options" as="select" defaultValue={defaults.shuffle ? "yes" : "no"}>

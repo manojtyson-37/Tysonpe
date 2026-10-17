@@ -172,7 +172,97 @@ describe("orders: rows", () => {
     expect(html).toMatch(/<div class="min-w-0[^"]*">/);
     expect(html).toMatch(/<p class="[^"]*\btruncate\b[^"]*">asha@example.com<\/p>/);
   });
+});
 
+// A CSS-level fit (no horizontal scroll at 1024 and 1280) cannot be proven by server-rendered markup; the browser
+// re-measures it. What these tests pin is every class that fit relies on, so removing one is a red test.
+describe("orders: column fit", () => {
+  const LONG = ["demo-full-1792018295446@test.tysonpe.test", "demo-fail-1792018303481@test.tysonpe.test"];
+  const cellsOf = (html: string) => {
+    const body = html.slice(html.indexOf("<tbody"));
+    return [...body.matchAll(/<tr\b[^>]*>(.*?)<\/tr>/g)].map((r) => [...r[1].matchAll(/<td\b([^>]*)>(.*?)<\/td>/g)].map((c) => ({ attrs: c[1], inner: c[2] })));
+  };
+  const classes = (s: string) => new Set((/class="([^"]*)"/.exec(s)?.[1] ?? "").split(/\s+/));
+  beforeEach(() => {
+    mocks.findMany.mockResolvedValue(
+      [["o_0", "paid", LONG[0]], ["o_1", "refunded", LONG[1]], ["o_2", "failed", LONG[0]], ["o_3", "created", LONG[1]]].map(([id, status, email]) =>
+        order({ id, status, user: { name: "Demo Buyer", email } }),
+      ),
+    );
+  });
+
+  it("tightens cell padding and never hides overflow (a cut-off button is a bug, not something to mask)", async () => {
+    const html = await render();
+    const wrapper = /<div class="([^"]*)" tabindex="0" role="region" aria-label="Orders">/.exec(html)![1].replace(/&amp;/g, "&").split(/\s+/);
+    expect(wrapper).toContain("overflow-x-auto");
+    expect(wrapper).toContain("[&_td]:px-2");
+    expect(wrapper).toContain("[&_th]:px-2");
+    expect(wrapper).not.toContain("overflow-hidden");
+    expect(wrapper.some((c) => /overflow-(?:x-)?hidden/.test(c))).toBe(false);
+  });
+
+  it("bounds the buyer column and truncates both lines, keeping the full address as the cell's text (no title tooltip)", async () => {
+    const html = await render();
+    for (const row of cellsOf(html)) {
+      const buyer = row[1];
+      const box = classes(/<div class="[^"]*"/.exec(buyer.inner)![0] + '"');
+      expect(box).toContain("min-w-0");
+      expect(box).toContain("max-w-28");
+      expect(box).toContain("xl:max-w-40");
+      expect(box).not.toContain("max-w-xs");
+      expect([...buyer.inner.matchAll(/<p class="[^"]*\btruncate\b/g)]).toHaveLength(2);
+      expect(buyer.inner).not.toContain("title=");
+    }
+    expect(cellsOf(html).map((r) => text(r[1].inner).trim())).toEqual([LONG[0], LONG[1], LONG[0], LONG[1]].map((e) => `Demo Buyer ${e}`));
+  });
+
+  it("gives Product a floor so it wraps but never collapses to a one-word column", async () => {
+    for (const row of cellsOf(await render())) {
+      const box = classes(/<div class="[^"]*"/.exec(row[2].inner)![0] + '"');
+      expect(box).toContain("min-w-28");
+      expect(box).toContain("max-w-xs");
+      expect(box).toContain("flex-wrap");
+    }
+  });
+
+  it("puts the actions in one left-aligned, unshifted group per row: same classes, Invoice first", async () => {
+    const rows = cellsOf(await render());
+    const groups = rows.map((r) => {
+      const cell = r[5];
+      expect(classes(cell.attrs)).not.toContain("text-right"); // Td default is left; RowActions would right-align
+      const m = /^<div class="([^"]*)">(.*)<\/div>$/.exec(cell.inner)!;
+      return { cls: m[1], inner: m[2] };
+    });
+    for (const g of groups) {
+      const c = g.cls.split(/\s+/);
+      for (const t of ["flex", "flex-wrap", "items-center", "gap-2", "xl:flex-nowrap"]) expect(c, t).toContain(t);
+      expect(c).not.toContain("justify-end");
+    }
+    // paid: Invoice then the refund form; refunded: Invoice alone, as the first child, i.e. at the same x; others: empty.
+    expect(groups[0].inner).toMatch(/^<a\b[^>]*>Invoice<\/a><form\b/);
+    expect(groups[1].inner).toMatch(/^<a\b[^>]*>Invoice<\/a>$/);
+    expect(groups[1].inner).not.toContain("<form");
+    expect(groups[2].inner).toBe("");
+    expect(groups[3].inner).toBe("");
+    expect(classes(rows[0][5].attrs)).toContain("whitespace-nowrap");
+  });
+
+  it("keeps the touch floor on both actions", async () => {
+    const html = await render();
+    expect(html.match(/pointer-coarse:min-h-11/g)!.length).toBeGreaterThanOrEqual(3); // invoice x2 + refund
+    for (const m of html.matchAll(/<button\b[^>]*>Mark refunded<\/button>|<button\b[^>]*aria-label="Mark refunded[^"]*"[^>]*>/g)) expect(m[0]).toContain("pointer-coarse:min-h-11");
+  });
+
+  it("keeps the stacked (<sm) layout: data-stack, a data-label on each data cell, the actions cell unlabelled", async () => {
+    const html = await render();
+    expect(html).toContain('data-stack="true"');
+    const row = cellsOf(html)[0];
+    expect(row.slice(0, 5).map((c) => /data-label="([^"]+)"/.exec(c.attrs)?.[1])).toEqual(["Date", "Buyer", "Product", "Total", "Status"]);
+    expect(row[5].attrs).not.toContain("data-label");
+  });
+});
+
+describe("orders: rows (status and invoice)", () => {
   it("labels every status with the shared badge (created reads Pending)", async () => {
     mocks.findMany.mockResolvedValue(["paid", "refunded", "failed", "created"].map((status, i) => order({ id: `o_${i}`, status })));
     expect(rowCells(await render()).map((c) => c[4])).toEqual(["Paid", "Refunded", "Failed", "Pending"]);
@@ -222,13 +312,16 @@ describe("orders: refund", () => {
     const [c] = await confirms();
     const dialog = String(c.props.message);
     expect(dialog).not.toMatch(/razorpay/i);
-    expect(dialog).toMatch(/loses access/i);
+    expect(dialog).toMatch(/removes the access this order granted/i);
+    // refundOrder keeps access when the buyer holds another paid order for the product, so never promise it is lost.
+    expect(dialog).not.toMatch(/loses access|immediately|revokes/i);
     expect(dialog).toMatch(/does not (?:return|send) (?:any |the )?money/i);
     expect(dialog).toMatch(/payment gateway/i);
 
     const foot = text(await render()).replace(/&#x27;/g, "'");
     expect(foot).not.toMatch(/razorpay/i);
-    expect(foot).toMatch(/revokes the buyer.s access and removes the order from payouts/);
+    expect(foot).toMatch(/removes the access this order granted and takes the order out of payouts/);
+    expect(foot).not.toMatch(/revokes|loses access|immediately/i);
     expect(foot).toMatch(/does not return any money/);
     expect(foot).toMatch(/through your payment gateway/);
   });

@@ -203,7 +203,7 @@ describe("quiz page: RSC boundary", () => {
 
   it("the page without stuck learners is walked too", async () => {
     const found = functionProps(await call(), BOUNDARIES);
-    expect(found.filter((p) => !/\.action$/.test(p))).toEqual([]);
+    expect(found.filter((p) => !/^<(?:form|QuizEditor)>\.action$/.test(p))).toEqual([]);
   });
 
   it("positive control: a handler planted in the page tree is reported", async () => {
