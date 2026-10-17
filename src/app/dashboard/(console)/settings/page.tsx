@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { updateProfile } from "@/app/actions/creator";
 import { ActionForm, Field, FormError, SavedNote, SubmitButton } from "@/components/form";
 import { PageHeader } from "@/components/ui";
@@ -11,6 +12,18 @@ export default async function SettingsPage() {
   return (
     <>
       <PageHeader title="Store settings" sub="How your storefront looks to buyers." />
+
+      {/* Storefront Studio Banner */}
+      <div className="card max-w-xl p-5 mb-6 border-brand/30 bg-brand-soft/30 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-bold text-ink">Storefront Customizer Studio</p>
+          <p className="text-xs text-muted mt-0.5">Customize texts, pictures, quick links, testimonials, FAQs & announcements.</p>
+        </div>
+        <Link href="/dashboard/storefront" className="btn btn-primary btn-sm shrink-0">
+          Open Studio →
+        </Link>
+      </div>
+
       <div className="card max-w-xl p-6">
         <ActionForm action={updateProfile} className="space-y-5">
           <Field name="displayName" label="Store name" defaultValue={creator.displayName} required />

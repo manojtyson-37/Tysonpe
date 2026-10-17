@@ -64,10 +64,9 @@ export function TestimonialsSection({ testimonials }: { testimonials?: Storefron
                     <p className="truncate text-xs font-bold text-ink sm:text-sm">
                       {t.name}
                     </p>
-                    <CheckCircleIcon
-                      className="h-3.5 w-3.5 text-good"
-                      title="Verified Buyer"
-                    />
+                    <span title="Verified Buyer">
+                      <CheckCircleIcon className="h-3.5 w-3.5 text-good" />
+                    </span>
                   </div>
                   {(t.role || t.company) && (
                     <p className="truncate text-[11px] text-muted">
