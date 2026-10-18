@@ -1,0 +1,53 @@
+-- CreateTable
+CREATE TABLE "Lead" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "creatorId" TEXT NOT NULL,
+    "phone" TEXT NOT NULL,
+    "name" TEXT,
+    "email" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'NEW',
+    "intent" TEXT,
+    "notes" TEXT,
+    "quoteAmount" INTEGER,
+    "appointmentTime" DATETIME,
+    "followUpAt" DATETIME,
+    "followUpCount" INTEGER NOT NULL DEFAULT 0,
+    "botPaused" BOOLEAN NOT NULL DEFAULT false,
+    "optedIn" BOOLEAN NOT NULL DEFAULT true,
+    "lastInboundAt" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Lead_creatorId_fkey" FOREIGN KEY ("creatorId") REFERENCES "Creator" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "WhatsAppMessage" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "leadId" TEXT NOT NULL,
+    "creatorId" TEXT NOT NULL,
+    "direction" TEXT NOT NULL,
+    "sender" TEXT NOT NULL,
+    "body" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'SENT',
+    "msgType" TEXT NOT NULL DEFAULT 'text',
+    "waMessageId" TEXT,
+    "templateName" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "WhatsAppMessage_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "Lead" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "WhatsAppMessage_creatorId_fkey" FOREIGN KEY ("creatorId") REFERENCES "Creator" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateIndex
+CREATE INDEX "Lead_creatorId_status_idx" ON "Lead"("creatorId", "status");
+
+-- CreateIndex
+CREATE INDEX "Lead_followUpAt_idx" ON "Lead"("followUpAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Lead_creatorId_phone_key" ON "Lead"("creatorId", "phone");
+
+-- CreateIndex
+CREATE INDEX "WhatsAppMessage_creatorId_createdAt_idx" ON "WhatsAppMessage"("creatorId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "WhatsAppMessage_leadId_idx" ON "WhatsAppMessage"("leadId");

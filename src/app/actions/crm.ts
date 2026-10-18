@@ -1,0 +1,232 @@
+"use server";
+
+import { db } from "@/lib/db";
+import { requireCreator } from "@/lib/auth/session";
+import {
+  sendWhatsAppText,
+  createWhatsAppTemplate,
+  listWhatsAppTemplates,
+  getWhatsAppAccountStatus,
+  sanitizePhone,
+} from "@/lib/whatsapp/client";
+import type { CreateTemplateInput } from "@/lib/whatsapp/types";
+
+export async function getLeadsAction(options?: {
+  query?: string;
+  status?: string;
+}) {
+  const { creator } = await requireCreator();
+
+  const where: Record<string, unknown> = { creatorId: creator.id };
+
+  if (options?.status && options.status !== "ALL") {
+    where.status = options.status;
+  }
+
+  if (options?.query) {
+    const q = options.query.trim();
+    where.OR = [
+      { name: { contains: q } },
+      { phone: { contains: q } },
+      { intent: { contains: q } },
+    ];
+  }
+
+  const leads = await db.lead.findMany({
+    where,
+    orderBy: { updatedAt: "desc" },
+    include: {
+      messages: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
+    },
+  });
+
+  return { ok: true, leads };
+}
+
+export async function getLeadDetailAction(leadId: string) {
+  const { creator } = await requireCreator();
+
+  const lead = await db.lead.findFirst({
+    where: { id: leadId, creatorId: creator.id },
+    include: {
+      messages: {
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  if (!lead) {
+    return { ok: false, error: "Lead not found" };
+  }
+
+  return { ok: true, lead };
+}
+
+export async function updateLeadStatusAction(leadId: string, status: string) {
+  const { creator } = await requireCreator();
+
+  const validStatuses = [
+    "NEW",
+    "INQUIRY",
+    "INTERESTED",
+    "QUOTE_SENT",
+    "CALLBACK",
+    "BOOKED",
+    "CLOSED",
+  ];
+
+  if (!validStatuses.includes(status)) {
+    return { ok: false, error: "Invalid status value" };
+  }
+
+  const lead = await db.lead.updateMany({
+    where: { id: leadId, creatorId: creator.id },
+    data: { status },
+  });
+
+  if (lead.count === 0) {
+    return { ok: false, error: "Lead not found" };
+  }
+
+  return { ok: true };
+}
+
+export async function toggleBotPausedAction(leadId: string, botPaused: boolean) {
+  const { creator } = await requireCreator();
+
+  const lead = await db.lead.updateMany({
+    where: { id: leadId, creatorId: creator.id },
+    data: { botPaused },
+  });
+
+  if (lead.count === 0) {
+    return { ok: false, error: "Lead not found" };
+  }
+
+  return { ok: true, botPaused };
+}
+
+export async function sendDirectMessageAction(leadId: string, text: string) {
+  const { creator } = await requireCreator();
+
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return { ok: false, error: "Message cannot be empty" };
+  }
+
+  const lead = await db.lead.findFirst({
+    where: { id: leadId, creatorId: creator.id },
+  });
+
+  if (!lead) {
+    return { ok: false, error: "Lead not found" };
+  }
+
+  // Send through Meta WhatsApp Cloud API
+  const apiResult = await sendWhatsAppText(lead.phone, trimmed);
+
+  // Record outbound message in database
+  const msg = await db.whatsAppMessage.create({
+    data: {
+
+      leadId: lead.id,
+      creatorId: creator.id,
+      direction: "OUTBOUND",
+      sender: "CREATOR",
+      body: trimmed,
+      status: apiResult.success ? "SENT" : "FAILED",
+      waMessageId: apiResult.messageId || null,
+    },
+  });
+
+  // Touch lead's updatedAt
+  await db.lead.update({
+    where: { id: lead.id },
+    data: { updatedAt: new Date() },
+  });
+
+  return {
+    ok: true,
+    message: msg,
+    metaStatus: apiResult.success,
+    metaError: apiResult.error,
+  };
+}
+
+export async function createLeadAction(input: {
+  phone: string;
+  name?: string;
+  notes?: string;
+  intent?: string;
+  status?: string;
+  quoteAmount?: number;
+}) {
+  const { creator } = await requireCreator();
+
+  const cleanedPhone = sanitizePhone(input.phone);
+  if (!cleanedPhone || cleanedPhone.length < 8) {
+    return { ok: false, error: "Valid phone number required" };
+  }
+
+  const lead = await db.lead.upsert({
+    where: {
+      creatorId_phone: {
+        creatorId: creator.id,
+        phone: cleanedPhone,
+      },
+    },
+    update: {
+      name: input.name || undefined,
+      notes: input.notes || undefined,
+      intent: input.intent || undefined,
+      status: input.status || undefined,
+      quoteAmount: input.quoteAmount !== undefined ? input.quoteAmount : undefined,
+    },
+    create: {
+      creatorId: creator.id,
+      phone: cleanedPhone,
+      name: input.name || null,
+      notes: input.notes || null,
+      intent: input.intent || null,
+      status: input.status || "NEW",
+      quoteAmount: input.quoteAmount || null,
+    },
+  });
+
+  return { ok: true, lead };
+}
+
+export async function submitTemplateAction(input: CreateTemplateInput) {
+  await requireCreator();
+
+  if (!input.name || !input.bodyText) {
+    return { ok: false, error: "Template name and body text are required" };
+  }
+
+  const result = await createWhatsAppTemplate(input);
+
+  if (!result.success) {
+    return { ok: false, error: result.error || "Failed to submit template to Meta" };
+  }
+
+  return {
+    ok: true,
+    templateId: result.templateId,
+    status: result.status,
+  };
+}
+
+export async function getTemplatesAction() {
+  await requireCreator();
+  const res = await listWhatsAppTemplates();
+  return { ok: !res.error, templates: res.templates, error: res.error };
+}
+
+export async function getWhatsAppStatusAction() {
+  await requireCreator();
+  const status = await getWhatsAppAccountStatus();
+  return { ok: true, status };
+}

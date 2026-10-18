@@ -56,6 +56,8 @@ model Creator {
   bans        CommunityBan[]
   pointEvents PointEvent[]
   badges      UserBadge[]
+  leads       Lead[]
+  whatsappMessages WhatsAppMessage[]
 }
 
 model Product {
@@ -427,4 +429,51 @@ model UserBadge {
   creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
 
   @@unique([userId, creatorId, badgeKey])
+}
+
+model Lead {
+  id              String            @id @default(cuid())
+  creatorId       String
+  phone           String
+  name            String?
+  email           String?
+  status          String            @default("NEW") // NEW, INQUIRY, INTERESTED, QUOTE_SENT, CALLBACK, BOOKED, CLOSED
+  intent          String?
+  notes           String?
+  quoteAmount     Int?
+  appointmentTime DateTime?
+  followUpAt      DateTime?
+  followUpCount   Int               @default(0)
+  botPaused       Boolean           @default(false)
+  optedIn         Boolean           @default(true)
+  lastInboundAt   DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @default(now()) @updatedAt
+
+  creator         Creator           @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  messages        WhatsAppMessage[]
+
+  @@unique([creatorId, phone])
+  @@index([creatorId, status])
+  @@index([followUpAt])
+}
+
+model WhatsAppMessage {
+  id           String   @id @default(cuid())
+  leadId       String
+  creatorId    String
+  direction    String   // INBOUND, OUTBOUND
+  sender       String   // CUSTOMER, BOT, CREATOR
+  body         String
+  status       String   @default("SENT") // SENT, DELIVERED, READ, FAILED
+  msgType      String   @default("text") // text, template
+  waMessageId  String?
+  templateName String?
+  createdAt    DateTime @default(now())
+
+  lead         Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  creator      Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId, createdAt])
+  @@index([leadId])
 }

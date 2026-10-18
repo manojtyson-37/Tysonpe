@@ -12,6 +12,8 @@ import {
   TicketIcon,
   BanknoteIcon,
   SettingsIcon,
+  WhatsAppIcon,
+
 } from "./dashboard/icons";
 
 interface NavLinkItem {
@@ -27,12 +29,14 @@ const links: NavLinkItem[] = [
   { href: "/dashboard/storefront", label: "Storefront", icon: StorefrontIcon, badge: "Customizer" },
   { href: "/dashboard/products", label: "Products", icon: PackageIcon },
   { href: "/dashboard/orders", label: "Orders", icon: ReceiptIcon },
+  { href: "/dashboard/crm", label: "WhatsApp CRM", icon: WhatsAppIcon, badge: "AI Agent" },
   { href: "/dashboard/learners", label: "Learners", icon: UsersIcon },
   { href: "/dashboard/community", label: "Community", icon: MessageIcon },
   { href: "/dashboard/coupons", label: "Coupons", icon: TicketIcon },
   { href: "/dashboard/payouts", label: "Payouts", icon: BanknoteIcon },
   { href: "/dashboard/settings", label: "Settings", icon: SettingsIcon },
 ];
+
 
 export function DashNav() {
   const path = usePathname();
