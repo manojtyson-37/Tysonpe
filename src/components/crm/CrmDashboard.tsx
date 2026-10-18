@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import {
   updateLeadStatusAction,
   toggleBotPausedAction,
@@ -162,21 +162,26 @@ export function CrmDashboard({
     }
   };
 
-  const selectedLead = leads.find((l) => l.id === selectedLeadId) || leads[0];
+  const selectedLead = useMemo(
+    () => leads.find((l) => l.id === selectedLeadId) || leads[0],
+    [leads, selectedLeadId]
+  );
 
-  const filteredLeads = leads.filter((l) => {
-    if (inboxFilter === "PAUSED" && !l.botPaused) return false;
-    if (inboxFilter === "ABANDONED" && l.status !== "NEW") return false;
-    if (inboxFilter === "INQUIRY" && l.status !== "INQUIRY") return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const matchName = l.name?.toLowerCase().includes(q);
-      const matchPhone = l.phone.includes(q);
-      const matchIntent = l.intent?.toLowerCase().includes(q);
-      if (!matchName && !matchPhone && !matchIntent) return false;
-    }
-    return true;
-  });
+  const filteredLeads = useMemo(() => {
+    return leads.filter((l) => {
+      if (inboxFilter === "PAUSED" && !l.botPaused) return false;
+      if (inboxFilter === "ABANDONED" && l.status !== "NEW") return false;
+      if (inboxFilter === "INQUIRY" && l.status !== "INQUIRY") return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const matchName = l.name?.toLowerCase().includes(q);
+        const matchPhone = l.phone.includes(q);
+        const matchIntent = l.intent?.toLowerCase().includes(q);
+        if (!matchName && !matchPhone && !matchIntent) return false;
+      }
+      return true;
+    });
+  }, [leads, inboxFilter, searchQuery]);
 
   const handleSendMessage = () => {
     if (!selectedLead || !chatInput.trim()) return;
@@ -308,19 +313,29 @@ export function CrmDashboard({
     });
   };
 
-  const approvedCount = templates.filter((t) => t.status === "APPROVED").length;
-  const pendingCount = templates.filter((t) => t.status === "PENDING").length;
-  const rejectedCount = templates.filter((t) => t.status === "REJECTED").length;
-
-  const filteredTemplates = templates.filter((tpl) => {
-    if (templateFilter !== "ALL" && tpl.status !== templateFilter) return false;
-    if (templateSearch.trim()) {
-      const q = templateSearch.toLowerCase();
-      const bodyText = tpl.components?.find((c) => c.type === "BODY")?.text?.toLowerCase() || "";
-      if (!tpl.name.toLowerCase().includes(q) && !bodyText.includes(q)) return false;
+  const { approvedCount, pendingCount, rejectedCount } = useMemo(() => {
+    let approved = 0;
+    let pending = 0;
+    let rejected = 0;
+    for (const t of templates) {
+      if (t.status === "APPROVED") approved++;
+      else if (t.status === "PENDING") pending++;
+      else if (t.status === "REJECTED") rejected++;
     }
-    return true;
-  });
+    return { approvedCount: approved, pendingCount: pending, rejectedCount: rejected };
+  }, [templates]);
+
+  const filteredTemplates = useMemo(() => {
+    return templates.filter((tpl) => {
+      if (templateFilter !== "ALL" && tpl.status !== templateFilter) return false;
+      if (templateSearch.trim()) {
+        const q = templateSearch.toLowerCase();
+        const bodyText = tpl.components?.find((c) => c.type === "BODY")?.text?.toLowerCase() || "";
+        if (!tpl.name.toLowerCase().includes(q) && !bodyText.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [templates, templateFilter, templateSearch]);
 
   return (
     <div className="space-y-6">
@@ -437,7 +452,7 @@ export function CrmDashboard({
           ].map((t) => (
             <button
               key={t.id}
-              onClick={() => setTab(t.id as typeof tab)}
+              onClick={() => startTransition(() => setTab(t.id as typeof tab))}
               className={`px-4 py-2.5 text-xs font-semibold transition-all duration-150 border-b-2 -mb-px active:scale-[0.98] ${
                 tab === t.id
                   ? "border-brand text-brand font-bold"

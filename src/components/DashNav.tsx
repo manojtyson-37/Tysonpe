@@ -51,6 +51,7 @@ export function DashNav() {
           <Link
             key={l.href}
             href={l.href}
+            prefetch={true}
             aria-current={active ? "page" : undefined}
             className={`group flex items-center justify-between whitespace-nowrap rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all duration-150 ease-out active:scale-[0.98] ${
               active

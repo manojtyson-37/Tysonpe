@@ -25,10 +25,25 @@ export function sanitizePhone(phone: string): string {
   return digits;
 }
 
+// In-memory TTL cache for external Meta Graph API calls to prevent blocking page loads
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+let statusCache: CacheEntry<WhatsAppAccountInfo> | null = null;
+let templatesCache: CacheEntry<{ templates: WhatsAppTemplateItem[]; error?: string }> | null = null;
+const CACHE_TTL_MS = 60 * 1000; // 60s cache TTL
+
+export function invalidateWhatsAppCache() {
+  statusCache = null;
+  templatesCache = null;
+}
+
 /**
  * Fetch WhatsApp phone number and business account health status from Meta
  */
-export async function getWhatsAppAccountStatus(): Promise<WhatsAppAccountInfo> {
+export async function getWhatsAppAccountStatus(forceRefresh = false): Promise<WhatsAppAccountInfo> {
   const { token, phoneNumberId, wabaId, isConfigured } = getWhatsAppConfig();
 
   if (!isConfigured) {
@@ -36,6 +51,10 @@ export async function getWhatsAppAccountStatus(): Promise<WhatsAppAccountInfo> {
       connected: false,
       error: "WhatsApp API credentials not configured in environment.",
     };
+  }
+
+  if (!forceRefresh && statusCache && Date.now() - statusCache.timestamp < CACHE_TTL_MS) {
+    return statusCache.data;
   }
 
   try {
@@ -46,22 +65,26 @@ export async function getWhatsAppAccountStatus(): Promise<WhatsAppAccountInfo> {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        cache: "no-store",
+        signal: AbortSignal.timeout(3500),
+        next: { revalidate: forceRefresh ? 0 : 60, tags: ["whatsapp-meta"] },
+        cache: forceRefresh ? "no-store" : "default",
       }
     );
 
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
-      return {
+      const errResult: WhatsAppAccountInfo = {
         connected: false,
         phoneNumberId,
         wabaId,
         error: errData.error?.message || `HTTP ${res.status}`,
       };
+      statusCache = { data: errResult, timestamp: Date.now() };
+      return errResult;
     }
 
     const data = await res.json();
-    return {
+    const result: WhatsAppAccountInfo = {
       connected: data.status === "CONNECTED",
       phoneNumberId,
       wabaId,
@@ -70,20 +93,23 @@ export async function getWhatsAppAccountStatus(): Promise<WhatsAppAccountInfo> {
       qualityRating: data.quality_rating || "GREEN",
       messagingLimitTier: data.messaging_limit_tier || "TIER_250",
     };
+    statusCache = { data: result, timestamp: Date.now() };
+    return result;
   } catch (err) {
-    return {
+    const errResult: WhatsAppAccountInfo = {
       connected: false,
       phoneNumberId,
       wabaId,
       error: err instanceof Error ? err.message : String(err),
     };
+    return errResult;
   }
 }
 
 /**
  * List message templates from Meta Graph API
  */
-export async function listWhatsAppTemplates(): Promise<{
+export async function listWhatsAppTemplates(forceRefresh = false): Promise<{
   templates: WhatsAppTemplateItem[];
   error?: string;
 }> {
@@ -96,6 +122,10 @@ export async function listWhatsAppTemplates(): Promise<{
     };
   }
 
+  if (!forceRefresh && templatesCache && Date.now() - templatesCache.timestamp < CACHE_TTL_MS) {
+    return templatesCache.data;
+  }
+
   try {
     const res = await fetch(
       `${BASE_URL}/${wabaId}/message_templates?limit=50&fields=id,name,status,category,language,components`,
@@ -104,20 +134,26 @@ export async function listWhatsAppTemplates(): Promise<{
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        cache: "no-store",
+        signal: AbortSignal.timeout(3500),
+        next: { revalidate: forceRefresh ? 0 : 60, tags: ["whatsapp-meta"] },
+        cache: forceRefresh ? "no-store" : "default",
       }
     );
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      return {
+      const errResult = {
         templates: [],
         error: err.error?.message || `Failed to fetch templates: HTTP ${res.status}`,
       };
+      templatesCache = { data: errResult, timestamp: Date.now() };
+      return errResult;
     }
 
     const data = await res.json();
-    return { templates: data.data || [] };
+    const result = { templates: (data.data as WhatsAppTemplateItem[]) || [] };
+    templatesCache = { data: result, timestamp: Date.now() };
+    return result;
   } catch (err) {
     return {
       templates: [],
@@ -180,6 +216,7 @@ export async function createWhatsAppTemplate(
       };
     }
 
+    invalidateWhatsAppCache();
     return {
       success: true,
       templateId: data.id,
@@ -221,6 +258,7 @@ export async function deleteWhatsAppTemplate(
       return { success: false, error: data.error?.message || "Failed to delete template" };
     }
 
+    invalidateWhatsAppCache();
     return { success: data.success ?? true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : String(err) };

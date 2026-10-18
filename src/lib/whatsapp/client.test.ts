@@ -6,11 +6,13 @@ import {
   sendWhatsAppTemplate,
   createWhatsAppTemplate,
   listWhatsAppTemplates,
+  invalidateWhatsAppCache,
 } from "./client";
 
 describe("whatsapp client", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    invalidateWhatsAppCache();
     process.env.WHATSAPP_ACCESS_TOKEN = "test_token";
     process.env.WHATSAPP_PHONE_NUMBER_ID = "1298109926710710";
     process.env.WHATSAPP_BUSINESS_ACCOUNT_ID = "2197739044402624";

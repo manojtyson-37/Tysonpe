@@ -9,13 +9,13 @@ export const metadata: Metadata = { title: "Payouts" };
 
 export default async function PayoutsPage() {
   const { creator } = await requireCreator();
-  const entries = await db.ledgerEntry.findMany({
-    where: { creatorId: creator.id, order: { status: "paid" } }, // refunded orders drop out
-    orderBy: { createdAt: "desc" }, take: 200,
-    include: { order: { include: { product: true, user: true } } },
-  });
-  // Totals come from the database over ALL entries; the table below shows only the latest 200.
-  const [total, count] = await Promise.all([
+  const [entries, total, count] = await Promise.all([
+    db.ledgerEntry.findMany({
+      where: { creatorId: creator.id, order: { status: "paid" } }, // refunded orders drop out
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      include: { order: { include: { product: true, user: true } } },
+    }),
     db.ledgerEntry.aggregate({
       where: { creatorId: creator.id, order: { status: "paid" } },
       _sum: { grossPaise: true, platformFeePaise: true, gatewayFeePaise: true, netPaise: true },

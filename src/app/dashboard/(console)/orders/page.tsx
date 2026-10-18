@@ -14,16 +14,17 @@ export default async function OrdersPage({ searchParams }: PageProps<"/dashboard
   const sp = await searchParams;
   const status = FILTERS.find((f) => f === sp.status) ?? "all";
 
-  const pendingCount = await db.order.count({
-    where: { creatorId: creator.id, status: "pending_approval" },
-  });
-
-  const orders = await db.order.findMany({
-    where: { creatorId: creator.id, ...(status === "all" ? {} : { status }) },
-    orderBy: { createdAt: "desc" },
-    take: 200,
-    include: { user: true, product: true, coupon: true },
-  });
+  const [pendingCount, orders] = await Promise.all([
+    db.order.count({
+      where: { creatorId: creator.id, status: "pending_approval" },
+    }),
+    db.order.findMany({
+      where: { creatorId: creator.id, ...(status === "all" ? {} : { status }) },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      include: { user: true, product: true, coupon: true },
+    }),
+  ]);
 
   return (
     <>
