@@ -62,6 +62,15 @@ describe("StatStrip", () => {
   it("appends a className passthrough", () => {
     expect(render(<StatStrip items={items} className="mb-6" />)).toContain(" mb-6");
   });
+
+  it("labels are uppercase micro-labels unless a strip opts into sentence case", () => {
+    expect((render(<StatStrip items={items} labelCase="upper" />).match(/class="t-label"/g) ?? []).length).toBe(3);
+    const html = render(<StatStrip items={items} labelCase="sentence" />);
+    expect(html).not.toContain("t-label");
+    expect(html.match(/<p class="text-sm text-muted">(Gross|Fees|Net)<\/p>/g)).toHaveLength(3);
+    expect(render(<Stat label="Net" value="1" labelCase="sentence" />)).toContain('<p class="text-sm text-muted">Net</p>');
+    expect(render(<Stat label="Net" value="1" />)).toContain('<p class="t-label">Net</p>');
+  });
 });
 
 describe("StatStrip keys", () => {

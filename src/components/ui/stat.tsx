@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { trueMinus } from "./money";
 
 export type DeltaTone = "good" | "bad" | "muted";
+/** "upper" is the app-screen micro-label (the default); "sentence" is for marketing pages, where uppercase labels are capped. */
+export type StatLabelCase = "upper" | "sentence";
 
 const DELTA_CLASS: Record<DeltaTone, string> = {
   good: "text-good",
@@ -16,6 +18,7 @@ export function Stat({
   sub,
   delta,
   deltaTone = "muted",
+  labelCase = "upper",
   className,
 }: {
   label: string;
@@ -24,11 +27,12 @@ export function Stat({
   /** Change text such as "+12%". It always carries its own sign, so it never relies on colour alone. */
   delta?: string;
   deltaTone?: DeltaTone;
+  labelCase?: StatLabelCase;
   className?: string;
 }) {
   return (
     <div className={className}>
-      <p className="t-label">{label}</p>
+      <p className={labelCase === "sentence" ? "text-sm text-muted" : "t-label"}>{label}</p>
       <p className="mt-1.5 text-2xl font-semibold tabular-nums sm:text-3xl">{value}</p>
       {delta && (
         <p className={`mt-1 text-sm font-medium tabular-nums ${DELTA_CLASS[deltaTone]}`}>{trueMinus(delta)}</p>
@@ -47,7 +51,15 @@ export type StatStripItem = {
 };
 
 /** A hairline-separated row of stats: two columns on phones, one divided row from sm up. */
-export function StatStrip({ items, className }: { items: StatStripItem[]; className?: string }) {
+export function StatStrip({
+  items,
+  labelCase = "upper",
+  className,
+}: {
+  items: StatStripItem[];
+  labelCase?: StatLabelCase;
+  className?: string;
+}) {
   const cls = [
     "grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-4 sm:flex sm:gap-0 sm:divide-x sm:divide-line",
     className,
@@ -58,7 +70,7 @@ export function StatStrip({ items, className }: { items: StatStripItem[]; classN
     <div className={cls}>
       {/* Index key: a strip may legitimately repeat a label (two "Net" columns for two periods). */}
       {items.map((item, i) => (
-        <Stat key={i} {...item} className="sm:px-6 sm:first:pl-0" />
+        <Stat key={i} {...item} labelCase={labelCase} className="sm:px-6 sm:first:pl-0" />
       ))}
     </div>
   );

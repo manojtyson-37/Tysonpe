@@ -24,7 +24,7 @@ export function CheckoutFragment() {
   const order = sampleOrder();
   return (
     <figure className="min-w-0">
-      <Surface padding="lg">
+      <Surface tone="inset" padding="lg">
         <p className="text-sm text-muted">Your order</p>
         <p className="mt-1 text-lg font-semibold">Sample course</p>
         <p className="text-sm text-muted">by Sample creator</p>
@@ -57,7 +57,7 @@ export function InvoiceFragment() {
   const taxable = SALE.salePaise - SALE.gstPaise;
   return (
     <figure className="min-w-0">
-      <Surface as="article" tone="paper" padding="lg" aria-label="Sample tax invoice">
+      <Surface as="article" tone="inset" padding="lg" aria-label="Sample tax invoice">
         <header className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-4">
           <div>
             <p className="font-display text-xl font-extrabold">Tax invoice</p>
@@ -106,6 +106,7 @@ export function PayoutsFragment() {
           { label: "Gateway fees", value: <Money paise={SALE.gatewayFeePaise} sign="−" /> },
           { label: "Net earnings", value: <Money paise={SALE.netPaise} tone="good" /> },
         ]}
+        labelCase="sentence"
       />
       <figcaption className="mt-3 text-sm text-muted">
         Sample figures for one {formatINR(SALE.salePaise)} sale on Basic, laid out as on the Payouts page. They are not a customer&apos;s numbers.

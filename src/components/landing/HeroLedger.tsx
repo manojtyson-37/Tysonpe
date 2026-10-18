@@ -7,7 +7,6 @@ import {
   DEFAULT_GST_RATE,
   DEFAULT_PLAN,
   DEFAULT_PRICE_RUPEES,
-  MAX_PRICE_DIGITS,
   MAX_PRICE_RUPEES,
   MIN_PRICE_RUPEES,
   PLAN_OPTIONS,
@@ -30,8 +29,9 @@ export function HeroLedger({ gstRates }: { gstRates: readonly number[] }) {
   const [planKey, setPlanKey] = useState(DEFAULT_PLAN);
   const l = ledgerFromInput(priceText, gstRate, planKey);
 
-  const onPrice = (e: ChangeEvent<HTMLInputElement>) =>
-    setPriceText(e.target.value.replace(/\D/g, "").slice(0, MAX_PRICE_DIGITS));
+  // Only the separators people paste with (commas, spaces, the rupee sign) are dropped. Anything else, a "." included, is
+  // kept so parsePriceRupees can refuse it and the hint says so: rewriting "29.99" into 2999 would price it 100x too high.
+  const onPrice = (e: ChangeEvent<HTMLInputElement>) => setPriceText(e.target.value.replace(/[,\s₹]/g, ""));
   const onGst = (e: ChangeEvent<HTMLSelectElement>) => {
     const next = Number(e.target.value);
     if (gstRates.includes(next)) setGstRate(next);
@@ -46,13 +46,17 @@ export function HeroLedger({ gstRates }: { gstRates: readonly number[] }) {
 
   return (
     <figure className="min-w-0">
+      {/* Without scripts the controls cannot do anything, so they are hidden and the default sale reads as a static ledger. */}
+      <noscript>
+        <style>{"#ledger-controls{display:none}"}</style>
+      </noscript>
       <Surface padding="lg">
         <div className="flex items-baseline justify-between gap-4 border-b border-line pb-3">
           <p className="text-sm font-semibold">Order ledger</p>
           <p className="text-sm text-muted">Sample sale</p>
         </div>
 
-        <div className="mt-5 grid gap-x-4 gap-y-4 sm:grid-cols-2">
+        <div id="ledger-controls" className="mt-5 grid gap-x-4 gap-y-4 sm:grid-cols-2">
           <InputGroup
             id={PRICE_ID}
             label="Sale price, GST included"
@@ -62,7 +66,6 @@ export function HeroLedger({ gstRates }: { gstRates: readonly number[] }) {
             inputMode="numeric"
             autoComplete="off"
             spellCheck={false}
-            maxLength={MAX_PRICE_DIGITS}
             aria-invalid={l.usedDefault || undefined}
             hint={
               l.usedDefault
@@ -98,6 +101,7 @@ export function HeroLedger({ gstRates }: { gstRates: readonly number[] }) {
             label="Net after fees"
             value={
               <output htmlFor={`${PRICE_ID} ${GST_ID} ${PLAN_ID}`} aria-live="polite">
+                <span className="sr-only">Net after fees </span>
                 <Money paise={l.netPaise} tone="good" size="lg" mono />
               </output>
             }
@@ -105,8 +109,10 @@ export function HeroLedger({ gstRates }: { gstRates: readonly number[] }) {
         </MetricList>
       </Surface>
       <figcaption className="mt-4 max-w-md text-sm leading-relaxed text-muted">
-        The {formatINR(l.gstPaise)} of GST sits inside the price and is yours to remit; the ledger does not deduct it. {planNote} Real
-        settlement starts after launch.
+        {l.gstPaise === 0
+          ? `No GST is included at ${l.gstRate}%, so there is none to remit. `
+          : `The ${formatINR(l.gstPaise)} of GST sits inside the price and is yours to remit; the ledger does not deduct it. `}
+        {planNote} Real settlement starts after launch.
       </figcaption>
     </figure>
   );

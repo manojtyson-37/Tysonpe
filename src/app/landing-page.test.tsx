@@ -132,10 +132,26 @@ describe("landing: one ink call to action per band", () => {
 });
 
 describe("landing: section rhythm and layouts", () => {
-  it("never repeats a layout from one band to the next", () => {
+  it("declares a different data-layout on every band and each declaration is backed by that band's markup", () => {
+    // The label is the author's own, so a repeat check alone proves little. Each name is tied to the structure it claims.
     const layouts = sections.map(layoutOf);
     expect(layouts.length).toBeGreaterThanOrEqual(7);
-    for (let i = 1; i < layouts.length; i++) expect(layouts[i], `band ${i}`).not.toBe(layouts[i - 1]);
+    expect(new Set(layouts).size).toBe(layouts.length);
+    const marker: Record<string, string | RegExp> = {
+      "hero-split": "lg:grid-cols-[1.25fr_1fr]",
+      "header-split-wide": "lg:grid-cols-[1fr_1.2fr]",
+      "sticky-left-fragments": "lg:grid-cols-[1fr_1.4fr]",
+      strip: "sm:divide-x sm:divide-line",
+      "sticky-left-rules": "lg:grid-cols-[1fr_1.6fr]",
+      table: "<table",
+      wordmark: "font-display",
+    };
+    expect(Object.keys(marker).sort()).toEqual([...layouts].sort());
+    for (const s of sections) {
+      const m = marker[layoutOf(s)];
+      expect(typeof m === "string" ? s.includes(m) : m.test(s), layoutOf(s)).toBe(true);
+    }
+    for (const s of sections.filter((x) => layoutOf(x).startsWith("sticky-left"))) expect(s).toContain("lg:sticky");
   });
 
   it("gives every band after the hero 80 to 112px of vertical padding", () => {
@@ -190,9 +206,20 @@ describe("landing: the hero is one live ledger from true numbers", () => {
     expect({ platform: DEFAULT_LEDGER.platformRate, gateway: DEFAULT_LEDGER.gatewayRate }).toEqual(planRates("basic"));
   });
 
-  it("announces only the net row, as one polite value", () => {
+  it("announces only the net row, as one polite value that says what it is", () => {
     expect(count(hero, "aria-live")).toBe(1);
     expect(hero).toMatch(/<output[^>]*aria-live="polite"/);
+    const out = /<output\b[^>]*>([\s\S]*?)<\/output>/.exec(hero)![1];
+    expect(out).toMatch(/^<span class="sr-only">Net after fees <\/span>/);
+    expect(text(out)).toBe("Net after fees ₹2,639.12");
+  });
+
+  it("shows its controls only to visitors with scripts, with no mounted flag: a noscript style hides the dead control grid", () => {
+    const style = /<noscript><style>([^<]*)<\/style><\/noscript>/.exec(hero);
+    expect(style).not.toBeNull();
+    expect(style![1]).toContain("#ledger-controls");
+    expect(style![1]).toContain("display:none");
+    expect(hero).toContain('id="ledger-controls"');
   });
 
   it("names its fields and offers the real plans", () => {
@@ -290,6 +317,9 @@ describe("landing: status and fees", () => {
     }
     expect(rows.map((r) => r.match(/(₹[\d,.]+)$/)![1])).toEqual(["₹2,639.12", "₹2,774.07", "₹2,834.05", "₹2,954.01"]);
     expect(text(fees)).toContain("Plan monthly fees are not netted here.");
+    // marketing rows are not clickable, so they get no hover fill
+    expect(fees).not.toContain("hover:bg-surface-2");
+    expect(fees).not.toContain('role="row"');
     // the page's own mask-image hack is gone (the Table primitive supplies the scroll fade; the sources test covers the page)
     expect(PAGE_SOURCE).not.toMatch(/mask-image/);
   });
@@ -312,6 +342,53 @@ describe("landing: the interactive demo band", () => {
     expect(levels[0]).toBe(2);
     for (const level of levels.slice(1)) expect(level).toBe(3);
     expect(demo).not.toMatch(/animate-|infinite|gradient|shadow-/);
+  });
+});
+
+describe("landing: at most two outlined boxes, two uppercase labels, 15px body outside the demo", () => {
+  const demoStart = html.indexOf(demo);
+  const outside = html.slice(0, demoStart) + html.slice(demoStart + demo.length);
+  const classTokens = (h: string) => [...h.matchAll(/\sclass="([^"]*)"/g)].map((m) => m[1].split(/\s+/));
+  const outlined = (h: string) => classTokens(h).filter((t) => t.includes("card") || (t.includes("rounded-card") && t.includes("border")));
+
+  it("draws the hero ledger as the only outlined box; the checkout and invoice fragments are tone steps", () => {
+    expect(outlined(outside)).toHaveLength(1);
+    expect(outlined(hero)).toHaveLength(1);
+    expect(outlined(outside).length).toBeLessThanOrEqual(2);
+    // positive control: the detector counts both the .card class and the rounded-card border recipe
+    expect(outlined('<div class="card px-4"></div><div class="rounded-card border border-line bg-bg"></div><div class="rounded-card bg-surface-2"></div>')).toHaveLength(2);
+    const trail = sections.find((s) => layoutOf(s) === "sticky-left-fragments")!;
+    expect(count(trail, "rounded-card bg-surface-2")).toBe(2);
+  });
+
+  it("keeps uppercase tracked micro-labels out of the marketing bands (the spec caps them at two; there are none)", () => {
+    const labels = classTokens(outside).filter(
+      (t) => (t.includes("t-label") && !t.includes("normal-case")) || t.includes("uppercase") || t.includes("tracking-wider"),
+    );
+    expect(labels).toHaveLength(0);
+    // positive control: an un-overridden t-label counts, an overridden one does not
+    expect(classTokens('<th class="t-label px-3"></th><th class="t-label normal-case tracking-normal"></th>').filter((t) => t.includes("t-label") && !t.includes("normal-case"))).toHaveLength(1);
+  });
+
+  it("sets table heads and stat labels in sentence case", () => {
+    const fees = sections.find((s) => layoutOf(s) === "table")!;
+    const heads = [...fees.matchAll(/<th\b[^>]*class="([^"]*)"/g)].map((m) => m[1]);
+    expect(heads).toHaveLength(5);
+    for (const c of heads) expect(c).toMatch(/\bnormal-case\b/);
+    const strip = [...html.matchAll(/<p class="([^"]*)">(Gross sales|Platform fees|Gateway fees|Net earnings)<\/p>/g)];
+    expect(strip).toHaveLength(4);
+    for (const m of strip) expect(m[1]).not.toMatch(/t-label|uppercase/);
+  });
+
+  it("sets running copy at 16px: no text-sm paragraph with a reading line-height outside a caption, including the demo intro", () => {
+    const paras = [...outside.matchAll(/<p class="([^"]*\bleading-relaxed\b[^"]*)">/g)].map((m) => m[1]);
+    expect(paras.length).toBeGreaterThanOrEqual(10);
+    for (const c of paras) expect(c, c).not.toMatch(/\btext-sm\b/);
+    const intro = /<h2 id="demo-h"[^>]*>[^<]*<\/h2><p class="([^"]*)">/.exec(demo)!;
+    expect(intro[1]).toMatch(/\btext-base\b/);
+    expect(intro[1]).not.toMatch(/\btext-sm\b/);
+    // captions stay small
+    expect(count(outside, /<figcaption class="[^"]*\btext-sm\b/g)).toBe(4);
   });
 });
 
@@ -338,9 +415,12 @@ describe("landing: copy lint", () => {
     }
   });
 
-  it("has no exclamation mark in the rendered text or in a string of the page source", () => {
+  it("has no exclamation mark in the rendered text or in a quoted string of the landing sources", () => {
     expect(visible).not.toContain("!");
-    expect(visible.includes("!")).toBe(false);
+    // A "!" inside a quoted string (not `!==`, `!x` or a JSX non-null) is copy that a conditional branch could still render.
+    const inString = /(["'`])(?:(?!\1)[^\n\\])*!(?!=)(?:(?!\1)[^\n\\])*\1/;
+    for (const [file, src] of SOURCES) expect(src, file).not.toMatch(inString);
+    expect(inString.test('const a = "Welcome!";')).toBe(true); // positive control
   });
 
   it("keeps headings in sentence case", () => {

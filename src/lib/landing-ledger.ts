@@ -9,8 +9,6 @@ export const DEFAULT_GST_RATE = 18;
 export const DEFAULT_PLAN = "basic";
 export const MIN_PRICE_RUPEES = 1;
 export const MAX_PRICE_RUPEES = 1_000_000;
-/** Longest digit run the price field accepts. */
-export const MAX_PRICE_DIGITS = String(MAX_PRICE_RUPEES).length;
 
 /** Basic is the only plan creators are on; the others are draft pricing and billing is not live. */
 export const PLAN_OPTIONS = [

@@ -7,7 +7,7 @@ export type { SurfaceProps, SurfaceTone, SurfacePadding } from "./surface";
 export { Money, Price, trueMinus } from "./money";
 export type { MoneyTone, MoneySize, MoneySign } from "./money";
 export { Stat, StatStrip, MetricList, MetricRow } from "./stat";
-export type { StatStripItem, DeltaTone } from "./stat";
+export type { StatStripItem, DeltaTone, StatLabelCase } from "./stat";
 export { Progress } from "./progress";
 export type { ProgressTone } from "./progress";
 export { Avatar } from "./avatar";

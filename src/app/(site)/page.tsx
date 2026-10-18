@@ -3,7 +3,7 @@ import { HomeInteractiveDemo } from "@/components/HomeInteractiveDemo";
 import { Logo } from "@/components/Logo";
 import { CheckoutFragment, InvoiceFragment, PayoutsFragment } from "@/components/landing/Fragments";
 import { HeroLedger } from "@/components/landing/HeroLedger";
-import { ButtonLink, MoneyCell, Table, Td, Th, Tr } from "@/components/ui";
+import { ButtonLink, MoneyCell, Table, Td, Th } from "@/components/ui";
 import { DEMO_HANDLE } from "@/lib/demo";
 import { DEFAULT_LEDGER, PLAN_OPTIONS, ledgerFor } from "@/lib/landing-ledger";
 import { formatINR } from "@/lib/money";
@@ -30,6 +30,9 @@ const NOT_BUILT = [
 // One row per plan, each run through the same ledger maths as the hero at the default sale.
 const PLANS = PLAN_OPTIONS.map((p) => ({ ...p, ledger: ledgerFor(SALE.rupees, SALE.gstRate, p.key) }));
 
+// The marketing page limits all-caps micro-labels, so the table heads read as ordinary 14px text (utilities beat the components-layer label style).
+const HEAD = "normal-case tracking-normal text-sm";
+
 type StatusRow = { name: string; note: string; status: string };
 function StatusList({ rows, muted = false }: { rows: StatusRow[]; muted?: boolean }) {
   return (
@@ -38,7 +41,7 @@ function StatusList({ rows, muted = false }: { rows: StatusRow[]; muted?: boolea
         <li key={f.name} className="grid gap-1 border-b border-line py-4 sm:grid-cols-[1fr_auto] sm:gap-6">
           <div>
             <p className={`text-base font-semibold ${muted ? "text-muted" : ""}`}>{f.name}</p>
-            <p className="mt-1 max-w-lg text-sm leading-relaxed text-muted">{f.note}</p>
+            <p className="mt-1 max-w-lg text-base leading-relaxed text-muted">{f.note}</p>
           </div>
           <p className="text-sm text-muted sm:pt-1">{f.status}</p>
         </li>
@@ -84,7 +87,7 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr] lg:gap-16">
             <h2 id="demo-h" className="text-3xl font-semibold sm:text-4xl">Pay the way your learners will.</h2>
-            <p className="max-w-lg text-sm leading-relaxed text-muted lg:pt-2">
+            <p className="max-w-lg text-base leading-relaxed text-muted lg:pt-2">
               Scan the QR or tap a UPI app, then watch the order, GST invoice and course access appear. Switch to the
               Easebuzz tab for the redirect flow, or the fee calculator to see what you keep per month.
             </p>
@@ -108,12 +111,12 @@ export default function Home() {
           <div className="divide-y divide-line">
             <div className="pb-12">
               <h3 className="text-lg font-semibold">At checkout</h3>
-              <p className="mt-1 max-w-md text-sm leading-relaxed text-muted">Price, coupon and the GST inside the total, then a gateway.</p>
+              <p className="mt-1 max-w-md text-base leading-relaxed text-muted">Price, coupon and the GST inside the total, then a gateway.</p>
               <div className="mt-6"><CheckoutFragment /></div>
             </div>
             <div className="pt-12">
               <h3 className="text-lg font-semibold">After payment</h3>
-              <p className="mt-1 max-w-md text-sm leading-relaxed text-muted">A tax invoice for the order, kept with the learner and the creator.</p>
+              <p className="mt-1 max-w-md text-base leading-relaxed text-muted">A tax invoice for the order, kept with the learner and the creator.</p>
               <div className="mt-6"><InvoiceFragment /></div>
             </div>
           </div>
@@ -166,16 +169,16 @@ export default function Home() {
           <Table caption={`Fees by plan for one ${SALE_TEXT} sale`} stack className="mt-10">
             <thead>
               <tr>
-                <Th>Plan</Th>
-                <Th align="right">Monthly</Th>
-                <Th align="right">Platform fee</Th>
-                <Th align="right">Gateway fee</Th>
-                <Th align="right">Net after fees</Th>
+                <Th className={HEAD}>Plan</Th>
+                <Th align="right" className={HEAD}>Monthly</Th>
+                <Th align="right" className={HEAD}>Platform fee</Th>
+                <Th align="right" className={HEAD}>Gateway fee</Th>
+                <Th align="right" className={HEAD}>Net after fees</Th>
               </tr>
             </thead>
             <tbody>
               {PLANS.map((p) => (
-                <Tr key={p.key} className={p.live ? "bg-surface" : "text-muted"}>
+                <tr key={p.key} className={p.live ? "bg-surface" : "text-muted"}>
                   <Td label="Plan">
                     {/* One flex item, so the stacked mobile row keeps the name and its status together. */}
                     <span>
@@ -187,7 +190,7 @@ export default function Home() {
                   <Td label="Platform fee" align="right" className="font-mono tabular-nums">{p.ledger.platformRate}</Td>
                   <Td label="Gateway fee" align="right" className="font-mono tabular-nums">{p.ledger.gatewayRate}</Td>
                   <MoneyCell label="Net after fees" paise={p.ledger.netPaise} tone={p.live ? "good" : "default"} mono className="font-semibold" />
-                </Tr>
+                </tr>
               ))}
             </tbody>
           </Table>
