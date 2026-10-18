@@ -275,7 +275,7 @@ export function EasebuzzHostedPage({
                         {(
                           [
                             ["apps", "UPI apps"],
-                            ["qr", "Dynamic QR"],
+                            ["qr", "Scan QR"],
                             ["id", "Enter VPA"],
                           ] as const
                         ).map(([id, name]) => (

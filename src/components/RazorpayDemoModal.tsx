@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { settleDemoAction } from "@/app/actions/checkout";
-import { canDismissRazorpay } from "@/lib/gateway-demo";
+import { canDismissRazorpay, settledView } from "@/lib/gateway-demo";
 import { Dialog } from "@/components/ui/dialog";
 import {
   AxisBankIcon,
@@ -59,6 +59,7 @@ function choiceClass(selected: boolean) {
 }
 
 const NOOP = () => {};
+const DECLINED = "Transaction was declined by the simulated bank (Error 05: Do Not Honor).";
 
 export function RazorpayDemoModal({
   isOpen,
@@ -109,14 +110,21 @@ export function RazorpayDemoModal({
 
     try {
       const res = await settleDemoAction(orderId, outcome);
-      if (res.ok) {
+      const view = settledView(res, outcome);
+      if (view === "success") {
         setStatus("success");
         setProcessingStep("Payment approved. Enrolling you now…");
         await new Promise((r) => setTimeout(r, 800));
         router.push(res.to);
+      } else if (view === "declined") {
+        // The action answers ok with the failure page for a chosen decline: show the decline, then follow it.
+        setStatus("failed");
+        setErrorMsg(DECLINED);
+        await new Promise((r) => setTimeout(r, 800));
+        router.push(res.to);
       } else {
         setStatus("failed");
-        setErrorMsg(res.error || "Transaction was declined by the simulated bank (Error 05: Do Not Honor).");
+        setErrorMsg(res.error || DECLINED);
       }
     } catch {
       setStatus("failed");
@@ -166,10 +174,10 @@ export function RazorpayDemoModal({
           <div className="mt-4 flex items-end justify-between gap-4 border-t border-(--skin-head-line) pt-3.5">
             <div className="min-w-0">
               <p className="t-label text-(--skin-head-muted)">Merchant</p>
-              <p className="max-w-60 truncate text-sm font-semibold">{productTitle}</p>
+              <p className="line-clamp-2 text-sm font-semibold">{productTitle}</p>
             </div>
-            <div className="text-right">
-              <p className="t-label text-(--skin-head-muted)">Amount to pay</p>
+            <div className="shrink-0 text-right">
+              <p className="t-label whitespace-nowrap text-(--skin-head-muted)">Amount to pay</p>
               <p className="text-xl font-semibold tabular-nums text-(--skin-head-money)">₹{formattedAmount}</p>
             </div>
           </div>

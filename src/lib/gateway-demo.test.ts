@@ -5,6 +5,7 @@ import {
   countdownNotice,
   formatCountdown,
   isCountdownUrgent,
+  settledView,
 } from "./gateway-demo";
 
 describe("formatCountdown", () => {
@@ -67,5 +68,20 @@ describe("canDismissRazorpay", () => {
   it("blocks dismissal only while the payment is being settled", () => {
     expect(canDismissRazorpay("processing")).toBe(false);
     for (const s of ["idle", "success", "failed"] as const) expect(canDismissRazorpay(s)).toBe(true);
+  });
+});
+
+describe("settledView: what the Razorpay modal shows once the action answers", () => {
+  it("shows success only for an approved payment the buyer asked to succeed", () => {
+    expect(settledView({ ok: true }, "success")).toBe("success");
+  });
+
+  it("shows declined when the buyer chose to simulate a decline, even though the action answered ok (it returns the failure page)", () => {
+    expect(settledView({ ok: true }, "failure")).toBe("declined");
+  });
+
+  it("shows an error when the action refused, whatever was chosen", () => {
+    expect(settledView({ ok: false }, "success")).toBe("error");
+    expect(settledView({ ok: false }, "failure")).toBe("error");
   });
 });

@@ -102,6 +102,34 @@ describe("outcome choice reaches the settle action", () => {
     expect(H.push).toHaveBeenCalledWith("/checkout/success/ord_42");
   });
 
+  it("a chosen decline shows the declined screen, never success, then still follows the action's page", async () => {
+    H.settle = vi.fn(async () => ({ ok: true, to: "/checkout/pay/ord_42?failed=1" }));
+    radio(render().els, "failure").props.onChange();
+    const done = payButton(render().els).props.onClick();
+    await vi.advanceTimersByTimeAsync(1400); // past both simulated delays, before the redirect delay ends
+    const mid = render();
+    const text = textOf(mid.els.map((e) => e.props.children));
+    expect(text).toContain("Payment declined");
+    expect(text).toContain("Do Not Honor");
+    expect(text).not.toMatch(/successful|approved|Enrolling/i);
+    expect(byType(mid.els, "div").some((e) => e.props.role === "alert")).toBe(true);
+    await vi.advanceTimersByTimeAsync(5000);
+    await done;
+    expect(H.settle).toHaveBeenCalledWith("ord_42", "failure");
+    expect(H.push).toHaveBeenCalledWith("/checkout/pay/ord_42?failed=1");
+    expect(textOf(render().els.map((e) => e.props.children))).not.toMatch(/successful/i);
+  });
+
+  it("a chosen success with an ok answer shows the success screen", async () => {
+    const done = payButton(render().els).props.onClick();
+    await vi.advanceTimersByTimeAsync(1400);
+    const text = textOf(render().els.map((e) => e.props.children));
+    expect(text).toContain("Payment successful");
+    expect(text).not.toContain("declined");
+    await vi.advanceTimersByTimeAsync(5000);
+    await done;
+  });
+
   it("shows the decline reason and offers Try again, which returns to the form, when the action refuses", async () => {
     H.settle = vi.fn(async () => ({ ok: false, error: "Card declined by the simulated bank." }));
     await pay(render().els);

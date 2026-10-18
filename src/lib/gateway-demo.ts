@@ -31,3 +31,13 @@ export function isCountdownUrgent(secondsLeft: number): boolean {
 export function canDismissRazorpay(status: "idle" | "processing" | "success" | "failed"): boolean {
   return status !== "processing";
 }
+
+/**
+ * Which screen the Razorpay modal shows once `settleDemoAction` has answered. The action answers `ok: true` with the failure
+ * page for a simulated decline (it only answers `ok: false` when it throws an AppError), so `ok` alone must not mean success:
+ * a buyer who picked "Simulate decline" sees the declined screen, and is still sent to the page the action names.
+ */
+export function settledView(res: { ok: boolean }, outcome: "success" | "failure"): "success" | "declined" | "error" {
+  if (!res.ok) return "error";
+  return outcome === "failure" ? "declined" : "success";
+}

@@ -93,6 +93,15 @@ describe("RazorpayDemoModal: skin and honesty", () => {
   });
 });
 
+describe("RazorpayDemoModal: narrow header", () => {
+  it("lets the merchant name wrap to two lines and keeps the amount label on one line", () => {
+    const out = html();
+    expect(out).toMatch(/line-clamp-2[^>]*>Brand Strategy Masterclass</);
+    expect(out).not.toMatch(/truncate[^>]*>Brand Strategy Masterclass</);
+    expect(out).toMatch(/whitespace-nowrap[^>]*>Amount to pay</);
+  });
+});
+
 describe("RazorpayDemoModal: it is a Dialog", () => {
   it("hands Dialog the open flag, a title that names the merchant, and the bare layout", () => {
     html();

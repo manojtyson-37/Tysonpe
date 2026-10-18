@@ -88,6 +88,12 @@ describe("EasebuzzHostedPage: the 15-minute clock", () => {
 });
 
 describe("EasebuzzHostedPage: controls", () => {
+  it("the three UPI sub-tabs have short labels that stay on one line at 390px", () => {
+    const out = html();
+    for (const label of ["UPI apps", "Scan QR", "Enter VPA"]) expect(out).toContain(`>${label}<`);
+    expect(out).not.toContain("Dynamic QR");
+  });
+
   it("the pay form and the cancel form are separate forms, each with a 44px-on-touch submit button", () => {
     const out = html();
     expect(out.match(/<form /g)).toHaveLength(2);
