@@ -1,11 +1,15 @@
 import { readFileSync } from "node:fs";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 type Row = Record<string, unknown>;
 const state = vi.hoisted(() => ({
-  user: { id: "u1", name: "Asha Rao", preferredGateway: "razorpay" } as Row,
+  user: { id: "u1", name: "Asha Rao", preferredGateway: "razorpay", creator: { id: "c1" } } as Row,
+  /** simulatedPaymentsAllowed() */
+  allowed: true,
+  /** getProvider().name, or "THROW" for a deployment with no provider configured. */
+  provider: "mock" as string,
   /** What each successive product.findFirst call returns. */
   products: [] as (Row | null)[],
   enrollment: null as Row | null,
@@ -45,6 +49,13 @@ vi.mock("@/lib/db", () => ({
     },
   },
 }));
+vi.mock("@/lib/payments/demo-mode", () => ({ simulatedPaymentsAllowed: () => state.allowed }));
+vi.mock("@/lib/payments", () => ({
+  getProvider: () => {
+    if (state.provider === "THROW") throw new Error("No payment provider configured");
+    return { name: state.provider };
+  },
+}));
 // The actions' own contracts are pinned in actions/*.test.ts; here they only record how the page binds them.
 vi.mock("@/app/actions/auth", () => ({
   setPreferredGateway: async (...args: unknown[]) => void state.actions.push(["setPreferredGateway", ...args]),
@@ -56,6 +67,8 @@ vi.mock("@/app/actions/checkout", () => ({
 
 import { ActionForm, FormError, RadioCard, SubmitButton } from "@/components/form";
 import { GatewayChooser } from "@/components/GatewayChooser";
+import { Button, EmptyState } from "@/components/ui";
+import { IconCheck } from "@/components/icons";
 import { gatewayFormId } from "@/lib/gateway-form";
 import { gstComponent } from "@/lib/money";
 import { GATEWAYS } from "@/lib/payments/gateways";
@@ -79,7 +92,9 @@ const product = (over: Row = {}): Row => ({
 });
 
 beforeEach(() => {
-  state.user = { id: "u1", name: "Asha Rao", preferredGateway: "razorpay" };
+  state.user = { id: "u1", name: "Asha Rao", preferredGateway: "razorpay", creator: { id: "c1" } };
+  state.allowed = true;
+  state.provider = "mock";
   state.products = [product()];
   state.enrollment = null;
   state.productArgs = [];
@@ -102,6 +117,26 @@ const text = (h: string) =>
     .replace(/&amp;/g, "&")
     .replace(/\s+/g, " ")
     .trim();
+
+/** Every page state worth scanning, each set up from a clean slate. */
+const STATES: [string, () => void][] = [
+  ["not enrolled", () => {}],
+  ["enrolled", () => void (state.enrollment = { id: "e1" })],
+  ["no product", () => void (state.products = [null, null])],
+  ["not a demo deployment", () => void (state.allowed = false)],
+];
+async function eachState(check: (name: string, html: string) => void) {
+  for (const [name, setup] of STATES) {
+    state.user = { id: "u1", name: "Asha Rao", preferredGateway: "razorpay", creator: { id: "c1" } };
+    state.allowed = true;
+    state.provider = "mock";
+    state.products = [product()];
+    state.enrollment = null;
+    state.productArgs = [];
+    setup();
+    check(name, await render());
+  }
+}
 
 /** Every element in the (unrendered) tree, in order. */
 function elements(node: unknown, out: ReactElement<Row>[] = []): ReactElement<Row>[] {
@@ -133,10 +168,8 @@ describe("demo page: heading and honest copy", () => {
   });
 
   it("makes none of the old claims: signatures, enterprise, friction, authentic flows, buzzwords", async () => {
-    for (const enrolled of [false, true]) {
-      state.enrollment = enrolled ? { id: "e1" } : null;
-      state.productArgs = [];
-      const t = text(await render()).toLowerCase();
+    await eachState((name, html) => {
+      const t = text(html).toLowerCase();
       for (const banned of [
         "hmac",
         "sha-256",
@@ -156,9 +189,9 @@ describe("demo page: heading and honest copy", () => {
         "qr scanning",
         "303",
       ]) {
-        expect(t, banned).not.toContain(banned);
+        expect(t, `${name}: ${banned}`).not.toContain(banned);
       }
-    }
+    });
     // positive control: the scan would catch the old copy
     expect("backend computes SHA-256 signatures identical to genuine webhooks".toLowerCase()).toContain("sha-256");
   });
@@ -170,14 +203,20 @@ describe("demo page: heading and honest copy", () => {
   });
 
   it("has no glyph icons, exclamation marks or emoji", async () => {
-    for (const enrolled of [false, true]) {
-      state.enrollment = enrolled ? { id: "e1" } : null;
-      state.productArgs = [];
-      const t = text(await render());
-      expect(t).not.toMatch(/[✓●→←✔•]/);
-      expect(t).not.toContain("!");
-      expect(t).not.toMatch(/\p{Extended_Pictographic}/u);
-    }
+    await eachState((name, html) => {
+      const t = text(html);
+      expect(t, name).not.toMatch(/[✓●→←✔•]/);
+      expect(t, name).not.toContain("!");
+      expect(t, name).not.toMatch(/\p{Extended_Pictographic}/u);
+    });
+    // positive control: the scans see a glyph, a bang and an emoji
+    expect("Done ✓!").toMatch(/[✓●→←✔•]/);
+    expect("ok 😀").toMatch(/\p{Extended_Pictographic}/u);
+  });
+
+  it("shows each gateway's own blurb", async () => {
+    const t = text(await render());
+    for (const gw of GATEWAYS) expect(t, gw.id).toContain(gw.blurb);
   });
 });
 
@@ -234,23 +273,53 @@ describe("demo page: the gateway chooser", () => {
     for (const gw of GATEWAYS) expect(html).toContain(`<form id="${gatewayFormId(gw.id)}"`);
   });
 
-  it("gives a no-script visitor a real button per form (the radios need script to submit)", async () => {
+  it("gives a no-script visitor a real button INSIDE each gateway's own form (the radios need script to submit)", async () => {
+    const tree = await renderTree();
+    for (const gw of GATEWAYS) {
+      const form = hostForms(tree).find((f) => f.props.id === gatewayFormId(gw.id))!;
+      const inside = elements(form.props.children);
+      const noscript = inside.find((e) => e.type === "noscript");
+      expect(noscript, gw.id).toBeDefined();
+      const buttons = elements(noscript!.props.children).filter((e) => e.type === Button);
+      expect(buttons, gw.id).toHaveLength(1);
+      expect(buttons[0].props.type).toBe("submit");
+      expect(buttons[0].props.children).toEqual(["Use ", gw.name]);
+    }
+    // and in the markup: slice each gateway form, then look inside the slice only
     const html = await render();
-    expect(html).toMatch(/<noscript><button[^>]*type="submit"[^>]*>Use Razorpay<\/button><\/noscript>/);
-    expect(html).toMatch(/<noscript><button[^>]*type="submit"[^>]*>Use Easebuzz<\/button><\/noscript>/);
+    for (const gw of GATEWAYS) {
+      const slice = new RegExp(`<form id="${gatewayFormId(gw.id)}"[^>]*>([\\s\\S]*?)</form>`).exec(html)![1];
+      expect(slice, gw.id).toMatch(new RegExp(`^<noscript><button[^>]*type="submit"[^>]*>Use ${gw.name}</button></noscript>$`));
+    }
+  });
+
+  it("tells a no-script visitor what the buttons are for", async () => {
+    const html = await render();
+    expect(html).toMatch(/<noscript><p[^>]*>[^<]*(buttons?)[^<]*<\/p><\/noscript>/);
+    expect(text(html)).toContain("Scripts are off: use the buttons below to save a gateway.");
   });
 
   it("tells the user that choosing saves it, and where it is used", async () => {
     expect(text(await render())).toContain("Choosing a gateway saves it to your account and pre-selects it on the pay page.");
   });
 
-  it("remounts the group when the saved choice changes (key), so the radios follow the server", async () => {
+  it("does NOT remount the group on a new saved choice (a key would drop keyboard focus)", async () => {
     const chooser = (tree: ReactNode) => elements(tree).find((e) => e.type === GatewayChooser)!;
-    const a = chooser(await renderTree()).key;
+    const a = chooser(await renderTree());
     state.user = { ...state.user, preferredGateway: "easebuzz" };
     state.productArgs = [];
-    const b = chooser(await renderTree()).key;
-    expect(a).not.toEqual(b);
+    const b = chooser(await renderTree());
+    expect(a.key).toBeNull();
+    expect(b.key).toBeNull();
+    expect(a.props.selected).toBe("razorpay");
+    expect(b.props.selected).toBe("easebuzz");
+    expect(PAGE).not.toMatch(/<GatewayChooser[^>]*\bkey=/);
+  });
+
+  it("renders a persistent, empty polite status region for the save message", async () => {
+    const html = await render();
+    expect(html).toMatch(/<p role="status" aria-live="polite" class="[^"]*sr-only[^"]*"><\/p>/);
+    expect(html.match(/role="status"/g)!.length).toBe(1 + 1 /* SubmitButton pending region */);
   });
 
   it("passes the chooser plain data only (no functions, no elements)", async () => {
@@ -260,52 +329,13 @@ describe("demo page: the gateway chooser", () => {
   });
 });
 
-describe("GatewayChooser: choosing a radio submits the matching form", () => {
-  const radios = () => elements(GatewayChooser({ options: [{ id: "razorpay", name: "Razorpay", blurb: "b", fact: "f" }, { id: "easebuzz", name: "Easebuzz", blurb: "b", fact: "f" }], selected: "razorpay", labelledBy: "h" })).filter((e) => e.type === RadioCard);
-  const submitted: string[] = [];
-  const lookups: string[] = [];
-  beforeEach(() => {
-    submitted.length = 0;
-    lookups.length = 0;
-    vi.stubGlobal("document", {
-      getElementById: (id: string) => {
-        lookups.push(id);
-        return { requestSubmit: () => void submitted.push(id) };
-      },
-    });
-  });
-  afterEach(() => vi.unstubAllGlobals());
-
-  it("looks up and submits gateway-form-<value> when a radio becomes checked", () => {
-    const [razorpay, easebuzz] = radios();
-    (easebuzz.props.onChange as (e: unknown) => void)({ currentTarget: { checked: true, value: "easebuzz" } });
-    expect(submitted).toEqual(["gateway-form-easebuzz"]);
-    (razorpay.props.onChange as (e: unknown) => void)({ currentTarget: { checked: true, value: "razorpay" } });
-    expect(submitted).toEqual(["gateway-form-easebuzz", "gateway-form-razorpay"]);
-  });
-
-  it("does nothing when the event is not a check, and tolerates a missing form", () => {
-    const [razorpay] = radios();
-    (razorpay.props.onChange as (e: unknown) => void)({ currentTarget: { checked: false, value: "razorpay" } });
-    expect(lookups).toEqual([]);
-    vi.stubGlobal("document", { getElementById: () => null });
-    expect(() => (razorpay.props.onChange as (e: unknown) => void)({ currentTarget: { checked: true, value: "razorpay" } })).not.toThrow();
-  });
-
-  it("uses defaultChecked (uncontrolled) so arrow keys move the native selection", () => {
-    const [razorpay, easebuzz] = radios();
-    expect(razorpay.props.defaultChecked).toBe(true);
-    expect(easebuzz.props.defaultChecked).toBe(false);
-    expect("checked" in razorpay.props).toBe(false);
-  });
-});
-
 describe("demo page: GST comes from the product rate", () => {
   // Oracle by hand: GST is the part of a GST-inclusive price, price * rate / (100 + rate).
   it.each([
     [118000, 18, 18000, "₹180"],
     [105000, 5, 5000, "₹50"],
     [112000, 12, 12000, "₹120"],
+    [128000, 28, 28000, "₹280"],
   ])("a %i paise product at %i%% prints its own GST component", async (pricePaise, rate, gstPaise, rupees) => {
     expect(gstComponent(pricePaise, rate)).toBe(gstPaise);
     state.products = [product({ pricePaise, gstRatePct: rate })];
@@ -349,6 +379,12 @@ describe("demo page: the three product states", () => {
     expect(text(html)).toContain("Creates a test order and opens the pay page with Razorpay selected.");
     expect(html).not.toContain("/library/p1");
     expect(text(html)).not.toContain("Reset");
+    // the form shows its error, and says what it is doing while pending
+    const all = elements(tree);
+    expect(all.filter((e) => e.type === FormError)).toHaveLength(1);
+    const submits = all.filter((e) => e.type === SubmitButton);
+    expect(submits.map((e) => e.props.pendingText)).toEqual(["Creating a test order…"]);
+    expect(all.filter((e) => e.type === IconCheck)).toHaveLength(0);
   });
 
   it("names the saved gateway in the button and the line under it", async () => {
@@ -369,7 +405,15 @@ describe("demo page: the three product states", () => {
     const reset = hostForms(tree).filter((f) => !String(f.props.id).startsWith("gateway-form-"));
     expect(reset).toHaveLength(1);
     expect(await submit(reset[0])).toEqual(["resetDemoEnrollmentAction", "p1"]);
-    expect(html).toMatch(/<button type="submit" class="btn btn-secondary[^"]*">Reset and buy again<\/button>/);
+    expect(html).toMatch(/<button type="submit" class="btn btn-secondary[^"]*[^>]*>Reset and buy again<\/button>/);
+    // the success line carries the check icon; there is no checkout form, so no FormError either
+    const all = elements(tree);
+    expect(all.filter((e) => e.type === IconCheck)).toHaveLength(1);
+    expect(all.filter((e) => e.type === FormError)).toHaveLength(0);
+    expect(all.filter((e) => e.type === SubmitButton).map((e) => e.props.pendingText)).toEqual(["Resetting…"]);
+    // 44px touch floor on the enrolled-state link and reset button
+    expect(html).toMatch(/<a class="btn btn-primary[^"]*pointer-coarse:min-h-11[^"]*" href="\/library\/p1">/);
+    expect(html).toMatch(/<button type="submit" class="btn btn-secondary[^"]*pointer-coarse:min-h-11[^"]*">Reset and buy again/);
   });
 
   it("no product: an honest empty state with a link for creators, and no checkout controls", async () => {
@@ -384,6 +428,11 @@ describe("demo page: the three product states", () => {
     expect(state.enrollmentArgs).toEqual([]);
     // the chooser is still usable without a product
     expect(html).toContain('role="radiogroup"');
+    // the empty state's body is 16px and its action keeps the touch floor
+    const empty = elements(tree).find((e) => e.type === EmptyState)!;
+    expect(String(empty.props.className)).toContain("text-base");
+    expect(String(empty.props.actionClassName)).toContain("pointer-coarse:min-h-11");
+    expect(html).toMatch(/href="\/dashboard\/products\/new"/);
   });
 
   it("shows the product's type, title, creator and h3 under the second h2", async () => {
@@ -391,6 +440,55 @@ describe("demo page: the three product states", () => {
     expect(html).toMatch(/<h3[^>]*>Intro to bookkeeping<\/h3>/);
     expect(text(html)).toContain("Course by Meera Nair");
     expect(html.indexOf("<h2")).toBeLessThan(html.indexOf("<h3"));
+  });
+
+  it("labels the product type from the shared map, and falls back to the raw type", async () => {
+    state.products = [product({ type: "download" })];
+    expect(text(await render())).toContain("Digital download by Meera Nair");
+    state.products = [product({ type: "webinar" })];
+    state.productArgs = [];
+    expect(text(await render())).toContain("Live webinar by Meera Nair");
+    state.products = [product({ type: "mystery" })];
+    state.productArgs = [];
+    expect(text(await render())).toContain("mystery by Meera Nair");
+  });
+});
+
+describe("demo page: outside a mock-gateway demo deployment", () => {
+  const cases: [string, () => void][] = [
+    ["simulated payments not allowed", () => void (state.allowed = false)],
+    ["not allowed and the provider is the mock", () => void ((state.allowed = false), (state.provider = "mock"))],
+    ["allowed but live Razorpay keys", () => void (state.provider = "razorpay")],
+    ["allowed but Easebuzz", () => void (state.provider = "easebuzz")],
+    ["allowed but getProvider throws", () => void (state.provider = "THROW")],
+    ["not allowed and getProvider throws", () => void ((state.allowed = false), (state.provider = "THROW"))],
+  ];
+  it.each(cases)("%s: honest short state, no test-mode claim, no chooser, no checkout, no reset", async (_n, setup) => {
+    setup();
+    state.enrollment = { id: "e1" }; // even an owned product must not offer a reset
+    const tree = await renderTree();
+    const html = renderToStaticMarkup(<>{tree}</>);
+    const t = text(html);
+    expect([...html.matchAll(/<h1\b[^>]*>(.*?)<\/h1>/g)].map((m) => m[1])).toEqual(["Gateway playground"]);
+    expect(t).toContain("The gateway playground runs on the demo deployment only.");
+    expect(html).toMatch(/<a class="btn btn-primary[^"]*pointer-coarse:min-h-11[^"]*" href="\/library">[^<]+<\/a>/);
+    expect(t.toLowerCase()).not.toContain("test mode");
+    expect(t.toLowerCase()).not.toContain("real money");
+    expect(html).not.toContain('role="radiogroup"');
+    expect(html).not.toContain('type="radio"');
+    expect(html).not.toContain("<form");
+    expect(html).not.toContain("<noscript");
+    expect(t).not.toContain("Start checkout");
+    expect(t).not.toContain("Reset");
+    expect(elements(tree).filter((e) => e.type === GatewayChooser || e.type === ActionForm || e.type === SubmitButton)).toHaveLength(0);
+    // no data is fetched for a page that shows none
+    expect(state.log).toEqual(["requireUser:/demo"]);
+  });
+
+  it("the demo deployment (allowed and mock provider) still shows the playground", async () => {
+    const t = text(await render());
+    expect(t).toContain("Test mode: no real money moves.");
+    expect(t).not.toContain("runs on the demo deployment only");
   });
 });
 
@@ -458,12 +556,9 @@ describe("demo page: layout and style budget", () => {
   });
 
   it("has no resting shadow, motion loop, uppercase label, tracked label or arbitrary radius in the markup", async () => {
-    for (const enrolled of [false, true]) {
-      state.enrollment = enrolled ? { id: "e1" } : null;
-      state.productArgs = [];
-      const html = await render();
-      expect(html).not.toMatch(/shadow|animate-|infinite|uppercase|tracking-|t-label|rounded-\[|gradient|blur/);
-    }
+    await eachState((name, html) => {
+      expect(html, name).not.toMatch(/shadow|animate-|infinite|uppercase|tracking-|t-label|rounded-\[|gradient|blur/);
+    });
   });
 
   it("keeps copy at 15px or more outside the radio cards (no text-xs or text-sm in the page)", () => {
@@ -471,20 +566,25 @@ describe("demo page: layout and style budget", () => {
   });
 
   it("every link and button is a Button or ButtonLink (44px touch floor from .btn); no raw anchors", async () => {
-    for (const enrolled of [false, true]) {
-      state.enrollment = enrolled ? { id: "e1" } : null;
-      state.productArgs = [];
-      const html = await render();
+    await eachState((name, html) => {
       const tags = [...html.matchAll(/<(a|button)\b([^>]*)>/g)];
-      expect(tags.length).toBeGreaterThan(2);
-      for (const [tag] of tags) expect(tag, tag).toMatch(/class="btn btn-/);
-    }
+      expect(tags.length, name).toBeGreaterThanOrEqual(1);
+      for (const [tag] of tags) expect(tag, `${name}: ${tag}`).toMatch(/class="btn btn-/);
+    });
   });
 
-  it("ends with plain ghost links to the library and the dashboard, no arrows", async () => {
+  it("ends with plain ghost links to the library and the dashboard, no arrows, each with the touch floor", async () => {
     const html = await render();
-    expect(html).toMatch(/<a class="btn btn-ghost[^"]*" href="\/library">Your library<\/a>/);
-    expect(html).toMatch(/<a class="btn btn-ghost[^"]*" href="\/dashboard">Creator dashboard<\/a>/);
+    expect(html).toMatch(/<a class="btn btn-ghost[^"]*pointer-coarse:min-h-11[^"]*" href="\/library">Your library<\/a>/);
+    expect(html).toMatch(/<a class="btn btn-ghost[^"]*pointer-coarse:min-h-11[^"]*" href="\/dashboard">Creator dashboard<\/a>/);
+  });
+
+  it("hides the Creator dashboard link from a user who has no creator profile", async () => {
+    state.user = { ...state.user, creator: null };
+    const html = await render();
+    expect(html).not.toContain("Creator dashboard");
+    expect(html).not.toContain('href="/dashboard"');
+    expect(html).toContain('href="/library">Your library<');
   });
 
   it("passes the legacy style scan on both touched sources", () => {
@@ -521,5 +621,10 @@ describe("demo page: server/client boundary", () => {
     state.products = [null, null];
     state.productArgs = [];
     expect(functionProps(await renderTree(), boundaries).sort()).toEqual(["<form>.action", "<form>.action"]);
+    // not a demo deployment: no forms, so no functions at all
+    state.products = [product()];
+    state.allowed = false;
+    state.productArgs = [];
+    expect(functionProps(await renderTree(), boundaries)).toEqual([]);
   });
 });

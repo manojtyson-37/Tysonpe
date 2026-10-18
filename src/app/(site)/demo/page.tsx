@@ -4,11 +4,13 @@ import { setPreferredGateway } from "@/app/actions/auth";
 import { GatewayChooser, type GatewayOption } from "@/components/GatewayChooser";
 import { ActionForm, FormError, SubmitButton } from "@/components/form";
 import { IconCheck, IconLock } from "@/components/icons";
-import { Button, ButtonLink, EmptyState, Money, PageHeader } from "@/components/ui";
+import { Button, ButtonLink, EmptyState, Money, PageHeader, TYPE_LABEL } from "@/components/ui";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { gatewayFormId } from "@/lib/gateway-form";
 import { gstComponent } from "@/lib/money";
+import { getProvider } from "@/lib/payments";
+import { simulatedPaymentsAllowed } from "@/lib/payments/demo-mode";
 import { GATEWAYS } from "@/lib/payments/gateways";
 
 export const metadata: Metadata = { title: "Gateway playground" };
@@ -23,6 +25,32 @@ const OPTIONS: GatewayOption[] = GATEWAYS.map((gw) => ({ id: gw.id, name: gw.nam
 
 export default async function DemoPage() {
   const user = await requireUser("/demo");
+
+  // Test-mode copy, the chooser, checkout and reset are true only where simulated payments are allowed AND the provider
+  // is the mock. With live keys the button would create a real order and the reset action would throw.
+  const sandbox =
+    simulatedPaymentsAllowed() &&
+    (() => {
+      try {
+        return getProvider().name === "mock";
+      } catch {
+        return false;
+      }
+    })();
+
+  if (!sandbox) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
+        <PageHeader title="Gateway playground" />
+        <p className="max-w-prose text-base text-muted">The gateway playground runs on the demo deployment only.</p>
+        <div className="mt-6">
+          <ButtonLink href="/library" className="pointer-coarse:min-h-11">
+            Open your library
+          </ButtonLink>
+        </div>
+      </div>
+    );
+  }
 
   // Find a product from another creator to purchase
   let product = await db.product.findFirst({
@@ -67,7 +95,10 @@ export default async function DemoPage() {
         <p className="mb-4 mt-1 max-w-prose text-base text-muted">
           Choosing a gateway saves it to your account and pre-selects it on the pay page.
         </p>
-        <GatewayChooser key={currentGateway.id} options={OPTIONS} selected={currentGateway.id} labelledBy="gateway-heading" />
+        <GatewayChooser options={OPTIONS} selected={currentGateway.id} labelledBy="gateway-heading" />
+        <noscript>
+          <p className="mt-3 max-w-prose text-base text-muted">Scripts are off: use the buttons below to save a gateway.</p>
+        </noscript>
         {/* The radios submit these by id. Without script they cannot, so each form carries its own button. */}
         {GATEWAYS.map((gw) => (
           <form key={gw.id} id={gatewayFormId(gw.id)} action={setPreferredGateway.bind(null, gw.id)}>
@@ -91,7 +122,7 @@ export default async function DemoPage() {
               <div className="min-w-0">
                 <h3 className="text-xl font-semibold">{product.title}</h3>
                 <p className="mt-1 text-base text-muted">
-                  {product.type.charAt(0).toUpperCase() + product.type.slice(1)} by {product.creator.displayName}
+                  {TYPE_LABEL[product.type] ?? product.type} by {product.creator.displayName}
                 </p>
               </div>
               <div className="sm:text-right">
@@ -116,9 +147,9 @@ export default async function DemoPage() {
                     <span>You already own this. It is unlocked in your library.</span>
                   </p>
                   <div className="flex flex-wrap items-center gap-3">
-                    <ButtonLink href={`/library/${product.id}`}>Open in your library</ButtonLink>
+                    <ButtonLink href={`/library/${product.id}`} className="pointer-coarse:min-h-11">Open in your library</ButtonLink>
                     <form action={resetDemoEnrollmentAction.bind(null, product.id)}>
-                      <SubmitButton variant="secondary" pendingText="Resetting…">
+                      <SubmitButton variant="secondary" pendingText="Resetting…" className="pointer-coarse:min-h-11">
                         Reset and buy again
                       </SubmitButton>
                     </form>
@@ -141,6 +172,8 @@ export default async function DemoPage() {
         ) : (
           <EmptyState
             inline
+            className="[&>p+p]:text-base"
+            actionClassName="pointer-coarse:min-h-11"
             title="No published paid product to buy yet"
             body="Checkout needs a published product with a price. Creators can add one from the dashboard."
             action={{ label: "Create a product", href: "/dashboard/products/new" }}
@@ -149,12 +182,14 @@ export default async function DemoPage() {
       </section>
 
       <div className="mt-10 flex flex-wrap gap-2 border-t border-line pt-4">
-        <ButtonLink variant="ghost" href="/library">
+        <ButtonLink variant="ghost" href="/library" className="pointer-coarse:min-h-11">
           Your library
         </ButtonLink>
-        <ButtonLink variant="ghost" href="/dashboard">
-          Creator dashboard
-        </ButtonLink>
+        {user.creator ? (
+          <ButtonLink variant="ghost" href="/dashboard" className="pointer-coarse:min-h-11">
+            Creator dashboard
+          </ButtonLink>
+        ) : null}
       </div>
     </div>
   );
