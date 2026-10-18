@@ -138,6 +138,26 @@ describe("ConfirmButton confirmLabel", () => {
   });
 });
 
+describe("ConfirmButton destructive", () => {
+  const html = (node: React.ReactNode) => renderToStaticMarkup(<form>{node}</form>);
+
+  it("asks a destructive confirm by default, so every existing caller keeps its red button", () => {
+    html(<ConfirmButton message="Delete this lesson?">Delete</ConfirmButton>);
+    expect(seen.dialog.at(-1)?.destructive).toBe(true);
+  });
+
+  it("hands destructive={false} to the dialog, for a reversible action that should confirm in the primary look", () => {
+    html(<ConfirmButton message="Turn off?" destructive={false}>Turn off</ConfirmButton>);
+    expect(seen.dialog.at(-1)?.destructive).toBe(false);
+  });
+
+  it("does not change the trigger button: destructive only styles the dialog's confirm", () => {
+    expect(html(<ConfirmButton message="m" variant="secondary" destructive={false}>Turn off</ConfirmButton>)).toBe(
+      '<form><button type="submit" class="btn btn-secondary btn-sm">Turn off</button></form>',
+    );
+  });
+});
+
 describe("ConfirmButton ref", () => {
   it("hands one ref object to both the trigger Button and the dialog's focus return, so requestSubmit and focus-back find the node", () => {
     renderToStaticMarkup(<form><ConfirmButton message="m">Delete</ConfirmButton></form>);

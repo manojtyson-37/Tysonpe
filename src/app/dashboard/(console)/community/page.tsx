@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: "Community" };
 const COARSE = "pointer-coarse:min-h-11";
 
 const GAMIFICATION_OFF_CONFIRM =
-  "Turn off points, levels and badges? Nothing new is awarded and the leaderboard is hidden. Points members already earned are kept.";
+  "Turn off points, levels and badges? Nothing new is awarded, the leaderboard is hidden, and members stop seeing their own points and level. Points members already earned are kept.";
 
 function deleteMessage(name: string, postCount: number) {
   if (postCount === 0) return `Delete "${name}"? This can't be undone.`;
@@ -54,10 +54,9 @@ export default async function CommunityConsole() {
         <div className="min-w-0 space-y-10 xl:col-start-1 xl:row-span-2 xl:row-start-1">
           <section aria-labelledby="channels-h">
             <h2 id="channels-h" className="sr-only">Channels</h2>
-            <ul className="divide-y divide-line border-y border-line" aria-label="Channels">
+            <ul className="divide-y divide-line border-y border-line" aria-labelledby="channels-h">
               {channels.map((c, i) => (
                 <li key={c.id}>
-                  {/* px-1.5: the panel clips overflow, and the 2px ring plus its 2px offset of a field on its edge must fit. */}
                   <Disclosure
                     className="px-1.5"
                     label={
@@ -72,7 +71,7 @@ export default async function CommunityConsole() {
                       </span>
                     }
                   >
-                    <div className="space-y-4 px-0.5 pb-5 pt-1">
+                    <div className="space-y-4 pb-5 pt-1">
                       <ChannelForm action={updateChannelAction.bind(null, c.id)} channel={c} products={products} submitLabel="Save channel" />
                       <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
                         <form action={moveChannelAction.bind(null, c.id, "up")}>
@@ -150,7 +149,7 @@ export default async function CommunityConsole() {
           <div className="mt-3 flex flex-wrap gap-2">
             {creator.gamificationEnabled ? (
               <form action={setGamificationAction.bind(null, false)}>
-                <ConfirmButton variant="secondary" size="sm" className={COARSE} message={GAMIFICATION_OFF_CONFIRM} confirmLabel="Turn off">
+                <ConfirmButton variant="secondary" size="sm" className={COARSE} message={GAMIFICATION_OFF_CONFIRM} confirmLabel="Turn off" destructive={false}>
                   Turn off
                 </ConfirmButton>
               </form>

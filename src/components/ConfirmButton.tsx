@@ -59,6 +59,7 @@ export function ConfirmButton({
   variant,
   size,
   confirmLabel,
+  destructive = true,
   children,
   "aria-label": ariaLabel,
 }: {
@@ -67,6 +68,8 @@ export function ConfirmButton({
   variant?: ButtonVariant;
   size?: ButtonSize;
   confirmLabel?: ReactNode;
+  /** Whether the dialog's confirm button is the red destructive one (default). Pass `false` for a reversible action. */
+  destructive?: boolean;
   children: ReactNode;
   "aria-label"?: string;
 }) {
@@ -102,6 +105,7 @@ export function ConfirmButton({
         open={state.open}
         title={message}
         confirmLabel={confirmLabel ?? children}
+        destructive={destructive}
         onConfirm={() => dispatch("confirm")}
         onCancel={() => dispatch("cancel")}
         returnFocusRef={buttonRef}

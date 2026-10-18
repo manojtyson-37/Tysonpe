@@ -63,6 +63,31 @@ describe("Disclosure", () => {
     expect(panel(render(<Disclosure label="Filter" defaultOpen><input name="q" /></Disclosure>))).not.toContain("inert");
   });
 
+  // The panel clips overflow (that is what lets the height collapse), and a focus ring is 2px wide plus a 2px offset:
+  // 4px beyond the field. So the clip edge must sit 4px outside the content, on the PANEL itself (a padding on the
+  // root is outside the clip and protects nothing).
+  const classesOf = (tag: string) => new Set(/class="([^"]*)"/.exec(tag)![1].split(/\s+/));
+
+  it("puts the panel's clip edge 4px outside its content so edge fields keep their whole focus ring", () => {
+    const classes = classesOf(panel(render(<Disclosure label="Filter"><input name="q" /></Disclosure>)));
+    expect(classes).toContain("overflow-hidden");
+    expect(classes).toContain("-mx-1");
+    expect(classes).toContain("px-1");
+    expect(classes).not.toContain("px-0.5");
+  });
+
+  it("styles the button like the project's other controls: hover fill, 150ms explicit-property transition, press scale", () => {
+    const button = /<button[^>]*>/.exec(render(<Disclosure label="Filter"><p>p</p></Disclosure>))![0];
+    const classes = classesOf(button);
+    expect(classes).toContain("hover:bg-surface-2");
+    expect(classes).toContain("duration-[var(--dur-fast)]");
+    expect(classes).toContain("ease-[var(--ease-standard)]");
+    expect(classes).toContain("active:scale-[var(--scale-press-lg)]");
+    expect([...classes].some((c) => /^transition-\[[^\]]*background-color[^\]]*transform[^\]]*\]$/.test(c))).toBe(true);
+    expect(classes).not.toContain("transition-all");
+    expect(classes).not.toContain("transition");
+  });
+
   it("lets a long label shrink and wrap instead of pushing the chevron out of the row", () => {
     const html = render(<Disclosure label="x"><p>p</p></Disclosure>);
     expect(html).toMatch(/<span class="[^"]*\bmin-w-0\b[^"]*\bflex-1\b[^"]*">x<\/span>/);

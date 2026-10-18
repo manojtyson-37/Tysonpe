@@ -33,6 +33,10 @@ function ChevronIcon({ className }: { className?: string }) {
  * The inner div must have `min-h-0` so it collapses properly.
  *
  * Keyboard native: a `<button aria-expanded>` — no custom JS needed.
+ *
+ * Horizontal room: the button's hover fill bleeds 6px past the label (`-mx-1.5 px-1.5`) and the panel's clip edge
+ * sits 4px past the content (`-mx-1 px-1`), so a caller that wants the fill to end at its own rules gives the
+ * root `px-1.5`.
  */
 export function Disclosure({
   label,
@@ -57,7 +61,12 @@ export function Disclosure({
         id={id}
         aria-controls={panelId}
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-2 py-3 text-left text-sm font-medium text-ink"
+        className={[
+          "-mx-1.5 flex items-center justify-between gap-2 rounded-control px-1.5 py-3 text-left text-sm font-medium text-ink",
+          // Explicit properties (never `transition: all`), 150ms, and the same press scale as the Button primitive.
+          "transition-[background-color,transform] duration-[var(--dur-fast)] ease-[var(--ease-standard)]",
+          "hover:bg-surface-2 active:scale-[var(--scale-press-lg)]",
+        ].join(" ")}
       >
         <span className="min-w-0 flex-1">{label}</span>
         <ChevronIcon
@@ -78,7 +87,9 @@ export function Disclosure({
         // Collapsing is only a height change, so without this the closed fields stay tabbable and readable.
         inert={!open}
         className={[
-          "grid overflow-hidden",
+          // The clip edge sits 4px outside the content (-mx-1 px-1): a focus ring is 2px wide with a 2px offset, so a
+          // field on the panel's edge would otherwise lose its left and right ring to the clip.
+          "-mx-1 grid overflow-hidden px-1",
           "transition-[grid-template-rows] duration-[var(--dur-base)] ease-[var(--ease-standard)]",
           open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
         ].join(" ")}

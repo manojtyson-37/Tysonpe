@@ -119,6 +119,12 @@ describe("community admin: layout and surfaces", () => {
     expect(html).not.toContain("title=");
   });
 
+  it("keeps the focus-ring room in the Disclosure primitive, not in page workarounds", () => {
+    const page = readFileSync(PAGE_PATH, "utf8");
+    expect(page).not.toContain("px-0.5");
+    expect(page).not.toContain("the panel clips overflow");
+  });
+
   it("passes the style scan on both touched sources, and names no hand-built chevron or glyph", () => {
     for (const file of [PAGE_PATH, FORM_PATH]) {
       const src = readFileSync(file, "utf8");
@@ -137,13 +143,19 @@ describe("community admin: channels are Disclosures", () => {
     expect(elements(await call()).filter((e) => e.type === Disclosure)).toHaveLength(3);
     expect(html.match(/aria-expanded="false"/g)).toHaveLength(3);
     expect(html.match(/aria-controls="/g)).toHaveLength(3);
-    expect(html.match(/role="region"/g)!.length).toBeGreaterThanOrEqual(3);
+    // Exactly one region per channel, and they are the Disclosure panels (labelled by their button), not the Table's.
+    const regions = html.match(/<div id="([^"]*-panel)" role="region" aria-labelledby="([^"]*)"/g)!;
+    expect(regions).toHaveLength(3);
+    const buttonIds = [...html.matchAll(/<button\b[^>]*aria-expanded[^>]*>/g)].map((m) => /\bid="([^"]*)"/.exec(m[0])![1]);
+    expect(regions.map((r) => /aria-labelledby="([^"]*)"/.exec(r)![1])).toEqual(buttonIds);
   });
 
   it("lists channels as a named, ruled list under an sr-only heading", async () => {
     const html = await render();
     expect(html).toMatch(/<h2 id="channels-h" class="sr-only">Channels<\/h2>/);
-    expect(html).toMatch(/<ul class="divide-y divide-line[^"]*" aria-label="Channels">/);
+    // Named once: by the heading. A second aria-label on the list would name it twice.
+    expect(html).toMatch(/<ul class="divide-y divide-line[^"]*" aria-labelledby="channels-h">/);
+    expect(html).not.toContain('aria-label="Channels"');
   });
 
   it("summarises name, ONE quiet Type and Access line, and the post count", async () => {
@@ -163,9 +175,10 @@ describe("community admin: channels are Disclosures", () => {
     expect(buttons[0]).not.toContain("badge");
   });
 
-  it("has no more than one meta separator-line per channel (not two pills)", async () => {
+  it("has exactly one meta separator per channel (not two pills)", async () => {
+    M.listChannelsAdmin.mockResolvedValue(three());
     const html = await render();
-    expect(html.match(/aria-hidden="true"[^>]*>·</g)).toHaveLength(1);
+    expect(html.match(/aria-hidden="true"[^>]*>·</g)).toHaveLength(3);
   });
 
   it("holds the edit form, move buttons and delete inside the panel", async () => {
@@ -333,8 +346,16 @@ describe("community admin: gamification", () => {
   it("the Turn off dialog states the consequence: no awards, leaderboard hidden, earned points kept", async () => {
     const off = elements(await call()).find((e) => e.type === ConfirmButton && bound(e).action === "setGamificationAction")!;
     expect(off.props.message).toBe(
-      "Turn off points, levels and badges? Nothing new is awarded and the leaderboard is hidden. Points members already earned are kept.",
+      "Turn off points, levels and badges? Nothing new is awarded, the leaderboard is hidden, and members stop seeing their own points and level. Points members already earned are kept.",
     );
+  });
+
+  it("confirms Turn off in the calm primary look (it is reversible); Delete keeps the destructive default", async () => {
+    const els = elements(await call());
+    const off = els.find((e) => e.type === ConfirmButton && bound(e).action === "setGamificationAction")!;
+    expect(off.props.destructive).toBe(false);
+    const del = els.find((e) => e.type === ConfirmButton && bound(e).action === "deleteChannelAction")!;
+    expect(del.props.destructive).toBeUndefined();
   });
 
   it("recalculating is not destructive: no dialog on it", async () => {
