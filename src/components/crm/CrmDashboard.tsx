@@ -476,36 +476,29 @@ export function CrmDashboard({
       )}
 
       {/* Header & Meta Connection Pill */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-xl font-bold tracking-tight text-ink font-display">
-              WhatsApp Sales & CRM
+              WhatsApp Sales & AI CRM
             </h1>
-            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">
-              Live Meta Cloud API
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800 border border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Meta Cloud API
             </span>
           </div>
-          <p className="mt-1 text-xs text-muted">
-            Automated WhatsApp AI sales, lead recovery, and 2-way human takeover for @{creatorHandle}.
+          <p className="mt-0.5 text-xs text-muted">
+            Automated WhatsApp AI sales, cart recovery, and 2-way human takeover for @{creatorHandle}.
           </p>
         </div>
 
-        {/* Live Meta Status Badge */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-1.5 text-xs shadow-2xs">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-good opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-good" />
+        {/* Action Controls */}
+        <div className="flex items-center gap-2.5">
+          <div className="hidden sm:inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-1.5 text-xs shadow-2xs">
+            <span className="text-[11px] font-mono text-ink font-semibold">
+              {accountStatus.displayPhoneNumber || "+91 63606 81493"}
             </span>
-            <div className="text-left">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
-                Meta Number: {accountStatus.displayPhoneNumber || "+1 555-149-7566"}
-              </p>
-              <p className="text-[11px] font-bold text-ink">
-                {accountStatus.verifiedName || "Connected"} • Tier 250
-              </p>
-            </div>
+            <span className="text-[10px] text-muted">Tier 250</span>
           </div>
 
           <button
@@ -514,7 +507,7 @@ export function CrmDashboard({
               setSelectedOutreachTemplate(approvedTpl);
               setShowUploadModal(true);
             }}
-            className="flex items-center gap-1.5 rounded-xl border border-line bg-surface px-3.5 py-2 text-xs font-semibold text-ink shadow-2xs transition-all duration-150 active:scale-[0.98] hover:bg-surface-2"
+            className="flex items-center gap-1.5 rounded-xl border border-line bg-surface px-3 py-2 text-xs font-semibold text-ink shadow-2xs transition-all duration-150 active:scale-[0.98] hover:bg-surface-2"
           >
             <svg
               className="h-3.5 w-3.5 text-brand"
@@ -525,7 +518,7 @@ export function CrmDashboard({
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
             </svg>
-            <span>Upload Leads (CSV)</span>
+            <span>Import CSV</span>
           </button>
 
           <button
@@ -537,71 +530,79 @@ export function CrmDashboard({
         </div>
       </div>
 
-      {/* Performance Summary Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-        <div className="rounded-2xl border border-line bg-surface p-4 shadow-2xs">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-            Total Pipeline Leads
-          </p>
-          <p className="mt-1.5 text-2xl font-bold tracking-tight text-ink tabular-nums">
-            {leads.length}
-          </p>
-          <p className="mt-1 text-[11px] text-muted">Auto-captured from storefront</p>
+      {/* Streamlined Metrics Ribbon (Glanceable, High-Density, Non-Intrusive) */}
+      <div className="rounded-xl border border-line bg-surface p-3 shadow-2xs grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-line/60">
+        <div className="px-3 py-1">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Pipeline Leads</p>
+          <div className="flex items-baseline gap-2 mt-0.5">
+            <span className="text-xl font-extrabold tracking-tight text-ink tabular-nums">{leads.length}</span>
+            <span className="text-[11px] text-muted">contacts</span>
+          </div>
         </div>
 
-        <div className="rounded-2xl border border-line bg-surface p-4 shadow-2xs">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-            AI Inquiries Handled
-          </p>
-          <p className="mt-1.5 text-2xl font-bold tracking-tight text-ink tabular-nums">
-            {leads.filter((l) => l.status === "INQUIRY" || l.status === "INTERESTED").length}
-          </p>
-          <p className="mt-1 text-[11px] text-emerald-600 font-medium">94% automated resolution</p>
+        <div className="px-3 py-1">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-muted">AI Resolution</p>
+          <div className="flex items-baseline gap-2 mt-0.5">
+            <span className="text-xl font-extrabold tracking-tight text-emerald-600 tabular-nums">
+              {leads.filter((l) => l.status === "INQUIRY" || l.status === "INTERESTED").length}
+            </span>
+            <span className="text-[11px] font-semibold text-emerald-600">94% automated</span>
+          </div>
         </div>
 
-        <div className="rounded-2xl border border-line bg-surface p-4 shadow-2xs">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-            Quotes / Cart Recovery
-          </p>
-          <p className="mt-1.5 text-2xl font-bold tracking-tight text-ink tabular-nums">
-            ₹
-            {leads
-              .reduce((acc, curr) => acc + (curr.quoteAmount || 0), 0)
-              .toLocaleString("en-IN")}
-          </p>
-          <p className="mt-1 text-[11px] text-muted">Active deal value</p>
+        <div className="px-3 py-1">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Active Pipeline Value</p>
+          <div className="flex items-baseline gap-2 mt-0.5">
+            <span className="text-xl font-extrabold tracking-tight text-brand tabular-nums font-mono">
+              ₹{leads.reduce((acc, curr) => acc + (curr.quoteAmount || 0), 0).toLocaleString("en-IN")}
+            </span>
+            <span className="text-[11px] text-muted">deal value</span>
+          </div>
         </div>
 
-        <div className="rounded-2xl border border-line bg-surface p-4 shadow-2xs">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-            Human Takeovers
-          </p>
-          <p className="mt-1.5 text-2xl font-bold tracking-tight text-ink tabular-nums">
-            {leads.filter((l) => l.botPaused).length}
-          </p>
-          <p className="mt-1 text-[11px] text-amber-600 font-medium">Bot currently paused</p>
+        <div className="px-3 py-1">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Human Takeovers</p>
+          <div className="flex items-baseline gap-2 mt-0.5">
+            <span className="text-xl font-extrabold tracking-tight text-ink tabular-nums">
+              {leads.filter((l) => l.botPaused).length}
+            </span>
+            <span className="text-[11px] text-muted">
+              {leads.some((l) => l.botPaused) ? "Manual takeover active" : "Bot handling replies"}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Tabs Bar */}
-      <div className="flex border-b border-line">
-        <div className="flex gap-2">
+      {/* Skiper UI Segmented Control Tabs */}
+      <div className="flex items-center justify-between">
+        <div className="inline-flex rounded-xl bg-surface-2 p-1 border border-line/60">
           {[
-            { id: "inbox", label: "2-Way Live Chat" },
-            { id: "pipeline", label: "Kanban Pipeline" },
-            { id: "templates", label: "Meta Templates & Approvals" },
+            { id: "inbox", label: "Live Chat", count: leads.length },
+            { id: "pipeline", label: "Deals Pipeline", count: leads.length },
+            { id: "templates", label: "Meta Templates", count: approvedCount },
             { id: "settings", label: "Automation Rules" },
           ].map((t) => (
             <button
               key={t.id}
               onClick={() => startTransition(() => setTab(t.id as typeof tab))}
-              className={`px-4 py-2.5 text-xs font-semibold transition-all duration-150 border-b-2 -mb-px active:scale-[0.98] ${
+              className={`flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all duration-150 active:scale-[0.98] ${
                 tab === t.id
-                  ? "border-brand text-brand font-bold"
-                  : "border-transparent text-muted hover:text-ink hover:border-line"
+                  ? "bg-surface text-ink font-bold shadow-xs border border-line/80"
+                  : "text-muted hover:text-ink"
               }`}
             >
-              {t.label}
+              <span>{t.label}</span>
+              {t.count !== undefined && (
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                    tab === t.id
+                      ? "bg-brand/10 text-brand font-bold"
+                      : "bg-line/60 text-muted"
+                  }`}
+                >
+                  {t.count}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -609,44 +610,56 @@ export function CrmDashboard({
 
       {/* TAB 1: INBOX & 2-WAY LIVE CHAT */}
       {tab === "inbox" && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 rounded-2xl border border-line bg-surface overflow-hidden shadow-2xs min-h-[580px]">
-          {/* Left: Contact List */}
-          <div className="lg:col-span-4 border-r border-line flex flex-col bg-surface">
-            {/* Filter Pills & Search */}
-            <div className="p-3.5 border-b border-line space-y-2.5">
-              <input
-                type="text"
-                placeholder="Search by name, phone or intent..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-xl border border-line bg-bg px-3 py-1.5 text-xs text-ink placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-brand"
-              />
+        <div className="grid grid-cols-1 lg:grid-cols-12 rounded-2xl border border-line bg-surface overflow-hidden shadow-xs h-[640px]">
+          {/* Left Column: Leads & Conversations Drawer */}
+          <div className="lg:col-span-4 border-r border-line flex flex-col bg-surface overflow-hidden">
+            {/* Search & Filter Bar */}
+            <div className="p-3 border-b border-line space-y-2 bg-surface">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search leads by name or phone..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full rounded-xl border border-line bg-bg pl-8 pr-3 py-1.5 text-xs text-ink placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-brand"
+                />
+                <svg
+                  className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
+              </div>
 
-              <div className="flex gap-1.5 overflow-x-auto text-[11px]">
-                {["ALL", "INQUIRY", "PAUSED", "ABANDONED"].map((f) => (
+              {/* Segmented Filter Pills */}
+              <div className="flex gap-1 overflow-x-auto text-[11px] pb-0.5">
+                {[
+                  { key: "ALL", label: "All" },
+                  { key: "INQUIRY", label: "Inquiries" },
+                  { key: "PAUSED", label: "Takeover" },
+                  { key: "ABANDONED", label: "Cart Drop" },
+                ].map((f) => (
                   <button
-                    key={f}
-                    onClick={() => setInboxFilter(f)}
-                    className={`rounded-lg px-2.5 py-1 font-semibold transition-all ${
-                      inboxFilter === f
-                        ? "bg-brand-soft text-brand font-bold"
-                        : "bg-surface-2 text-muted hover:text-ink"
+                    key={f.key}
+                    onClick={() => setInboxFilter(f.key)}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition-all duration-150 ${
+                      inboxFilter === f.key
+                        ? "bg-surface-2 text-ink font-bold border border-line/70 shadow-2xs"
+                        : "text-muted hover:text-ink hover:bg-surface-2/50"
                     }`}
                   >
-                    {f === "ALL"
-                      ? "All Chats"
-                      : f === "INQUIRY"
-                      ? "Inquiries"
-                      : f === "PAUSED"
-                      ? "Human Takeover"
-                      : "Abandoned Cart"}
+                    {f.label}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* List */}
-            <div className="flex-1 overflow-y-auto divide-y divide-line/60">
+            {/* Conversation List */}
+            <div className="flex-1 overflow-y-auto divide-y divide-line/40">
               {filteredLeads.length === 0 ? (
                 <div className="p-8 text-center text-xs text-muted">
                   No conversations match your filter.
@@ -660,11 +673,18 @@ export function CrmDashboard({
                     <button
                       key={l.id}
                       onClick={() => setSelectedLeadId(l.id)}
-                      className={`w-full text-left p-3.5 transition-colors flex items-start gap-3 ${
-                        isSelected ? "bg-brand-soft/60" : "hover:bg-surface-2"
+                      className={`w-full text-left p-3 transition-colors flex items-start gap-2.5 relative ${
+                        isSelected
+                          ? "bg-surface-2/80 text-ink"
+                          : "hover:bg-surface-2/50"
                       }`}
                     >
-                      <div className="h-9 w-9 shrink-0 rounded-full bg-brand-soft text-brand font-bold text-xs flex items-center justify-center">
+                      {/* Active Left Indicator Accent */}
+                      {isSelected && (
+                        <span className="absolute left-0 top-0 bottom-0 w-1 bg-brand" />
+                      )}
+
+                      <div className="h-8 w-8 shrink-0 rounded-full bg-brand-soft text-brand font-bold text-xs flex items-center justify-center border border-brand/20">
                         {(l.name || l.phone).slice(0, 2).toUpperCase()}
                       </div>
 
@@ -673,9 +693,18 @@ export function CrmDashboard({
                           <p className="truncate text-xs font-bold text-ink">
                             {l.name || `+${l.phone}`}
                           </p>
-                          {l.botPaused && (
-                            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800">
+                          {l.botPaused ? (
+                            <span className="rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-400 px-1.5 py-0.2 text-[9px] font-bold">
                               Human
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-muted font-mono">
+                              {lastMsg
+                                ? new Date(lastMsg.createdAt).toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })
+                                : ""}
                             </span>
                           )}
                         </div>
@@ -684,8 +713,8 @@ export function CrmDashboard({
                           {lastMsg ? lastMsg.body : l.intent || "New Storefront Lead"}
                         </p>
 
-                        <div className="mt-1.5 flex items-center gap-1.5">
-                          <span className="rounded bg-line/60 px-1.5 py-0.5 text-[9px] font-semibold text-muted">
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <span className="rounded bg-line/60 px-1.5 py-0.2 text-[9px] font-semibold text-muted uppercase">
                             {l.status}
                           </span>
                           {l.quoteAmount && (
@@ -702,72 +731,88 @@ export function CrmDashboard({
             </div>
           </div>
 
-          {/* Right: Active Chat Conversation */}
-          <div className="lg:col-span-8 flex flex-col bg-bg">
+          {/* Right Column: Active Conversation Stream & Composer */}
+          <div className="lg:col-span-8 flex flex-col bg-bg overflow-hidden">
             {selectedLead ? (
               <>
                 {/* Chat Top Bar */}
-                <div className="border-b border-line bg-surface p-4 flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-bold text-ink">
-                        {selectedLead.name || `Lead +${selectedLead.phone}`}
-                      </p>
-                      <span className="font-mono text-xs text-muted">+{selectedLead.phone}</span>
+                <div className="border-b border-line bg-surface p-3 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-8 w-8 rounded-full bg-brand-soft text-brand font-bold text-xs flex items-center justify-center border border-brand/20">
+                      {(selectedLead.name || selectedLead.phone).slice(0, 2).toUpperCase()}
                     </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-bold text-ink leading-tight">
+                          {selectedLead.name || `Lead +${selectedLead.phone}`}
+                        </p>
+                        <span className="font-mono text-[11px] text-muted">+{selectedLead.phone}</span>
+                      </div>
 
-                    <div className="mt-1 flex items-center gap-2 text-[11px] text-muted">
-                      <span>Status:</span>
-                      <select
-                        value={selectedLead.status}
-                        onChange={(e) => handleUpdateStatus(selectedLead.id, e.target.value)}
-                        className="rounded-md border border-line bg-surface px-2 py-0.5 font-semibold text-ink text-[11px]"
-                      >
-                        {PIPELINE_COLUMNS.map((c) => (
-                          <option key={c.key} value={c.key}>
-                            {c.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* AI vs Human Takeover Switch */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 rounded-xl border border-line bg-surface p-1.5">
-                      <span className="text-xs font-semibold text-muted pl-1">
-                        {selectedLead.botPaused ? "Human Takeover Active" : "AI Assistant Replying"}
-                      </span>
-                      <button
-                        onClick={() => handleToggleBot(selectedLead.id, selectedLead.botPaused)}
-                        className={`rounded-lg px-2.5 py-1 text-xs font-bold transition-all duration-150 active:scale-[0.98] ${
-                          selectedLead.botPaused
-                            ? "bg-amber-500 text-white shadow-xs"
-                            : "bg-brand text-brand-ink shadow-xs"
-                        }`}
-                      >
-                        {selectedLead.botPaused ? "Resume AI Bot" : "Pause Bot (Take Over)"}
-                      </button>
+                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted">
+                        <span>Pipeline:</span>
+                        <select
+                          value={selectedLead.status}
+                          onChange={(e) => handleUpdateStatus(selectedLead.id, e.target.value)}
+                          className="rounded border border-line bg-surface px-1.5 py-0.5 font-semibold text-ink text-[10px]"
+                        >
+                          {PIPELINE_COLUMNS.map((c) => (
+                            <option key={c.key} value={c.key}>
+                              {c.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* 24-hr Window Notice */}
-                <div className="border-b border-emerald-100 bg-emerald-50/50 px-4 py-2 flex items-center justify-between text-[11px] text-emerald-900">
+                  {/* Mode Switcher: AI Bot vs Human Takeover */}
                   <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>
-                      <strong>Meta 24-Hour Service Window Open:</strong> Freeform two-way messaging active without templates.
-                    </span>
+                    {selectedLead.botPaused ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-400 px-2 py-1 rounded-lg border border-amber-200/60 inline-flex items-center gap-1.5">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                          Human Takeover
+                        </span>
+                        <button
+                          onClick={() => handleToggleBot(selectedLead.id, selectedLead.botPaused)}
+                          className="rounded-lg bg-brand px-2.5 py-1 text-xs font-semibold text-brand-ink transition-all active:scale-[0.98] hover:bg-brand/90"
+                        >
+                          Resume AI Bot
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-400 px-2 py-1 rounded-lg border border-emerald-200/60 inline-flex items-center gap-1.5">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          AI Autopilot
+                        </span>
+                        <button
+                          onClick={() => handleToggleBot(selectedLead.id, selectedLead.botPaused)}
+                          className="rounded-lg border border-line bg-surface hover:bg-surface-2 px-2.5 py-1 text-xs font-semibold text-ink transition-all active:scale-[0.98]"
+                        >
+                          Take Over
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <span className="font-mono text-muted">Sandbox Connected</span>
                 </div>
 
-                {/* Chat Messages Body */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[340px]">
+                {/* Subtle Meta 24-hr Window Indicator */}
+                <div className="border-b border-line/60 bg-surface-2/40 px-4 py-1 flex items-center justify-between text-[10px] text-muted">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    <strong>24-Hour Service Window Open:</strong> Freeform two-way messaging active.
+                  </span>
+                  <span className="font-mono text-[10px]">Meta Cloud API</span>
+                </div>
+
+                {/* Chat Messages Stream */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-bg/50">
                   {selectedLead.messages.length === 0 ? (
-                    <div className="p-8 text-center text-xs text-muted">
-                      No messages in this thread yet. Send a direct WhatsApp message below.
+                    <div className="h-full flex flex-col items-center justify-center text-center p-8 text-xs text-muted space-y-2">
+                      <p className="font-semibold text-ink">No messages in this conversation yet</p>
+                      <p className="text-[11px] text-muted">Send a personalized greeting or quick checkout link below.</p>
                     </div>
                   ) : (
                     selectedLead.messages.map((m) => {
@@ -780,23 +825,23 @@ export function CrmDashboard({
                           className={`flex flex-col ${isCustomer ? "items-start" : "items-end"}`}
                         >
                           <div
-                            className={`max-w-[78%] rounded-2xl px-4 py-2.5 text-xs shadow-2xs ${
+                            className={`max-w-[78%] rounded-2xl px-3.5 py-2 text-xs shadow-2xs ${
                               isCustomer
                                 ? "bg-surface border border-line text-ink rounded-bl-xs"
                                 : isBot
-                                ? "bg-brand-soft border border-brand/20 text-ink rounded-br-xs"
+                                ? "bg-brand-soft/70 border border-brand/20 text-ink rounded-br-xs"
                                 : "bg-brand text-brand-ink rounded-br-xs"
                             }`}
                           >
-                            <div className="flex items-center justify-between gap-3 mb-1 text-[10px] opacity-70">
+                            <div className="flex items-center justify-between gap-3 mb-1 text-[10px] opacity-75">
                               <span className="font-bold">
                                 {isCustomer
                                   ? selectedLead.name || "Customer"
                                   : isBot
-                                  ? "AI Sales Agent"
-                                  : "You (Creator)"}
+                                  ? "🤖 AI Sales Agent"
+                                  : "👤 You"}
                               </span>
-                              <span>
+                              <span className="font-mono">
                                 {new Date(m.createdAt).toLocaleTimeString([], {
                                   hour: "2-digit",
                                   minute: "2-digit",
@@ -811,11 +856,44 @@ export function CrmDashboard({
                   )}
                 </div>
 
+                {/* Quick-Action Shortcuts Bar */}
+                <div className="border-t border-line/60 bg-surface px-3 py-1.5 flex gap-1.5 overflow-x-auto text-[11px]">
+                  <span className="text-[10px] font-bold text-muted self-center uppercase tracking-wider pr-1">
+                    Quick Insert:
+                  </span>
+                  {[
+                    {
+                      label: "⚡ 10% Discount",
+                      text: `Hi ${selectedLead.name || ""}! Here is an exclusive 10% discount: Use code SAVE10 on checkout: https://tysonpe.com/c/${creatorHandle}`,
+                    },
+                    {
+                      label: "💳 UPI Pay Link",
+                      text: `You can complete your payment securely via UPI (GPay/PhonePe/Paytm) here: https://tysonpe.com/c/${creatorHandle}`,
+                    },
+                    {
+                      label: "📅 Book 1:1 Call",
+                      text: "Would you like to hop on a quick 15-minute call today to go over the course curriculum?",
+                    },
+                    {
+                      label: "❓ Course Outline",
+                      text: "The program includes video lessons, downloadable templates, and private community access.",
+                    },
+                  ].map((s) => (
+                    <button
+                      key={s.label}
+                      onClick={() => setChatInput(s.text)}
+                      className="rounded-lg border border-line/80 bg-surface-2 px-2.5 py-1 text-[11px] font-semibold text-ink whitespace-nowrap hover:bg-line transition-all active:scale-[0.98]"
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+
                 {/* Live Message Composer */}
                 <div className="border-t border-line bg-surface p-3 flex items-center gap-2">
                   <input
                     type="text"
-                    placeholder="Type a WhatsApp reply to send directly..."
+                    placeholder={`Type a WhatsApp reply to ${selectedLead.name || "lead"} (Enter to send)...`}
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={(e) => {
@@ -829,15 +907,18 @@ export function CrmDashboard({
                   <button
                     disabled={isPending || !chatInput.trim()}
                     onClick={handleSendMessage}
-                    className="rounded-xl bg-brand px-4 py-2 text-xs font-semibold text-brand-ink transition-all duration-150 active:scale-[0.98] disabled:opacity-50 hover:bg-brand/90"
+                    className="rounded-xl bg-brand px-4 py-2 text-xs font-semibold text-brand-ink transition-all duration-150 active:scale-[0.98] disabled:opacity-50 hover:bg-brand/90 flex items-center gap-1.5"
                   >
-                    Send
+                    <span>Send</span>
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m5 12 7-7 7 7M12 5v14" transform="rotate(90 12 12)" />
+                    </svg>
                   </button>
                 </div>
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center p-8 text-xs text-muted">
-                Select a lead to view WhatsApp conversation history.
+                Select a lead from the left to view WhatsApp conversation history.
               </div>
             )}
           </div>
