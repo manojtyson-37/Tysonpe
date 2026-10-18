@@ -94,7 +94,7 @@ describe("demo sources: tokens only, no loops", () => {
     for (const [file, src] of SOURCES) expect(src, file).not.toMatch(/[→←↗✓✔✕★☆]|\p{Extended_Pictographic}/u);
   });
 
-  it("imports only gateway-icons symbols that are identical in HEAD (never the re-aliased BhimUpiIcon, CredIcon, BhimIcon)", () => {
+  it("imports only the gateway-icons symbols it needs, and none of the removed ones (BhimUpiIcon, CredIcon, BhimIcon no longer exist; see gateway-icons.test.tsx)", () => {
     const ALLOWED = new Set(["GooglePayIcon", "PhonePeIcon", "PaytmIcon", "UpiIcon", "BankIcon"]);
     for (const [file, src] of SOURCES) {
       for (const m of src.matchAll(/import\s*\{([^}]*)\}\s*from\s*"[^"]*gateway-icons"/g)) {
