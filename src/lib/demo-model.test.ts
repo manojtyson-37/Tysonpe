@@ -21,6 +21,7 @@ import {
   isDemoMode,
   nextCountdown,
   parseSalesRupees,
+  promptTitle,
   settleDelay,
   stepAnnouncement,
   ultimateDeltaPaise,
@@ -137,6 +138,15 @@ describe("demo model: apps and announcements", () => {
   it("names four apps, the last one generic", () => {
     expect(DEMO_APPS.map((a) => a.name)).toEqual(["Google Pay", "PhonePe", "Paytm", "Other UPI app"]);
     expect(appName("phonepe")).toBe("PhonePe");
+  });
+
+  it("titles the phone prompt by app, and says 'your UPI app' for the generic one (the QR scan path)", () => {
+    expect(promptTitle("gpay")).toBe("Payment request in Google Pay");
+    expect(promptTitle("phonepe")).toBe("Payment request in PhonePe");
+    expect(promptTitle("upi")).toBe("Payment request in your UPI app");
+    const scan = run([{ type: "choose-app", app: "upi" }]);
+    expect(stepAnnouncement(scan, "upi")).toBe("Simulated payment request in your UPI app for ₹1,180. Approve or decline.");
+    expect(stepAnnouncement(scan, "upi")).not.toContain("Other UPI app");
   });
 
   it("announces every step as a simulation, with the amount where one is shown", () => {

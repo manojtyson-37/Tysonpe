@@ -82,7 +82,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Interactive checkout simulation (HomeInteractiveDemo is split up separately). */}
+      {/* Interactive checkout simulation: HomeInteractiveDemo and its tabs live in components/demo. */}
       <section id="sandbox-demo" data-layout="header-split-wide" aria-labelledby="demo-h" className="scroll-mt-14 border-b border-line py-20 sm:py-28">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr] lg:gap-16">
@@ -166,7 +166,7 @@ export default function Home() {
           <p className="mt-4 max-w-xl text-base leading-relaxed text-muted">
             Every creator is on Basic today with no monthly fee. The other plans are draft pricing and billing is not live.
           </p>
-          <Table caption={`Fees by plan for one ${SALE_TEXT} sale`} stack className="mt-10">
+          <Table caption={`Fees by plan for one ${SALE_TEXT} sale`} stack labelCase="sentence" className="mt-10">
             <thead>
               <tr>
                 <Th className={HEAD}>Plan</Th>

@@ -26,9 +26,15 @@ const STACK_TABLE = [
   "max-sm:[&_td:not([colspan])]:flex max-sm:[&_td:not([colspan])]:items-baseline max-sm:[&_td:not([colspan])]:justify-between",
   "max-sm:[&_td:not([colspan])]:gap-4 max-sm:[&_td:not([colspan])]:px-0 max-sm:[&_td:not([colspan])]:py-1.5",
   "max-sm:[&_td:not([colspan])]:before:content-[attr(data-label)] max-sm:[&_td:not([colspan])]:before:shrink-0 max-sm:[&_td:not([colspan])]:before:text-left",
+].join(" ");
+
+// How the printed label looks. Micro-label (the default): small, bold, uppercase, tracked. Sentence: plain text for pages
+// that are already at their quota of micro-labels on a phone.
+const STACK_LABEL_UPPER = [
   "max-sm:[&_td:not([colspan])]:before:text-xs max-sm:[&_td:not([colspan])]:before:font-semibold max-sm:[&_td:not([colspan])]:before:uppercase",
   "max-sm:[&_td:not([colspan])]:before:tracking-[0.06em] max-sm:[&_td:not([colspan])]:before:text-muted",
 ].join(" ");
+const STACK_LABEL_SENTENCE = "max-sm:[&_td:not([colspan])]:before:text-sm max-sm:[&_td:not([colspan])]:before:text-muted";
 
 // The scroll wrapper is focusable, so it must have a name: pass a caption, an aria-label, or both.
 type TableName =
@@ -52,6 +58,8 @@ export type TableProps = TableName & {
   stickyHeader?: boolean;
   /** Below sm, render each row as label/value blocks (CSS only; pass `label` to each Td). */
   stack?: boolean;
+  /** With `stack`: how the printed label looks below sm. `upper` (default) is the uppercase tracked micro-label; `sentence` is plain text. */
+  labelCase?: "upper" | "sentence";
 };
 
 /**
@@ -62,7 +70,7 @@ export type TableProps = TableName & {
  * so do not override its right padding via `className`. Header rows should use a plain <tr>, not Tr, which
  * applies a hover fill meant for body rows. Needs `caption` or `aria-label` (it names the focusable region).
  */
-export function Table({ children, className, caption, "aria-label": ariaLabel, stickyHeader = false, stack = false }: TableProps) {
+export function Table({ children, className, caption, "aria-label": ariaLabel, stickyHeader = false, stack = false, labelCase = "upper" }: TableProps) {
   const regionName = ariaLabel ?? caption;
   // The mask clips the global outside focus outline, so the ring is drawn inset on the wrapper.
   const wrapperCls = join("overflow-x-auto focus-visible:outline-offset-[-2px]", stack ? FADE_FROM_SM : FADE, className);
@@ -70,6 +78,7 @@ export function Table({ children, className, caption, "aria-label": ariaLabel, s
     "w-full text-left text-sm [&_tbody]:divide-y [&_tbody]:divide-line",
     stickyHeader ? HEAD_STICKY : HEAD_STATIC,
     stack && STACK_TABLE,
+    stack && (labelCase === "sentence" ? STACK_LABEL_SENTENCE : STACK_LABEL_UPPER),
   );
   return (
     <div

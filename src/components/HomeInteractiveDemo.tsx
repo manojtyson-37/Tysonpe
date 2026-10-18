@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { IconArrowRight } from "@/components/icons";
 import { TabPanel, Tabs } from "@/components/ui";
-import { COUNTDOWN_START_SECONDS, DEMO_MODES, isDemoMode, nextCountdown, type DemoMode } from "@/lib/demo-model";
+import { DEMO_MODES, isDemoMode, type DemoMode } from "@/lib/demo-model";
+import { createSessionClock } from "@/lib/session-clock";
 import { FeeCalc } from "./demo/FeeCalc";
 import { HostedTab } from "./demo/HostedTab";
 import { QrTab } from "./demo/QrTab";
@@ -16,16 +17,17 @@ const PANEL = "px-3 py-5 sm:px-6 sm:py-6";
  * The landing page's simulated checkout: a UPI QR flow, an Easebuzz hosted-page flow and a fee calculator behind
  * one tab list. Every screen is labelled as a simulation. The pure logic is in lib/demo-model.ts and each tab owns its
  * own step machine, so switching tabs starts that tab afresh. Only the selected panel's content is mounted.
+ *
+ * The session clock is an external store owned here and read only by the <SessionClock> digits inside the checkout tabs,
+ * so a one-second tick re-renders those spans and nothing else: not this shell, not the tab bar's sliding indicator,
+ * not the calculator.
  */
 export function HomeInteractiveDemo() {
   const [mode, setMode] = useState<DemoMode>("upi-qr");
-  const [countdown, setCountdown] = useState(COUNTDOWN_START_SECONDS);
+  const [clock] = useState(() => createSessionClock());
 
-  // One clock for the session timers on both checkout tabs.
-  useEffect(() => {
-    const timer = setInterval(() => setCountdown(nextCountdown), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  // One clock for the session timers on both checkout tabs. Starting it writes no React state.
+  useEffect(() => clock.start(), [clock]);
 
   return (
     <div className="w-full rounded-card border border-line bg-bg">
@@ -43,10 +45,10 @@ export function HomeInteractiveDemo() {
       </div>
 
       <TabPanel id={TABS_ID} value="upi-qr" selected={mode === "upi-qr"} className={PANEL}>
-        {mode === "upi-qr" && <QrTab countdown={countdown} />}
+        {mode === "upi-qr" && <QrTab clock={clock} />}
       </TabPanel>
       <TabPanel id={TABS_ID} value="easebuzz" selected={mode === "easebuzz"} className={PANEL}>
-        {mode === "easebuzz" && <HostedTab countdown={countdown} />}
+        {mode === "easebuzz" && <HostedTab clock={clock} />}
       </TabPanel>
       <TabPanel id={TABS_ID} value="fees" selected={mode === "fees"} className={PANEL}>
         {mode === "fees" && <FeeCalc />}

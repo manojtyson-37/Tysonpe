@@ -40,10 +40,12 @@ vi.mock("react", async (importOriginal) => {
   };
   const useCallback = (fn: unknown) => fn;
   const useId = () => ":r0:";
-  const stubs = { useState, useRef, useEffect, useCallback, useId };
+  const useSyncExternalStore = (_subscribe: unknown, getSnapshot: () => unknown) => getSnapshot();
+  const stubs = { useState, useRef, useEffect, useCallback, useId, useSyncExternalStore };
   return { ...actual, default: { ...actual, ...stubs }, ...stubs };
 });
 
+import { createSessionClock } from "@/lib/session-clock";
 import { HostedTab } from "./HostedTab";
 import { QrTab } from "./QrTab";
 
@@ -88,21 +90,39 @@ function unmount() {
   H.fx = [];
 }
 
-function mount(component: (props: { countdown: number }) => ReactNode, countdown = 892) {
+// Stand-ins for the DOM: where focus is (document.activeElement), the demo root's contains(), the body.
+const BODY = { name: "body" };
+const INSIDE = { name: "a control inside the demo" };
+const OUTSIDE = { name: "a link elsewhere on the page" };
+const dom = { active: BODY as unknown };
+
+function mount(component: (props: { clock: ReturnType<typeof createSessionClock> }) => ReactNode, countdown = 892) {
   H.slots = [];
   H.fx = [];
   H.pending = [];
+  dom.active = BODY;
+  (globalThis as { document?: unknown }).document = {
+    get activeElement() {
+      return dom.active;
+    },
+    body: BODY,
+  };
   let tree: Node[] = [];
   const focus = vi.fn();
+  const heading$ = { focus };
+  const clock = createSessionClock(countdown);
   const render = () => {
     H.i = 0;
     H.e = 0;
     H.pending = [];
-    tree = all(expand(component({ countdown }) as ReactNode));
+    tree = all(expand(component({ clock }) as ReactNode));
     // Stand-in for the DOM node behind the heading's ref, so the focus effect has something to call.
     const heading = tree.find((n) => n.tag === "h3");
     const ref = heading?.props.ref as { current: unknown } | undefined;
-    if (ref) ref.current = { focus };
+    if (ref) ref.current = heading$;
+    // The outermost element is the demo root; it answers contains() for the one control that counts as inside.
+    const root = tree[0]?.props.ref as { current: unknown } | undefined;
+    if (root) root.current = { contains: (n: unknown) => n === INSIDE || n === heading$ };
     flush();
   };
   render();
@@ -128,12 +148,16 @@ function mount(component: (props: { countdown: number }) => ReactNode, countdown
     stageClass: () => tree.find((n) => n.tag === "div" && (n.props.className === "enter" || n.props.className === undefined) && n.kids.length > 0 && all(n.kids).some((k) => k.tag === "h3"))?.props.className,
     link: () => tree.find((n) => n.tag === "Link"),
     nodes: () => tree,
+    focusAt: (where: "body" | "inside" | "outside" | "heading") => {
+      dom.active = where === "body" ? BODY : where === "inside" ? INSIDE : where === "heading" ? heading$ : OUTSIDE;
+    },
   };
 }
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
   unmount();
+  delete (globalThis as { document?: unknown }).document;
   vi.useRealTimers();
 });
 
@@ -161,7 +185,8 @@ describe("QrTab: checkout -> phone-prompt -> processing -> success", () => {
   it("the scan button opens the prompt in the generic UPI app", () => {
     const t = mount(QrTab);
     t.click("Simulate scanning the QR");
-    expect(t.heading()).toBe("Payment request in Other UPI app");
+    expect(t.heading()).toBe("Payment request in your UPI app");
+    expect(t.status()).toBe("Simulated payment request in your UPI app for ₹1,180. Approve or decline.");
   });
 
   it("approve -> processing -> (1.2s) -> success, with focus following each heading", () => {
@@ -181,6 +206,19 @@ describe("QrTab: checkout -> phone-prompt -> processing -> success", () => {
     expect(t.has("Run it again")).toBe(true);
     expect(t.link()?.props.href).toBe("/demo");
     expect(t.text()).toContain("Everything below is a sample.");
+  });
+
+  it("the processing copy states the real delay: 1.2 seconds to approve, 0.6 to decline", () => {
+    const ok = mount(QrTab);
+    ok.click("Pay with Google Pay");
+    ok.click("Approve payment");
+    expect(ok.text()).toContain("about 1.2 seconds");
+    unmount();
+    const no = mount(QrTab);
+    no.click("Pay with Google Pay");
+    no.click("Decline");
+    expect(no.text()).toContain("about 0.6 seconds");
+    expect(no.text()).not.toContain("1.2");
   });
 
   it("decline -> processing -> (0.6s) -> failed, labelled as a simulation", () => {
@@ -269,6 +307,50 @@ describe("QrTab: checkout -> phone-prompt -> processing -> success", () => {
   });
 });
 
+describe("focus hand-off when the settle timer fires", () => {
+  const toProcessing = () => {
+    const t = mount(QrTab);
+    t.click("Pay with Google Pay");
+    t.click("Approve payment");
+    expect(t.focus).toHaveBeenCalledTimes(2); // prompt, processing
+    return t;
+  };
+
+  it("click-driven focus is a plain focus() call", () => {
+    const t = mount(QrTab);
+    t.click("Pay with PhonePe");
+    expect(t.focus.mock.calls[0]).toEqual([]);
+  });
+
+  it("does not steal focus when the visitor has moved to something outside the demo", () => {
+    const t = toProcessing();
+    t.focusAt("outside");
+    vi.advanceTimersByTime(1200);
+    t.render();
+    expect(t.heading()).toBe("Simulated payment of ₹1,180 succeeded"); // the step still settles
+    expect(t.focus).toHaveBeenCalledTimes(2); // but nothing moved focus
+  });
+
+  it("moves focus, without scrolling, when focus is still on the processing heading, on the body, or inside the demo", () => {
+    for (const where of ["heading", "body", "inside"] as const) {
+      unmount();
+      const t = toProcessing();
+      t.focusAt(where);
+      vi.advanceTimersByTime(1200);
+      t.render();
+      expect(t.focus, where).toHaveBeenCalledTimes(3);
+      expect(t.focus.mock.calls[2], where).toEqual([{ preventScroll: true }]);
+    }
+  });
+
+  it("the guard is for the timer only: a click after the visitor moved on still moves focus", () => {
+    const t = mount(QrTab);
+    t.focusAt("outside");
+    t.click("Pay with Google Pay");
+    expect(t.focus).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("HostedTab: pay or cancel straight from the hosted page", () => {
   it("starts on the bank choice, with the first sample bank selected and in the pay button", () => {
     const t = mount(HostedTab);
@@ -287,6 +369,32 @@ describe("HostedTab: pay or cancel straight from the hosted page", () => {
     t.render();
     expect(t.has("Pay ₹1,180 with Sample Bank C")).toBe(true);
     expect(t.nodes().filter((n) => n.tag === "input" && n.props.checked).map((n) => n.props.value)).toEqual(["Sample Bank C"]);
+  });
+
+  it("Run it again and Try again put the bank back to the first sample bank", () => {
+    const t = mount(HostedTab);
+    const pick = (i: number) => {
+      t.nodes().filter((n) => n.tag === "input" && n.props.type === "radio")[i].props.onChange({});
+      t.render();
+    };
+    pick(2);
+    t.click("Pay ₹1,180 with Sample Bank C");
+    vi.advanceTimersByTime(1200);
+    t.render();
+    t.click("Run it again");
+    expect(t.has("Pay ₹1,180 with Sample Bank A")).toBe(true);
+    pick(3);
+    t.click("Cancel payment");
+    vi.advanceTimersByTime(600);
+    t.render();
+    t.click("Try again");
+    expect(t.has("Pay ₹1,180 with Sample Bank A")).toBe(true);
+  });
+
+  it("the processing copy follows the outcome here too", () => {
+    const t = mount(HostedTab);
+    t.click("Cancel payment");
+    expect(t.text()).toContain("about 0.6 seconds");
   });
 
   it("pay -> processing -> success (the return flow), focus on each heading", () => {

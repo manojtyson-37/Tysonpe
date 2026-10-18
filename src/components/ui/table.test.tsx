@@ -303,3 +303,47 @@ describe("EmptyRow", () => {
     expect(html).toContain('<tr role="row">');
   });
 });
+
+describe("stack label case", () => {
+  // The stacked phone layout prints each cell's label first. Uppercase tracked micro-labels are the default; a page that
+  // already has its quota of micro-labels asks for sentence case instead.
+  const stacked = (labelCase?: "upper" | "sentence") =>
+    render(
+      <Table stack labelCase={labelCase} caption="Orders">
+        <tbody>
+          <Tr>
+            <Td label="Order">#1042</Td>
+          </Tr>
+        </tbody>
+      </Table>,
+    );
+  const BEFORE_UPPER = "max-sm:[&amp;_td:not([colspan])]:before:uppercase";
+  const BEFORE_TRACK = "max-sm:[&amp;_td:not([colspan])]:before:tracking-[0.06em]";
+
+  it("defaults to uppercase tracked labels below sm", () => {
+    for (const html of [stacked(), stacked("upper")]) {
+      expect(html).toContain(BEFORE_UPPER);
+      expect(html).toContain(BEFORE_TRACK);
+    }
+  });
+
+  it("labelCase=\"sentence\" prints the same label without uppercase or tracking, keeping the rest of the stack", () => {
+    const html = stacked("sentence");
+    expect(html).not.toContain("before:uppercase");
+    expect(html).not.toContain("before:tracking-");
+    expect(html).toContain("max-sm:[&amp;_td:not([colspan])]:before:content-[attr(data-label)]");
+    expect(html).toContain("max-sm:[&amp;_td:not([colspan])]:before:text-muted");
+    expect(html).toContain("max-sm:[&amp;_td:not([colspan])]:before:text-sm");
+    expect(html).toContain('data-stack="true"');
+  });
+
+  it("is a no-op without stack", () => {
+    const html = render(
+      <Table labelCase="sentence" caption="Orders">
+        <tbody />
+      </Table>,
+    );
+    expect(html).not.toContain("data-stack");
+    expect(html).not.toContain("max-sm:");
+  });
+});

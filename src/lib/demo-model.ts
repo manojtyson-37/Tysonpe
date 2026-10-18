@@ -60,6 +60,11 @@ export function appName(app: DemoApp): string {
   return DEMO_APPS.find((a) => a.id === app)?.name ?? "UPI app";
 }
 
+/** Heading of the simulated phone prompt. The generic app (the QR scan path) reads "your UPI app", not "Other UPI app". */
+export function promptTitle(app: DemoApp): string {
+  return `Payment request in ${app === "upi" ? "your UPI app" : appName(app)}`;
+}
+
 export type DemoStep = "checkout" | "phone-prompt" | "processing" | "success" | "failed";
 export type DemoOutcome = "success" | "failed";
 
@@ -117,7 +122,9 @@ export function stepAnnouncement(flow: DemoFlow, surface: "upi" | "hosted"): str
     case "checkout":
       return surface === "upi" ? "Simulated checkout: scan the sample QR or pick a UPI app." : "Simulated Easebuzz page: pick a sample bank.";
     case "phone-prompt":
-      return `Simulated ${appName(flow.app)} payment request for ${amount}. Approve or decline.`;
+      return flow.app === "upi"
+        ? `Simulated payment request in your UPI app for ${amount}. Approve or decline.`
+        : `Simulated ${appName(flow.app)} payment request for ${amount}. Approve or decline.`;
     case "processing":
       return "Simulated payment is processing.";
     case "success":

@@ -59,13 +59,14 @@ export function FeeCalc() {
         <p className="mt-1 text-2xl font-semibold">
           <Money paise={delta} tone={delta < 0 ? "bad" : "good"} sign={delta > 0 ? "+" : undefined} /> <span className="text-base text-muted">/ month</span>
         </p>
-        <output htmlFor={sliderId} aria-live="polite" className="mt-1 block text-sm text-ink">
+        {/* <output> carries the implicit status role, so it is already a polite live region: no aria-live on top. */}
+        <output htmlFor={sliderId} className="mt-1 block text-sm text-ink">
           {deltaSentence(delta)}
         </output>
         <p className="mt-1 text-sm text-muted">Plan prices are drafts and billing is not live.</p>
       </div>
 
-      <Table caption="Take-home by plan after the monthly plan fee" stack className="mt-4">
+      <Table caption="Take-home by plan after the monthly plan fee" stack labelCase="sentence" className="mt-4">
         <thead>
           <tr>
             <Th>Plan</Th>

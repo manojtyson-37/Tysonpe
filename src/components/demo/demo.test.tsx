@@ -10,6 +10,7 @@ vi.mock("next/navigation", () => ({
 import { HomeInteractiveDemo } from "@/components/HomeInteractiveDemo";
 import { PLAN_MONTHLY_PAISE, feeBreakdown, formatINR } from "@/lib/money";
 import { DEFAULT_SALES_RUPEES, DEMO_BANKS, ultimateDeltaPaise, feeRows } from "@/lib/demo-model";
+import { createSessionClock } from "@/lib/session-clock";
 import { legacyStyleFindings } from "@/test/style-scan";
 import { FeeCalc } from "./FeeCalc";
 import { HostedTab } from "./HostedTab";
@@ -27,13 +28,21 @@ const SOURCES: Array<readonly [string, string]> = [
   ...demoFiles.map((f) => [`demo/${f}`, read(new URL(f, DIR))] as const),
 ];
 const NOT_QR = SOURCES.filter(([f]) => f !== "demo/qr.tsx");
+// Client component modules: the shell plus every demo file that starts with the "use client" directive.
+const CLIENT_MODULES = SOURCES.filter(([f, src]) => f !== "lib/demo-model.ts" && src.startsWith('"use client"'));
+// Anything a client module exports that is not a component or a type: value bindings, or functions not named in PascalCase.
+function exportFindings(src: string): string[] {
+  const values = [...src.matchAll(/^export (?:const|let|var|class|enum)\b/gm)].map((m) => m[0]);
+  const fns = [...src.matchAll(/^export (?:async )?function\s+(\w+)/gm)].filter((m) => !/^[A-Z]/.test(m[1])).map((m) => m[0].replace(/\s+\w+$/, "").trim() + " " + m[1]);
+  return [...values, ...fns];
+}
 
 const text = (h: string) => h.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
 const count = (h: string, needle: string | RegExp) => (typeof needle === "string" ? h.split(needle).length - 1 : (h.match(needle) ?? []).length);
 
 const shell = renderToStaticMarkup(<HomeInteractiveDemo />);
-const qr = renderToStaticMarkup(<QrTab countdown={892} />);
-const hosted = renderToStaticMarkup(<HostedTab countdown={892} />);
+const qr = renderToStaticMarkup(<QrTab clock={createSessionClock(892)} />);
+const hosted = renderToStaticMarkup(<HostedTab clock={createSessionClock(892)} />);
 const fees = renderToStaticMarkup(<FeeCalc />);
 
 // The legacy scan this task exists to satisfy. Patterns the pass-1 demo used; the old file is red against this.
@@ -98,12 +107,31 @@ describe("demo sources: tokens only, no loops", () => {
   it("keeps the pure logic out of the client modules: the model has no 'use client' and no react import", () => {
     const model = SOURCES.find(([f]) => f === "lib/demo-model.ts")![1];
     expect(model).not.toMatch(/^"use client"|from "react"/m);
-    for (const f of ["HomeInteractiveDemo.tsx", "demo/QrTab.tsx", "demo/HostedTab.tsx", "demo/FeeCalc.tsx"]) {
-      const src = SOURCES.find(([n]) => n === f)![1];
-      expect(src.startsWith('"use client"'), f).toBe(true);
-      // only components are exported from a client module
-      expect([...src.matchAll(/^export (?:const|let|var|type|class|enum)\b/gm)].map((m) => m[0]), f).toEqual([]);
+    const clock = read(new URL("../../lib/session-clock.ts", import.meta.url));
+    expect(clock).not.toMatch(/^"use client"|from "react"/m);
+  });
+
+  it("scans every demo client module (parts.tsx and SessionClock.tsx included), not a hand-picked four", () => {
+    const names = CLIENT_MODULES.map(([f]) => f);
+    for (const f of ["HomeInteractiveDemo.tsx", "demo/QrTab.tsx", "demo/HostedTab.tsx", "demo/FeeCalc.tsx", "demo/parts.tsx", "demo/SessionClock.tsx"]) {
+      expect(names, f).toContain(f);
     }
+    expect(names).not.toContain("demo/use-flow.ts"); // a hook module, not a client component file
+  });
+
+  it("exports only components (PascalCase functions) and types from a client module", () => {
+    for (const [file, src] of CLIENT_MODULES) expect(exportFindings(src), file).toEqual([]);
+  });
+
+  it("the export scan catches what it is meant to: value exports, lowercase functions, default arrows", () => {
+    expect(exportFindings("export const x = 1;\nexport let y = 2;\nexport class Z {}\nexport enum E {}")).toHaveLength(4);
+    expect(exportFindings("export function helper() {}\nexport async function load() {}")).toEqual(["export function helper", "export async function load"]);
+    expect(exportFindings("export function QrTab() {}\nexport type A = 1;\nexport interface B {}\nexport type { C } from './c';")).toEqual([]);
+  });
+
+  it("keeps emerald (the money / success colour) out of the checkout chrome: no text-good or border-good in the QR and hosted tabs", () => {
+    for (const f of ["demo/QrTab.tsx", "demo/HostedTab.tsx"]) expect(SOURCES.find(([n]) => n === f)![1], f).not.toMatch(/(?:text|border|bg)-good/);
+    expect(qr).not.toMatch(/(?:text|border)-good/);
   });
 
   it("drops the pass-1 globals: no animate-scan class or looping scan keyframe, one one-shot scan with a reduced-motion fallback", () => {
@@ -111,6 +139,21 @@ describe("demo sources: tokens only, no loops", () => {
     expect(css).not.toContain("animate-scan");
     expect(css).not.toMatch(/@keyframes qr-scan(?![\w-])/);
     expect(css).toMatch(/\.qr-scan-once\s*\{[^}]*qr-scan-once[^}]*\b1 both/);
+    // the class sits inside @layer components, so a utility on the same element can still override it
+    const open = css.indexOf("@layer components {");
+    let depth = 0;
+    let close = -1;
+    for (let i = css.indexOf("{", open); i < css.length; i++) {
+      if (css[i] === "{") depth++;
+      if (css[i] === "}" && --depth === 0) {
+        close = i;
+        break;
+      }
+    }
+    const rule = css.search(/^\s*\.qr-scan-once\s*\{/m);
+    expect(open).toBeGreaterThan(-1);
+    expect(rule).toBeGreaterThan(open);
+    expect(rule).toBeLessThan(close);
     expect(css).not.toMatch(/\.qr-scan-once\s*\{[^}]*infinite/);
     const reduced = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
     expect(reduced).toMatch(/\.qr-scan-once\s*\{[^}]*animation:\s*none/);
@@ -233,10 +276,23 @@ describe("HostedTab: the Easebuzz hosted page, in app tokens", () => {
     expect(hosted).toMatch(/<fieldset\b/);
     const radios = [...hosted.matchAll(/<input\b[^>]*type="radio"[^>]*>/g)].map((m) => m[0]);
     expect(radios).toHaveLength(DEMO_BANKS.length);
-    expect(radios.every((r) => /name="hosted-bank"/.test(r))).toBe(true);
+    const names = new Set(radios.map((r) => /name="([^"]+)"/.exec(r)![1]));
+    expect(names.size).toBe(1); // one radio group
+    expect([...names][0]).not.toBe("hosted-bank");
     expect(radios.filter((r) => /\bchecked\b/.test(r))).toHaveLength(1);
     expect(radios[0]).toMatch(/\bchecked\b/);
     for (const name of DEMO_BANKS) expect(text(hosted)).toContain(name);
+  });
+
+  it("gives each mounted hosted tab its own radio group name (useId), so two never merge into one group", () => {
+    const both = renderToStaticMarkup(
+      <>
+        <HostedTab clock={createSessionClock(892)} />
+        <HostedTab clock={createSessionClock(892)} />
+      </>,
+    );
+    const groups = new Set([...both.matchAll(/<input\b[^>]*type="radio"[^>]*name="([^"]+)"/g)].map((m) => m[1]));
+    expect(groups.size).toBe(2);
   });
 
   it("names the pay and cancel actions and uses the app's primary and secondary buttons", () => {
@@ -294,9 +350,11 @@ describe("FeeCalc: the calculator", () => {
     expect(fees).toMatch(/class="[^"]*\bh-11\b[^"]*"/);
   });
 
-  it("announces only the delta sentence, as one polite output tied to the slider", () => {
-    expect(count(fees, "aria-live")).toBe(1);
-    expect(fees).toMatch(/<output\b[^>]*aria-live="polite"[^>]*>Ultimate leaves you ₹3,750 less than Basic each month<\/output>/);
+  it("announces only the delta sentence: one <output> tied to the slider, whose implicit status role is the live region (no second aria-live)", () => {
+    expect(count(fees, "<output")).toBe(1);
+    expect(count(fees, "aria-live")).toBe(0);
+    expect(fees).toMatch(/<output\b[^>]*for="[^"]+"[^>]*>Ultimate leaves you ₹3,750 less than Basic each month<\/output>/);
+    expect(fees).toContain('aria-valuetext="₹2,50,000 per month"');
   });
 
   it("keeps the draft caveat", () => {

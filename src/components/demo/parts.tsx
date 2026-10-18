@@ -3,7 +3,7 @@
 import type { ReactNode, Ref } from "react";
 import { IconCheck, IconClock, IconX } from "@/components/icons";
 import { Button, ButtonLink } from "@/components/ui";
-import { DEMO_INVOICE_NO, DEMO_TOTAL_PAISE, SETTLE_MS } from "@/lib/demo-model";
+import { DEMO_INVOICE_NO, DEMO_TOTAL_PAISE, SETTLE_MS, type DemoOutcome } from "@/lib/demo-model";
 import { formatINR } from "@/lib/money";
 
 // Pieces both simulated screens (UPI QR and Easebuzz hosted) share. Presentational only: the step machine lives in
@@ -44,7 +44,8 @@ export function Stage({ step, touched, children }: { step: string; touched: bool
   );
 }
 
-export function ProcessingView({ headingRef }: { headingRef: Ref<HTMLHeadingElement> }) {
+/** `outcome` is what the check will settle into; it sets the delay the copy states (1.2s to succeed, 0.6s to fail). */
+export function ProcessingView({ headingRef, outcome }: { headingRef: Ref<HTMLHeadingElement>; outcome: DemoOutcome | null }) {
   return (
     <div className="px-5 py-10 text-center">
       <IconClock size={24} className="mx-auto text-muted" />
@@ -52,7 +53,7 @@ export function ProcessingView({ headingRef }: { headingRef: Ref<HTMLHeadingElem
         Checking the payment
       </StepHeading>
       <p className="mx-auto mt-1 max-w-sm text-sm text-muted">
-        Simulated, about {(SETTLE_MS.success / 1000).toFixed(1)} seconds. No gateway is called. In the real flow the server verifies the
+        Simulated, about {(SETTLE_MS[outcome ?? "success"] / 1000).toFixed(1)} seconds. No gateway is called. In the real flow the server verifies the
         payment before the order is marked paid.
       </p>
     </div>

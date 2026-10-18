@@ -9,13 +9,15 @@ import {
   DEMO_GST_RATE_PCT,
   DEMO_TOTAL_PAISE,
   appName,
-  formatTimer,
+  promptTitle,
   stepAnnouncement,
   type DemoApp,
 } from "@/lib/demo-model";
 import { formatINR } from "@/lib/money";
+import type { SessionClock as Clock } from "@/lib/session-clock";
 import { FailedView, ProcessingView, Stage, StatusRegion, StepHeading, SuccessView } from "./parts";
 import { SampleQr } from "./qr";
+import { SessionClock } from "./SessionClock";
 import { useDemoFlow } from "./use-flow";
 
 function AppIcon({ app, className }: { app: DemoApp; className: string }) {
@@ -30,13 +32,13 @@ const APP_BUTTON =
   "transition-[background-color,border-color,scale] duration-(--dur-fast) ease-(--ease-standard) hover:border-ink hover:bg-surface-2 active:scale-(--scale-press-lg)";
 
 /** The simulated UPI checkout: a sample QR, four app buttons, a phone prompt, then processing and a result. */
-export function QrTab({ countdown }: { countdown: number }) {
-  const { flow, send, headingRef } = useDemoFlow();
+export function QrTab({ clock }: { clock: Clock }) {
+  const { flow, send, headingRef, rootRef } = useDemoFlow();
   const total = formatINR(DEMO_TOTAL_PAISE);
   const reset = () => send({ type: "reset" });
 
   return (
-    <div className="mx-auto max-w-lg rounded-card border border-line bg-surface">
+    <div ref={rootRef} className="mx-auto max-w-lg rounded-card border border-line bg-surface">
       <StatusRegion>{stepAnnouncement(flow, "upi")}</StatusRegion>
 
       <div className="flex items-start justify-between gap-4 rounded-t-card bg-brand px-5 py-4 text-brand-ink">
@@ -63,12 +65,12 @@ export function QrTab({ countdown }: { countdown: number }) {
             <div className="flex flex-col items-center">
               <div className="relative overflow-hidden rounded-card border border-line bg-surface p-3">
                 {/* One pass over the code when it mounts, then it rests invisible. Reduced motion: hidden outright. */}
-                <div aria-hidden="true" className="qr-scan-once pointer-events-none absolute inset-0 border-t-2 border-good" />
+                <div aria-hidden="true" className="qr-scan-once pointer-events-none absolute inset-0 border-t-2 border-ink" />
                 <SampleQr className="size-32" />
               </div>
               <p className="mt-2 text-sm text-muted">Sample QR, not scannable</p>
               <p className="mt-1 text-sm text-muted">
-                Session ends in <span className="font-semibold tabular-nums text-ink">{formatTimer(countdown)}</span>
+                Session ends in <SessionClock clock={clock} className="font-semibold tabular-nums text-ink" />
               </p>
             </div>
 
@@ -104,11 +106,11 @@ export function QrTab({ countdown }: { countdown: number }) {
                 <span className="text-sm text-muted">Simulated phone</span>
               </div>
               <div className="py-4 text-center">
-                <StepHeading headingRef={headingRef}>Payment request in {appName(flow.app)}</StepHeading>
+                <StepHeading headingRef={headingRef}>{promptTitle(flow.app)}</StepHeading>
                 <p className="mt-1 text-sm text-muted">Sample creator is requesting</p>
                 <p className="mt-1 text-2xl font-semibold tabular-nums text-ink">{total}</p>
                 <p className="mt-1 font-mono text-sm text-muted">Sample VPA: creator@sample</p>
-                <p className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-good">
+                <p className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-muted">
                   <IconLock size={16} />
                   Test mode: no real money
                 </p>
@@ -130,7 +132,7 @@ export function QrTab({ countdown }: { countdown: number }) {
           </div>
         )}
 
-        {flow.step === "processing" && <ProcessingView headingRef={headingRef} />}
+        {flow.step === "processing" && <ProcessingView headingRef={headingRef} outcome={flow.outcome} />}
         {flow.step === "success" && <SuccessView headingRef={headingRef} surface="upi" onReset={reset} />}
         {flow.step === "failed" && <FailedView headingRef={headingRef} surface="upi" onReset={reset} />}
       </Stage>
