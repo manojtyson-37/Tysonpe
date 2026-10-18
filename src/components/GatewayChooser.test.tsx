@@ -54,6 +54,14 @@ function walk(node: ReactNode, out: El[] = []): El[] {
   return out;
 }
 
+/** The text a node would render, from the unrendered tree. */
+function textOf(node: ReactNode): string {
+  if (node === null || node === undefined || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  return isValidElement(node) ? textOf((node.props as P).children) : "";
+}
+
 const OPTIONS = [
   { id: "razorpay", name: "Razorpay", blurb: "b1", fact: "f1" },
   { id: "easebuzz", name: "Easebuzz", blurb: "b2", fact: "f2" },
@@ -73,6 +81,8 @@ function mount(selected: string) {
     return {
       /** Runs the effects the render queued, as React does after commit. */
       commit: () => H.queue.splice(0).forEach((fn) => fn()),
+      /** What each card's native radio is described by (RadioCard wires `description` to aria-describedby). */
+      described: cards.map((c) => textOf(c.props.description)),
       checked: cards.map((c) => c.props.checked as boolean),
       current: cards.map((c) => (c.props.trailing ? walk(c.props.trailing).length > 0 : false)),
       status: els.find((e) => e.props.role === "status")!,
@@ -223,12 +233,39 @@ describe("GatewayChooser: the save remounts the page, so the choice crosses in s
     expect(after.checked).toEqual([false, true]);
   });
 
-  it("does not confirm a flag that does not match the saved value (the save did not land)", () => {
+  it("a flag that is not the saved choice is cleared, with no focus and no status (the save did not land)", () => {
     store.set(SAVED_FLAG, "easebuzz");
     const m = mount("razorpay");
     m.render().commit();
+    expect(focused).toEqual([]);
+    expect(store.has(SAVED_FLAG)).toBe(false);
     const after = m.render();
+    after.commit();
     expect(after.status.props.children).toBe("");
+    expect(after.described).toEqual(["b1", "b2"]);
+  });
+
+  it("while the saved text is showing, the checked radio is described by it, so it is read with the focus", () => {
+    store.set(SAVED_FLAG, "easebuzz");
+    const m = mount("easebuzz");
+    const first = m.render();
+    expect(first.described).toEqual(["b1", "b2"]); // nothing yet: same commit as the focus restore
+    first.commit();
+    const after = m.render();
+    expect(after.status.props.children).toBe("Saved: Easebuzz is your gateway");
+    expect(after.described).toEqual(["b1", "b2 Saved: Easebuzz is your gateway"]);
+    expect(after.checked).toEqual([false, true]); // only the checked radio carries it
+  });
+
+  it("the description is the blurb alone whenever the status text is empty", () => {
+    const m = mount("razorpay");
+    expect(m.render().described).toEqual(["b1", "b2"]);
+    m.render().choose("easebuzz");
+    expect(m.render().described).toEqual(["b1", "b2"]); // not saved yet
+    m.setSelected("easebuzz");
+    expect(m.render().described).toEqual(["b1", "b2 Saved: Easebuzz is your gateway"]);
+    m.render().choose("razorpay");
+    expect(m.render().described).toEqual(["b1", "b2"]);
   });
 
   it("ignores and clears a flag for an unknown gateway", () => {

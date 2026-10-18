@@ -45,7 +45,8 @@ function submitGatewayForm(gatewayId: string) {
  * if the instance does survive a re-render the user's pick shows at once and the server value wins when it changes.
  * "Current" is the saved choice (the `selected` prop), written out so the state is not carried by colour alone. The
  * role=status region is always in the DOM (a live region must exist before its text changes) and its text is set after
- * mount. Props are plain data: the server actions stay in the page and never cross into this client module.
+ * mount. After a remount that region is a new node, so the same sentence is also added to the saved gateway's
+ * description, which makes it part of that radio's accessible description and read with the restored focus. Props are plain data: the server actions stay in the page and never cross into this client module.
  */
 export function GatewayChooser({
   options,
@@ -76,11 +77,12 @@ export function GatewayChooser({
     const id = readFlag();
     if (id === null) return;
     clearFlag();
-    if (!options.some((o) => o.id === id)) return;
+    // Only the saved choice is restored; any other flag means the save did not land, so it is just dropped.
+    if (id !== selected) return;
     container.current?.querySelector<HTMLInputElement>(`input[name="gateway"][value="${id}"]`)?.focus();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the flag only exists after the previous instance unmounted; there is nothing to derive it from during render
     setChosen(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only: `options` is static page data
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only: reads `selected` once, as first rendered
   }, []);
 
   // No remount: once the save is confirmed here, the flag is spent (it must not steal focus on a later visit).
@@ -108,7 +110,18 @@ export function GatewayChooser({
             checked={option.id === shown}
             onChange={onChoose}
             title={option.name}
-            description={option.blurb}
+            description={
+              option.id === selected && savedName ? (
+                <>
+                  {option.blurb}{" "}
+                  {/* RadioCard wires `description` to the radio's aria-describedby, so the confirmation is read with the focus
+                      the restore puts on it (a live region created in that same commit is likely to be dropped). */}
+                  <span className="sr-only">{`Saved: ${savedName} is your gateway`}</span>
+                </>
+              ) : (
+                option.blurb
+              )
+            }
             trailing={option.id === selected ? <span className="text-sm font-medium text-ink">Current</span> : null}
           >
             <span className="mt-2 block text-sm text-muted">{option.fact}</span>
