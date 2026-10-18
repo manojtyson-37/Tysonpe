@@ -94,6 +94,17 @@ describe("the auth pages render through AuthShell", () => {
     expect(out).toMatch(/Already have an account\? <a [^>]*href="\/login"[^>]*>Log in<\/a>/);
   });
 
+  // The forms render fields only: the heading, subtitle, card and footer come from AuthShell, once.
+  it("sign up and log in each render one heading, one card and no second footer", async () => {
+    const signup = html(await SignupPage(params({ role: "creator" })));
+    expect(signup.match(/<h1\b/g)).toHaveLength(1);
+    expect(signup.match(/Already have an account/g)).toHaveLength(1);
+    expect(signup).not.toMatch(/<h[2-6]\b/);
+    const login = html(await LoginPage(params()));
+    expect(login.match(/<h1\b/g)).toHaveLength(1);
+    expect(login.match(/New here\?/g)).toHaveLength(1);
+  });
+
   it("log in and sign up still redirect a signed-in user", async () => {
     session.user = { id: "u1", name: "Asha", creator: null };
     await expect(LoginPage(params({ next: "/library/p1" }))).rejects.toThrow("REDIRECT /library/p1");
