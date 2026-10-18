@@ -344,24 +344,14 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
   to { opacity: 0; transform: scale(2.6); }
 }
 
-/* Pass-1 scan loop, still used by HomeInteractiveDemo; remove after Task 27. */
-@keyframes qr-scan {
-  0% {
-    top: 0%;
-    opacity: 0.8;
-  }
-  50% {
-    top: 92%;
-    opacity: 1;
-  }
-  100% {
-    top: 0%;
-    opacity: 0.8;
-  }
+/* The home demo's QR scan: one pass when the code mounts (the overlay's top edge travels the box once, ~960ms), then it
+   rests invisible. Transform and opacity only; the duration is the reveal token x3 so reduced motion collapses it. */
+.qr-scan-once {
+  animation: qr-scan-once calc(var(--dur-reveal) * 3) var(--ease-in-out) 1 both;
 }
-
-.animate-scan {
-  animation: qr-scan 2.4s ease-in-out infinite;
+@keyframes qr-scan-once {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(100%); opacity: 0; }
 }
 
 /* Reduced motion is mandatory: tokens collapse, every animation and transition becomes instant. */
@@ -390,4 +380,5 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
   .skeleton { animation: none; }
   .reveal-pop { animation: none; }
   .status-ring-once::after { display: none; }
+  .qr-scan-once { animation: none; display: none; }
 }

@@ -29,13 +29,11 @@ const PAGE_SOURCE = SOURCES[0][1];
 const html = renderToStaticMarkup(<Home />);
 const text = (h: string) => h.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
 
-// Sections, in page order. The interactive checkout (HomeInteractiveDemo) is Task 27's: it still carries animate-ping, a
-// gradient and its own buttons, so the page-level rules below are checked on every section except that one.
+// Sections, in page order. Every section is covered, the interactive checkout (HomeInteractiveDemo) included.
 const sections = [...html.matchAll(/<section\b[^>]*>[\s\S]*?<\/section>/g)].map((m) => m[0]);
 const layoutOf = (s: string) => /data-layout="([^"]+)"/.exec(s)![1];
 const demo = sections.find((s) => s.includes('id="sandbox-demo"'))!;
-const mine = sections.filter((s) => s !== demo);
-const myHtml = mine.join("\n");
+const myHtml = sections.join("\n");
 const hero = sections[0];
 const closing = sections[sections.length - 1];
 const count = (h: string, needle: string | RegExp) =>
@@ -93,7 +91,7 @@ describe("landing: no eyebrows, no pulsing, no pills", () => {
     }
   });
 
-  it("has no animate- class outside the demo section, no pulsing dot and no ping", () => {
+  it("has no animate- class anywhere in the sections (the demo included), no pulsing dot and no ping", () => {
     expect(myHtml).not.toContain("animate-");
     for (const [file, src] of SOURCES) expect(src, file).not.toContain("animate-");
   });
@@ -109,14 +107,14 @@ describe("landing: no eyebrows, no pulsing, no pills", () => {
   });
 
   it("uses no badge or pill class in the status list", () => {
-    const status = mine.find((s) => layoutOf(s) === "sticky-left-rules")!;
+    const status = sections.find((s) => layoutOf(s) === "sticky-left-rules")!;
     expect(status).not.toMatch(/badge|rounded-full|rounded-pill/);
   });
 });
 
 describe("landing: one ink call to action per band", () => {
   it("has at most one filled primary button per section, and exactly one in the hero and the closing band", () => {
-    for (const s of mine) expect(count(s, "btn-primary"), layoutOf(s)).toBeLessThanOrEqual(1);
+    for (const s of sections) expect(count(s, "btn-primary"), layoutOf(s)).toBeLessThanOrEqual(1);
     expect(count(hero, "btn-primary")).toBe(1);
     expect(count(closing, "btn-primary")).toBe(1);
   });
@@ -127,7 +125,7 @@ describe("landing: one ink call to action per band", () => {
   });
 
   it("the switched-off sample buttons are not ink", () => {
-    const trail = mine.find((s) => layoutOf(s) === "sticky-left-fragments")!;
+    const trail = sections.find((s) => layoutOf(s) === "sticky-left-fragments")!;
     expect(count(trail, "btn-primary")).toBe(0);
     expect(count(trail, /<button\b[^>]*\bdisabled\b/g)).toBe(3);
   });
@@ -206,7 +204,7 @@ describe("landing: the hero is one live ledger from true numbers", () => {
 });
 
 describe("landing: real UI fragments, each labelled as a sample", () => {
-  const figures = [...html.matchAll(/<figure\b[^>]*>[\s\S]*?<\/figure>/g)].map((m) => m[0]).filter((f) => !demo.includes(f));
+  const figures = [...html.matchAll(/<figure\b[^>]*>[\s\S]*?<\/figure>/g)].map((m) => m[0]);
 
   it("has the ledger, checkout, invoice and payouts fragments, and every one says Sample", () => {
     expect(figures).toHaveLength(4);
@@ -256,8 +254,8 @@ describe("landing: real UI fragments, each labelled as a sample", () => {
 });
 
 describe("landing: status and fees", () => {
-  const status = mine.find((s) => layoutOf(s) === "sticky-left-rules")!;
-  const fees = mine.find((s) => layoutOf(s) === "table")!;
+  const status = sections.find((s) => layoutOf(s) === "sticky-left-rules")!;
+  const fees = sections.find((s) => layoutOf(s) === "table")!;
 
   it("status is two ruled lists with plain-text status, and billing stays 'not live'", () => {
     expect(count(status, "<ul>")).toBe(2);
@@ -304,6 +302,19 @@ describe("landing: status and fees", () => {
   });
 });
 
+describe("landing: the interactive demo band", () => {
+  it("is labelled a simulation, is one tab list with one ink button, and nests its headings under the band's h2", () => {
+    expect(text(demo)).toContain("Simulated checkout, test mode");
+    expect(count(demo, 'role="tablist"')).toBe(1);
+    expect(count(demo, "btn-primary")).toBe(1);
+    expect(count(demo, 'role="status"')).toBe(1);
+    const levels = [...demo.matchAll(/<h([1-6])\b/g)].map((m) => Number(m[1]));
+    expect(levels[0]).toBe(2);
+    for (const level of levels.slice(1)) expect(level).toBe(3);
+    expect(demo).not.toMatch(/animate-|infinite|gradient|shadow-/);
+  });
+});
+
 describe("landing: closing band", () => {
   it("has the wordmark at display size through a non-important child selector, and one ink call to action", () => {
     expect(closing).toContain("Tysonpe");
@@ -339,8 +350,7 @@ describe("landing: copy lint", () => {
   });
 
   it("orders headings without skipping a level", () => {
-    // The demo's own headings are Task 27's to fix when it splits that component.
-    const levels = [...html.replace(demo, "").matchAll(/<h([1-6])\b/g)].map((m) => Number(m[1]));
+    const levels = [...html.matchAll(/<h([1-6])\b/g)].map((m) => Number(m[1]));
     expect(levels[0]).toBe(1);
     for (let i = 1; i < levels.length; i++) expect(levels[i] - levels[i - 1], `heading ${i}`).toBeLessThanOrEqual(1);
   });
