@@ -64,6 +64,24 @@ export const IconLock = make(
   "IconLock",
 );
 
+export const IconEye = make(
+  <>
+    <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+    <circle cx="12" cy="12" r="2.75" />
+  </>,
+  "IconEye",
+);
+
+export const IconEyeOff = make(
+  <>
+    <path d="M9.9 5.7A9 9 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a15.7 15.7 0 0 1-2.5 3.3" />
+    <path d="M6.3 7.7C3.7 9.4 2.5 12 2.5 12s3.5 6.5 9.5 6.5c1.5 0 2.9-.4 4.1-1" />
+    <path d="M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9" />
+    <path d="m4 4 16 16" />
+  </>,
+  "IconEyeOff",
+);
+
 export const IconTrash = make(
   <>
     <path d="M4 7h16M9.5 7V4.5h5V7" />

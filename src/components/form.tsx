@@ -53,7 +53,11 @@ export function useFormValues() {
   return useContext(Ctx)?.values;
 }
 
-/** Error string for a specific field or the top-level form error. */
+/**
+ * Error string for a specific field or the top-level form error. Reads the context `<ActionForm>` provides, so it
+ * only works in a component rendered BELOW `<ActionForm>`; called in the component that renders the form itself it
+ * always returns undefined.
+ */
 export function useFormError(fieldName?: string) {
   const s = useContext(Ctx);
   return fieldName ? s?.fields?.[fieldName] : s?.error;
@@ -63,7 +67,7 @@ export function FormError() {
   const s = useContext(Ctx);
   if (!s?.error) return null;
   return (
-    <p role="alert" className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm font-medium text-bad">
+    <p role="alert" className="rounded-control bg-bad-soft px-3.5 py-2.5 text-sm font-medium text-bad">
       {s.error}
     </p>
   );
