@@ -4,8 +4,10 @@ import { db } from "@/lib/db";
 import { requireCreator } from "@/lib/auth/session";
 import {
   sendWhatsAppText,
+  sendWhatsAppTemplate,
   createWhatsAppTemplate,
   listWhatsAppTemplates,
+  deleteWhatsAppTemplate,
   getWhatsAppAccountStatus,
   sanitizePhone,
 } from "@/lib/whatsapp/client";
@@ -223,6 +225,31 @@ export async function getTemplatesAction() {
   await requireCreator();
   const res = await listWhatsAppTemplates();
   return { ok: !res.error, templates: res.templates, error: res.error };
+}
+
+export async function deleteTemplateAction(name: string) {
+  await requireCreator();
+  const res = await deleteWhatsAppTemplate(name);
+  return { ok: res.success, error: res.error };
+}
+
+export async function testSendTemplateAction(input: {
+  phone: string;
+  templateName: string;
+  parameters?: string[];
+}) {
+  await requireCreator();
+  const cleaned = sanitizePhone(input.phone);
+  if (!cleaned || cleaned.length < 8) {
+    return { ok: false, error: "Valid recipient phone number is required" };
+  }
+  const res = await sendWhatsAppTemplate(
+    cleaned,
+    input.templateName,
+    "en_US",
+    input.parameters || []
+  );
+  return { ok: res.success, messageId: res.messageId, error: res.error };
 }
 
 export async function getWhatsAppStatusAction() {

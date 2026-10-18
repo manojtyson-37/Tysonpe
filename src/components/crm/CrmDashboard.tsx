@@ -7,6 +7,9 @@ import {
   sendDirectMessageAction,
   createLeadAction,
   submitTemplateAction,
+  getTemplatesAction,
+  deleteTemplateAction,
+  testSendTemplateAction,
 } from "@/app/actions/crm";
 import type { WhatsAppTemplateItem, WhatsAppAccountInfo } from "@/lib/whatsapp/types";
 
@@ -76,6 +79,19 @@ export function CrmDashboard({
   const [tplSample1, setTplSample1] = useState("");
   const [tplSample2, setTplSample2] = useState("");
 
+  // Template Manager Filter & Test States
+  const [templateFilter, setTemplateFilter] = useState<"ALL" | "APPROVED" | "PENDING" | "REJECTED">("ALL");
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [isRefreshingTemplates, setIsRefreshingTemplates] = useState(false);
+  const [copiedTemplateId, setCopiedTemplateId] = useState<string | null>(null);
+  const [testModalTemplate, setTestModalTemplate] = useState<WhatsAppTemplateItem | null>(null);
+  const [testPhone, setTestPhone] = useState("");
+  const [testParam1, setTestParam1] = useState("Manoj");
+  const [testParam2, setTestParam2] = useState("Masterclass");
+  const [testParam3, setTestParam3] = useState("₹1");
+  const [testParam4, setTestParam4] = useState("https://tysonpe.com");
+  const [isSendingTest, setIsSendingTest] = useState(false);
+
   // New Lead Modal State
   const [showNewLeadModal, setShowNewLeadModal] = useState(false);
   const [newLeadPhone, setNewLeadPhone] = useState("");
@@ -86,6 +102,64 @@ export function CrmDashboard({
   const showToast = (text: string, ok = true) => {
     setToastMsg({ text, ok });
     setTimeout(() => setToastMsg(null), 3500);
+  };
+
+  const handleRefreshTemplates = () => {
+    setIsRefreshingTemplates(true);
+    startTransition(async () => {
+      const res = await getTemplatesAction();
+      setIsRefreshingTemplates(false);
+      if (res.ok && res.templates) {
+        setTemplates(res.templates);
+        showToast("Templates refreshed from Meta!");
+      } else {
+        showToast(res.error || "Failed to refresh templates", false);
+      }
+    });
+  };
+
+  const handleCopy = (text: string, id: string) => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedTemplateId(id);
+      setTimeout(() => setCopiedTemplateId(null), 1800);
+    }
+  };
+
+  const handleDeleteTemplate = (name: string) => {
+    if (!confirm(`Are you sure you want to delete template "${name}" from Meta?`)) return;
+    startTransition(async () => {
+      const res = await deleteTemplateAction(name);
+      if (res.ok) {
+        setTemplates((prev) => prev.filter((t) => t.name !== name));
+        showToast(`Template "${name}" deleted from Meta`);
+      } else {
+        showToast(res.error || "Failed to delete template", false);
+      }
+    });
+  };
+
+  const handleTestSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testModalTemplate) return;
+    if (!testPhone.trim()) {
+      showToast("Please enter a recipient phone number", false);
+      return;
+    }
+    setIsSendingTest(true);
+    const params = [testParam1, testParam2, testParam3, testParam4].filter(Boolean);
+    const res = await testSendTemplateAction({
+      phone: testPhone,
+      templateName: testModalTemplate.name,
+      parameters: params,
+    });
+    setIsSendingTest(false);
+    if (res.ok) {
+      showToast(`Test WhatsApp message sent to ${testPhone}!`);
+      setTestModalTemplate(null);
+    } else {
+      showToast(res.error || "Failed to send test message", false);
+    }
   };
 
   const selectedLead = leads.find((l) => l.id === selectedLeadId) || leads[0];
@@ -233,6 +307,20 @@ export function CrmDashboard({
       }
     });
   };
+
+  const approvedCount = templates.filter((t) => t.status === "APPROVED").length;
+  const pendingCount = templates.filter((t) => t.status === "PENDING").length;
+  const rejectedCount = templates.filter((t) => t.status === "REJECTED").length;
+
+  const filteredTemplates = templates.filter((tpl) => {
+    if (templateFilter !== "ALL" && tpl.status !== templateFilter) return false;
+    if (templateSearch.trim()) {
+      const q = templateSearch.toLowerCase();
+      const bodyText = tpl.components?.find((c) => c.type === "BODY")?.text?.toLowerCase() || "";
+      if (!tpl.name.toLowerCase().includes(q) && !bodyText.includes(q)) return false;
+    }
+    return true;
+  });
 
   return (
     <div className="space-y-6">
@@ -679,150 +767,541 @@ export function CrmDashboard({
         </div>
       )}
 
-      {/* TAB 3: META TEMPLATES & APPROVALS VIA API */}
+      {/* TAB 3: META TEMPLATES & APPROVALS COMMAND CENTER */}
       {tab === "templates" && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left: Template Submission Form */}
-          <div className="lg:col-span-5 rounded-2xl border border-line bg-surface p-5 shadow-2xs space-y-4">
-            <div>
-              <h2 className="text-sm font-bold text-ink font-display">
-                Submit Template to Meta via API
-              </h2>
-              <p className="mt-0.5 text-xs text-muted">
-                Meta automatically reviews and approves templates within 2 to 15 minutes.
-              </p>
+        <div className="space-y-6">
+          {/* Top Stat Summary Grid */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="rounded-2xl border border-line bg-surface p-4 shadow-2xs">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                Total Templates
+              </span>
+              <div className="mt-2 flex items-baseline justify-between">
+                <span className="text-2xl font-bold font-display text-ink tabular-nums">
+                  {templates.length}
+                </span>
+                <span className="text-[10px] font-semibold text-muted font-mono">
+                  Applied to Meta
+                </span>
+              </div>
             </div>
 
-            <form onSubmit={handleSubmitTemplate} className="space-y-3.5">
-              <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1">
-                  Template Identifier Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. course_enrollment_notice_v1"
-                  value={tplName}
-                  onChange={(e) => setTplName(e.target.value)}
-                  className="w-full rounded-xl border border-line bg-bg px-3 py-2 text-xs text-ink placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-brand font-mono"
-                  required
-                />
-                <span className="text-[10px] text-muted">Lowercase and underscores only</span>
+            <div className="rounded-2xl border border-line bg-surface p-4 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                  Approved & Live
+                </span>
+                <span className="inline-flex items-center justify-center w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1">
-                  Category
-                </label>
-                <select
-                  value={tplCategory}
-                  onChange={(e) => setTplCategory(e.target.value as "UTILITY" | "MARKETING")}
-                  className="w-full rounded-xl border border-line bg-bg px-3 py-2 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-brand"
-                >
-                  <option value="UTILITY">Utility (Fastest approval ~2 mins, lower fee)</option>
-                  <option value="MARKETING">Marketing (Promotions, discounts, broadcasts)</option>
-                </select>
+              <div className="mt-2 flex items-baseline justify-between">
+                <span className="text-2xl font-bold font-display text-emerald-700 tabular-nums">
+                  {approvedCount}
+                </span>
+                <span className="rounded-md bg-emerald-50 border border-emerald-200/60 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                  Ready to Send
+                </span>
               </div>
+            </div>
 
-              <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1">
-                  Message Body (with variables)
-                </label>
-                <textarea
-                  rows={4}
-                  placeholder="Hi {{1}}, your enrollment in {{2}} is confirmed! Access link: {{3}}"
-                  value={tplBody}
-                  onChange={(e) => setTplBody(e.target.value)}
-                  className="w-full rounded-xl border border-line bg-bg px-3 py-2 text-xs text-ink placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-brand font-sans"
-                  required
-                />
+            <div className="rounded-2xl border border-line bg-surface p-4 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                  In Meta Review
+                </span>
+                {pendingCount > 0 && (
+                  <span className="inline-flex items-center justify-center w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                )}
               </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[10px] font-semibold uppercase text-muted mb-1">
-                    Sample Value for {"{{1}}"}
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Rahul"
-                    value={tplSample1}
-                    onChange={(e) => setTplSample1(e.target.value)}
-                    className="w-full rounded-xl border border-line bg-bg px-3 py-1.5 text-xs text-ink placeholder:text-muted"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold uppercase text-muted mb-1">
-                    Sample Value for {"{{2}}"}
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Masterclass"
-                    value={tplSample2}
-                    onChange={(e) => setTplSample2(e.target.value)}
-                    className="w-full rounded-xl border border-line bg-bg px-3 py-1.5 text-xs text-ink placeholder:text-muted"
-                  />
-                </div>
+              <div className="mt-2 flex items-baseline justify-between">
+                <span className="text-2xl font-bold font-display text-amber-700 tabular-nums">
+                  {pendingCount}
+                </span>
+                <span className="rounded-md bg-amber-50 border border-amber-200/60 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+                  ~2-5 min review
+                </span>
               </div>
+            </div>
 
-              <button
-                type="submit"
-                disabled={isPending || !tplName || !tplBody}
-                className="w-full rounded-xl bg-brand py-2.5 text-xs font-semibold text-brand-ink transition-all duration-150 active:scale-[0.98] disabled:opacity-50 hover:bg-brand/90"
-              >
-                {isPending ? "Submitting to Meta API..." : "Submit to Meta for Approval →"}
-              </button>
-            </form>
+            <div className="rounded-2xl border border-line bg-surface p-4 shadow-2xs">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                Needs Changes
+              </span>
+              <div className="mt-2 flex items-baseline justify-between">
+                <span className="text-2xl font-bold font-display text-rose-700 tabular-nums">
+                  {rejectedCount}
+                </span>
+                <span className="rounded-md bg-rose-50 border border-rose-200/60 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">
+                  Rejected
+                </span>
+              </div>
+            </div>
           </div>
 
-          {/* Right: List of Templates & Live Approval Status */}
-          <div className="lg:col-span-7 rounded-2xl border border-line bg-surface p-5 shadow-2xs space-y-4">
-            <div className="flex items-center justify-between">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Column: Template Submission Form */}
+            <div className="lg:col-span-5 rounded-2xl border border-line bg-surface p-5 shadow-2xs space-y-4">
               <div>
                 <h2 className="text-sm font-bold text-ink font-display">
-                  Live Meta Approved Templates
+                  Apply for New Meta Template
                 </h2>
-                <p className="mt-0.5 text-xs text-muted">
-                  WABA ID: {accountStatus.wabaId || "2197739044402624"}
+                <p className="mt-0.5 text-xs text-muted leading-relaxed">
+                  Submit pre-approved message templates for outbound broadcasts and notifications. Meta automatically reviews Utility templates in 2–5 minutes.
                 </p>
               </div>
-              <span className="text-xs font-mono font-bold text-muted">
-                {templates.length} templates
-              </span>
-            </div>
 
-            <div className="divide-y divide-line/60">
-              {templates.map((tpl) => (
-                <div key={tpl.id} className="py-3.5 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold font-mono text-ink">{tpl.name}</p>
-                    <span
-                      className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${
-                        tpl.status === "APPROVED"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : tpl.status === "PENDING"
-                          ? "bg-amber-100 text-amber-800"
-                          : "bg-red-100 text-red-800"
-                      }`}
-                    >
-                      {tpl.status}
-                    </span>
-                  </div>
+              <form onSubmit={handleSubmitTemplate} className="space-y-3.5">
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1">
+                    Template Identifier Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. course_enrollment_notice_v1"
+                    value={tplName}
+                    onChange={(e) => setTplName(e.target.value)}
+                    className="w-full rounded-xl border border-line bg-bg px-3 py-2 text-xs text-ink placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-brand font-mono"
+                    required
+                  />
+                  <span className="text-[10px] text-muted">Lowercase letters, numbers, and underscores only</span>
+                </div>
 
-                  <p className="text-xs text-muted leading-relaxed">
-                    {tpl.components?.find((c) => c.type === "BODY")?.text || "Template component"}
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1">
+                    Category
+                  </label>
+                  <select
+                    value={tplCategory}
+                    onChange={(e) => setTplCategory(e.target.value as "UTILITY" | "MARKETING")}
+                    className="w-full rounded-xl border border-line bg-bg px-3 py-2 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-brand"
+                  >
+                    <option value="UTILITY">Utility (Order updates, confirmations — fast 2-min review)</option>
+                    <option value="MARKETING">Marketing (Promotions, discounts, broadcasts)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1">
+                    Message Body (with variables)
+                  </label>
+                  <textarea
+                    rows={4}
+                    placeholder="Hello {{1}}, your order for {{2}} is confirmed! Total: {{3}}. Access link: {{4}} - Team Tysonpe."
+                    value={tplBody}
+                    onChange={(e) => setTplBody(e.target.value)}
+                    className="w-full rounded-xl border border-line bg-bg px-3 py-2 text-xs text-ink placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-brand font-sans"
+                    required
+                  />
+                  <p className="mt-1 text-[10px] text-muted">
+                    Meta Rule: Variables like <code className="font-mono text-brand">{"{{1}}"}</code> cannot be at the very start or end of the text.
                   </p>
+                </div>
 
-                  <div className="flex items-center gap-3 text-[10px] text-muted">
-                    <span className="uppercase font-semibold">{tpl.category}</span>
-                    <span>•</span>
-                    <span>Lang: {tpl.language}</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-semibold uppercase text-muted mb-1">
+                      Sample for {"{{1}}"}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Rahul"
+                      value={tplSample1}
+                      onChange={(e) => setTplSample1(e.target.value)}
+                      className="w-full rounded-xl border border-line bg-bg px-3 py-1.5 text-xs text-ink placeholder:text-muted"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold uppercase text-muted mb-1">
+                      Sample for {"{{2}}"}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Masterclass"
+                      value={tplSample2}
+                      onChange={(e) => setTplSample2(e.target.value)}
+                      className="w-full rounded-xl border border-line bg-bg px-3 py-1.5 text-xs text-ink placeholder:text-muted"
+                    />
                   </div>
                 </div>
-              ))}
+
+                <button
+                  type="submit"
+                  disabled={isPending || !tplName || !tplBody}
+                  className="w-full rounded-xl bg-brand py-2.5 text-xs font-semibold text-brand-ink transition-all duration-150 active:scale-[0.98] disabled:opacity-50 hover:bg-brand/90 flex items-center justify-center gap-2"
+                >
+                  {isPending ? (
+                    <>
+                      <svg className="w-3.5 h-3.5 animate-spin text-brand-ink" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span>Submitting to Meta API...</span>
+                    </>
+                  ) : (
+                    <span>Submit to Meta for Approval →</span>
+                  )}
+                </button>
+              </form>
+            </div>
+
+            {/* Right Column: Templates Status & Management Command Center */}
+            <div className="lg:col-span-7 rounded-2xl border border-line bg-surface p-5 shadow-2xs space-y-4 flex flex-col">
+              {/* Header with Account Information */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-line pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-bold text-ink font-display">
+                      All Applied Templates & Statuses
+                    </h2>
+                    <span className="rounded-full bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 text-[9px] font-bold text-emerald-800 uppercase tracking-wide">
+                      Live Account
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted">
+                    {accountStatus.verifiedName || "KBD Credit Solutions"} • {accountStatus.displayPhoneNumber || "+91 63606 81493"} • WABA {accountStatus.wabaId || "1337165675241639"}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleRefreshTemplates}
+                  disabled={isRefreshingTemplates}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-bg px-3 py-1.5 text-xs font-semibold text-ink transition-all duration-150 active:scale-[0.98] hover:border-brand/40"
+                  title="Refresh template statuses directly from Meta"
+                >
+                  <svg
+                    className={`w-3.5 h-3.5 text-muted transition-transform ${
+                      isRefreshingTemplates ? "animate-spin text-brand" : ""
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                  <span>{isRefreshingTemplates ? "Refreshing..." : "Refresh from Meta"}</span>
+                </button>
+              </div>
+
+              {/* Filter Tabs and Search Toolbar */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                {/* Status Segmented Control */}
+                <div className="inline-flex rounded-xl border border-line bg-bg p-1 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setTemplateFilter("ALL")}
+                    className={`rounded-lg px-2.5 py-1 font-semibold transition-all duration-150 ${
+                      templateFilter === "ALL"
+                        ? "bg-surface text-ink shadow-2xs"
+                        : "text-muted hover:text-ink"
+                    }`}
+                  >
+                    All ({templates.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTemplateFilter("APPROVED")}
+                    className={`rounded-lg px-2.5 py-1 font-semibold transition-all duration-150 ${
+                      templateFilter === "APPROVED"
+                        ? "bg-emerald-50 text-emerald-800 shadow-2xs border border-emerald-200/50"
+                        : "text-muted hover:text-ink"
+                    }`}
+                  >
+                    Approved ({approvedCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTemplateFilter("PENDING")}
+                    className={`rounded-lg px-2.5 py-1 font-semibold transition-all duration-150 ${
+                      templateFilter === "PENDING"
+                        ? "bg-amber-50 text-amber-800 shadow-2xs border border-amber-200/50"
+                        : "text-muted hover:text-ink"
+                    }`}
+                  >
+                    Pending ({pendingCount})
+                  </button>
+                  {rejectedCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setTemplateFilter("REJECTED")}
+                      className={`rounded-lg px-2.5 py-1 font-semibold transition-all duration-150 ${
+                        templateFilter === "REJECTED"
+                          ? "bg-rose-50 text-rose-800 shadow-2xs border border-rose-200/50"
+                          : "text-muted hover:text-ink"
+                      }`}
+                    >
+                      Rejected ({rejectedCount})
+                    </button>
+                  )}
+                </div>
+
+                {/* Search Bar */}
+                <div className="relative flex-1 sm:max-w-xs">
+                  <input
+                    type="text"
+                    placeholder="Search templates..."
+                    value={templateSearch}
+                    onChange={(e) => setTemplateSearch(e.target.value)}
+                    className="w-full rounded-xl border border-line bg-bg pl-8 pr-3 py-1.5 text-xs text-ink placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-brand"
+                  />
+                  <svg
+                    className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted pointer-events-none"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Template Items List */}
+              <div className="space-y-3 flex-1 overflow-y-auto max-h-[580px] pr-1">
+                {filteredTemplates.length === 0 ? (
+                  <div className="rounded-xl border border-line/60 bg-bg/50 p-8 text-center">
+                    <p className="text-xs font-semibold text-ink">No templates found</p>
+                    <p className="mt-1 text-[11px] text-muted">
+                      {templateFilter !== "ALL"
+                        ? `No templates currently in "${templateFilter}" state.`
+                        : "No templates submitted yet. Create one using the form on the left."}
+                    </p>
+                    {templateFilter !== "ALL" && (
+                      <button
+                        type="button"
+                        onClick={() => setTemplateFilter("ALL")}
+                        className="mt-3 inline-flex rounded-lg border border-line bg-surface px-2.5 py-1 text-[11px] font-semibold text-ink hover:border-brand/40"
+                      >
+                        Show All Templates
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  filteredTemplates.map((tpl) => {
+                    const bodyText =
+                      tpl.components?.find((c) => c.type === "BODY")?.text || "No body content";
+
+                    return (
+                      <div
+                        key={tpl.id}
+                        className="rounded-xl border border-line bg-bg/60 p-4 space-y-3 hover:border-brand/30 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs font-bold font-mono text-ink tracking-tight">
+                                {tpl.name}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => handleCopy(tpl.name, tpl.id)}
+                                className="text-muted hover:text-ink transition-colors p-0.5 rounded"
+                                title="Copy template name"
+                              >
+                                {copiedTemplateId === tpl.id ? (
+                                  <svg className="w-3.5 h-3.5 text-emerald-600 animate-in zoom-in-75 duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                ) : (
+                                  <svg className="w-3.5 h-3.5 text-muted hover:text-ink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                  </svg>
+                                )}
+                              </button>
+                            </div>
+                            <div className="flex items-center gap-2 text-[10px] text-muted">
+                              <span className="uppercase font-semibold tracking-wider">{tpl.category}</span>
+                              <span>•</span>
+                              <span>Language: {tpl.language}</span>
+                              <span>•</span>
+                              <span className="font-mono text-[9px] text-muted/70">ID: {tpl.id}</span>
+                            </div>
+                          </div>
+
+                          {/* Status Badge */}
+                          <div className="flex items-center gap-1.5">
+                            {tpl.status === "APPROVED" && (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                                <svg className="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                                </svg>
+                                APPROVED
+                              </span>
+                            )}
+                            {tpl.status === "PENDING" && (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200/80 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                                <svg className="w-3 h-3 text-amber-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                                PENDING REVIEW
+                              </span>
+                            )}
+                            {tpl.status === "REJECTED" && (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-rose-50 border border-rose-200/80 px-2 py-0.5 text-[10px] font-bold text-rose-800">
+                                <svg className="w-3 h-3 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                REJECTED
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Message Preview */}
+                        <div className="rounded-lg bg-surface border border-line/60 p-3 text-xs text-ink leading-relaxed">
+                          {bodyText}
+                        </div>
+
+                        {/* Card Actions */}
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-[10px] text-muted">
+                            {tpl.status === "APPROVED"
+                              ? "Ready for automated triggers & broadcasts"
+                              : "Under Meta compliance evaluation"}
+                          </span>
+
+                          <div className="flex items-center gap-2">
+                            {tpl.status === "APPROVED" && (
+                              <button
+                                type="button"
+                                onClick={() => setTestModalTemplate(tpl)}
+                                className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1 text-[11px] font-semibold text-ink hover:border-brand/40 active:scale-[0.98] transition-all"
+                              >
+                                <svg className="w-3 h-3 text-brand" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                </svg>
+                                <span>Test Send</span>
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTemplate(tpl.name)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-2 py-1 text-[11px] font-semibold text-muted hover:text-rose-600 hover:border-rose-200 active:scale-[0.98] transition-all"
+                              title="Delete template from Meta"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Test Template Modal */}
+      {testModalTemplate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-line pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-ink font-display">
+                  Test Send Template
+                </h3>
+                <p className="text-[11px] font-mono text-muted">
+                  {testModalTemplate.name}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTestModalTemplate(null)}
+                className="text-muted hover:text-ink text-sm p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleTestSend} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1">
+                  Recipient Phone Number
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 917619671728"
+                  value={testPhone}
+                  onChange={(e) => setTestPhone(e.target.value)}
+                  className="w-full rounded-xl border border-line bg-bg px-3 py-2 text-xs text-ink font-mono"
+                  required
+                />
+                <span className="text-[10px] text-muted">Include country code without + (e.g. 91...)</span>
+              </div>
+
+              {testModalTemplate.name !== "hello_world" && (
+                <div className="space-y-2">
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted">
+                    Dynamic Parameters
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Param {{1}}"
+                      value={testParam1}
+                      onChange={(e) => setTestParam1(e.target.value)}
+                      className="rounded-xl border border-line bg-bg px-3 py-1.5 text-xs text-ink"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Param {{2}}"
+                      value={testParam2}
+                      onChange={(e) => setTestParam2(e.target.value)}
+                      className="rounded-xl border border-line bg-bg px-3 py-1.5 text-xs text-ink"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Param {{3}}"
+                      value={testParam3}
+                      onChange={(e) => setTestParam3(e.target.value)}
+                      className="rounded-xl border border-line bg-bg px-3 py-1.5 text-xs text-ink"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Param {{4}}"
+                      value={testParam4}
+                      onChange={(e) => setTestParam4(e.target.value)}
+                      className="rounded-xl border border-line bg-bg px-3 py-1.5 text-xs text-ink"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setTestModalTemplate(null)}
+                  className="rounded-xl border border-line px-4 py-2 text-xs font-semibold text-muted hover:text-ink"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSendingTest || !testPhone}
+                  className="rounded-xl bg-brand px-4 py-2 text-xs font-semibold text-brand-ink disabled:opacity-50 hover:bg-brand/90 transition-all active:scale-[0.98]"
+                >
+                  {isSendingTest ? "Sending via Meta..." : "Send Test WhatsApp →"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
 
       {/* TAB 4: AUTOMATION SETTINGS */}
       {tab === "settings" && (
