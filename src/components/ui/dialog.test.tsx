@@ -288,6 +288,18 @@ describe("DialogView bare (content draws its own chrome)", () => {
     expect(html).not.toContain("ignored");
   });
 
+  it("sets aria-describedby for a description alone, for children alone, and not for neither", () => {
+    expect(renderToStaticMarkup(<DialogView titleId="t" descriptionId="d" title="T" description="Why" />)).toContain('aria-describedby="d"');
+    expect(
+      renderToStaticMarkup(
+        <DialogView titleId="t" descriptionId="d" title="T">
+          <b>x</b>
+        </DialogView>,
+      ),
+    ).toContain('aria-describedby="d"');
+    expect(renderToStaticMarkup(<DialogView titleId="t" descriptionId="d" title="T" />)).not.toContain("aria-describedby");
+  });
+
   it("leaves the default layout alone when bare is off", () => {
     const normal = renderToStaticMarkup(<DialogView titleId="n-title" descriptionId="n-desc" title="Hi" description="Body" />);
     expect(normal).toContain("px-6 pt-6");

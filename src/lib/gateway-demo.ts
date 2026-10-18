@@ -16,7 +16,7 @@ export function formatCountdown(totalSeconds: number): string {
  * window, never once a second.
  */
 export function countdownNotice(secondsLeft: number): string {
-  if (secondsLeft <= 0) return "Time is up. This payment page has expired.";
+  if (secondsLeft <= 0) return "Time is up for this simulated payment.";
   if (secondsLeft <= 60) return "1 minute left on this payment page.";
   if (secondsLeft <= 300) return "5 minutes left on this payment page.";
   return "";
@@ -33,11 +33,12 @@ export function canDismissRazorpay(status: "idle" | "processing" | "success" | "
 }
 
 /**
- * Which screen the Razorpay modal shows once `settleDemoAction` has answered. The action answers `ok: true` with the failure
- * page for a simulated decline (it only answers `ok: false` when it throws an AppError), so `ok` alone must not mean success:
- * a buyer who picked "Simulate decline" sees the declined screen, and is still sent to the page the action names.
+ * Which screen the Razorpay modal shows once `settleDemoAction` has answered. It decides from the SERVER's answer, not from
+ * the outcome the buyer picked: the action answers `ok: true` with the failure page for a simulated decline (it only answers
+ * `ok: false` when it throws an AppError), and never downgrades a paid order, so a decline picked on an already-paid order
+ * comes back with the success page. `ok` alone must not mean success.
  */
-export function settledView(res: { ok: boolean }, outcome: "success" | "failure"): "success" | "declined" | "error" {
+export function settledView(res: { ok: boolean; to: string }): "success" | "declined" | "error" {
   if (!res.ok) return "error";
-  return outcome === "failure" ? "declined" : "success";
+  return res.to.startsWith("/checkout/success/") ? "success" : "declined";
 }

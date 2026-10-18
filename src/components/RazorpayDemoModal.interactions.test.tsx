@@ -102,22 +102,34 @@ describe("outcome choice reaches the settle action", () => {
     expect(H.push).toHaveBeenCalledWith("/checkout/success/ord_42");
   });
 
-  it("a chosen decline shows the declined screen, never success, then still follows the action's page", async () => {
+  it("a decline answer (ok with the failure page) shows the declined screen, never success, and does not navigate", async () => {
     H.settle = vi.fn(async () => ({ ok: true, to: "/checkout/pay/ord_42?failed=1" }));
     radio(render().els, "failure").props.onChange();
-    const done = payButton(render().els).props.onClick();
-    await vi.advanceTimersByTimeAsync(1400); // past both simulated delays, before the redirect delay ends
-    const mid = render();
-    const text = textOf(mid.els.map((e) => e.props.children));
+    await pay(render().els);
+    const after = render();
+    const text = textOf(after.els.map((e) => e.props.children));
     expect(text).toContain("Payment declined");
     expect(text).toContain("Do Not Honor");
     expect(text).not.toMatch(/successful|approved|Enrolling/i);
-    expect(byType(mid.els, "div").some((e) => e.props.role === "alert")).toBe(true);
-    await vi.advanceTimersByTimeAsync(5000);
-    await done;
+    expect(byType(after.els, "div").some((e) => e.props.role === "alert")).toBe(true);
     expect(H.settle).toHaveBeenCalledWith("ord_42", "failure");
-    expect(H.push).toHaveBeenCalledWith("/checkout/pay/ord_42?failed=1");
-    expect(textOf(render().els.map((e) => e.props.children))).not.toMatch(/successful/i);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(H.push).not.toHaveBeenCalled(); // no forced redirect racing Try again and Cancel
+    expect(byType(after.els, "button").some((e) => textOf(e.props.children) === "Try again")).toBe(true);
+  });
+
+  it("the answer decides, not the pick: a decline picked on an already-paid order gets the success page and shows success", async () => {
+    radio(render().els, "failure").props.onChange();
+    await pay(render().els); // default mock answers ok with the success page
+    expect(textOf(render().els.map((e) => e.props.children))).toContain("Payment successful");
+    expect(H.push).toHaveBeenCalledWith("/checkout/success/ord_42");
+  });
+
+  it("success is picked but the action answers the failure page: declined", async () => {
+    H.settle = vi.fn(async () => ({ ok: true, to: "/checkout/pay/ord_42?failed=1" }));
+    await pay(render().els);
+    expect(textOf(render().els.map((e) => e.props.children))).toContain("Payment declined");
+    expect(H.push).not.toHaveBeenCalled();
   });
 
   it("a chosen success with an ok answer shows the success screen", async () => {
@@ -220,5 +232,19 @@ describe("the method switcher is keyboard-operable by construction", () => {
     tabs[2].props.onClick();
     const after = byType(render().els, "button").filter((e) => ["UPI / QR", "Card", "Netbanking", "Wallet"].includes(textOf(e.props.children)));
     expect(after.map((t) => t.props["aria-pressed"])).toEqual([false, false, true, false]);
+  });
+});
+
+describe("processing steps", () => {
+  it("shows the connecting step first and the authorizing step after the first delay", async () => {
+    const done = payButton(render().els).props.onClick();
+    await vi.advanceTimersByTimeAsync(10);
+    const stepText = (els: ReturnType<typeof render>["els"]) =>
+      textOf(byType(els, "div").find((e) => e.props.role === "status")!.props.children);
+    expect(stepText(render().els)).toContain("Connecting to the simulated payment network");
+    await vi.advanceTimersByTimeAsync(700);
+    expect(stepText(render().els)).toContain("Authorizing the simulated transaction");
+    await vi.advanceTimersByTimeAsync(5000);
+    await done;
   });
 });

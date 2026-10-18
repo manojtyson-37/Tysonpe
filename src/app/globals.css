@@ -400,6 +400,7 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
   --skin-head-muted: #a9b6c9;
   --skin-head-line: #27405f;
   --skin-head-money: #4ade80;
+  --skin-money: #0f7b4d;
   --skin-head-warn: #fcd34d;
   --skin-bg: #ffffff;
   --skin-surface: #ffffff;
@@ -425,6 +426,7 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
   --skin-head-muted: #55637a;
   --skin-head-line: #d9e0ec;
   --skin-head-money: #0f7b4d;
+  --skin-money: #0f7b4d;
   --skin-head-warn: #8a5300;
   --skin-bg: #eef2f8;
   --skin-surface: #ffffff;

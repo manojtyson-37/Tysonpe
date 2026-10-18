@@ -50,6 +50,10 @@ describe("countdownNotice: what a live region reads", () => {
     expect(changes.map((c) => c.at)).toEqual([300, 60, 0]);
   });
 
+  it("does not claim the page expired on the server: expiry here is the client clock only", () => {
+    expect(countdownNotice(0)).toBe("Time is up for this simulated payment.");
+  });
+
   it("makes no claim about security, encryption or compliance", () => {
     for (const s of [300, 60, 0]) expect(countdownNotice(s)).not.toMatch(/secure|encrypt|pci|bank-grade/i);
   });
@@ -72,16 +76,22 @@ describe("canDismissRazorpay", () => {
 });
 
 describe("settledView: what the Razorpay modal shows once the action answers", () => {
-  it("shows success only for an approved payment the buyer asked to succeed", () => {
-    expect(settledView({ ok: true }, "success")).toBe("success");
+  it("shows success when the action answers ok with the success page", () => {
+    expect(settledView({ ok: true, to: "/checkout/success/ord_1" })).toBe("success");
   });
 
-  it("shows declined when the buyer chose to simulate a decline, even though the action answered ok (it returns the failure page)", () => {
-    expect(settledView({ ok: true }, "failure")).toBe("declined");
+  it("shows declined when the action answers ok with any other page (a simulated decline sends the failure page)", () => {
+    expect(settledView({ ok: true, to: "/checkout/pay/ord_1?failed=1" })).toBe("declined");
   });
 
-  it("shows an error when the action refused, whatever was chosen", () => {
-    expect(settledView({ ok: false }, "success")).toBe("error");
-    expect(settledView({ ok: false }, "failure")).toBe("error");
+  it("decides from the server's answer, not the pick: a paid order answers with the success page even after a decline was picked", () => {
+    // settleDemoPayment never downgrades a paid order, so the success page is the truth whatever the buyer chose.
+    expect(settledView({ ok: true, to: "/checkout/success/ord_1" })).toBe("success");
+    expect(settledView({ ok: true, to: "/checkout/pay/ord_1?failed=1" })).toBe("declined");
+  });
+
+  it("shows an error when the action refused", () => {
+    expect(settledView({ ok: false, to: "/checkout/pay/ord_1?failed=1" })).toBe("error");
+    expect(settledView({ ok: false, to: "/checkout/success/ord_1" })).toBe("error");
   });
 });

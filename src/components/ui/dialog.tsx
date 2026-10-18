@@ -217,26 +217,34 @@ export function DialogView({
   );
 }
 
-export type DialogProps = {
+type DialogBaseProps = {
   open: boolean;
   /** Called for Escape and a click on the backdrop. The owner flips `open`. */
   onClose: () => void;
   title: ReactNode;
-  description?: ReactNode;
   children?: ReactNode;
-  footer?: ReactNode;
   className?: string;
-  /**
-   * For content that draws its own header and body (a gateway replica). The title stays as the accessible name but is
-   * visually hidden, `children` fill the panel edge to edge and are not wired as its description (a form is not a
-   * description), and `description` and `footer` are ignored. Focus trap, Escape, scroll lock and focus return are unchanged.
-   */
-  bare?: boolean;
   /** Element to focus on open. Defaults to the first focusable element in the panel. */
   initialFocusRef?: RefObject<HTMLElement | null>;
   /** The opener: focus returns to it on close, and the panel scales out of it. Defaults to the element focused at open. */
   returnFocusRef?: RefObject<HTMLElement | null>;
 };
+
+export type DialogProps = DialogBaseProps &
+  (
+    | { bare?: false; description?: ReactNode; footer?: ReactNode }
+    | {
+        /**
+         * For content that draws its own header and body (a gateway replica). The title stays as the accessible name but is
+         * visually hidden, `children` fill the panel edge to edge and are not wired as its description (a form is not a
+         * description). `description` and `footer` cannot be passed with it. Focus trap, Escape, scroll lock and focus return
+         * are unchanged.
+         */
+        bare: true;
+        description?: never;
+        footer?: never;
+      }
+  );
 
 const subscribeNever = () => () => {};
 

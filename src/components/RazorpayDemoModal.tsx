@@ -110,18 +110,17 @@ export function RazorpayDemoModal({
 
     try {
       const res = await settleDemoAction(orderId, outcome);
-      const view = settledView(res, outcome);
+      const view = settledView(res);
       if (view === "success") {
         setStatus("success");
         setProcessingStep("Payment approved. Enrolling you now…");
         await new Promise((r) => setTimeout(r, 800));
         router.push(res.to);
       } else if (view === "declined") {
-        // The action answers ok with the failure page for a chosen decline: show the decline, then follow it.
+        // The action answers ok with the failure page for a decline. The modal stays on the declined screen with Try again
+        // and Cancel; a forced redirect would race them.
         setStatus("failed");
         setErrorMsg(DECLINED);
-        await new Promise((r) => setTimeout(r, 800));
-        router.push(res.to);
       } else {
         setStatus("failed");
         setErrorMsg(res.error || DECLINED);

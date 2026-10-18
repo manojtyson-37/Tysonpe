@@ -197,3 +197,17 @@ describe("the method switcher is keyboard-operable by construction", () => {
     for (const id of ["eb-card-num", "eb-card-exp", "eb-card-cvv", "eb-card-holder"]) expect(labelFor).toContain(id);
   });
 });
+
+describe("Pay stays enabled until the clock reaches 00:00", () => {
+  it("is enabled at 00:01 and disabled at 00:00", () => {
+    const pay = (els: El[]) => byType(els, "button").find((e) => e.props.type === "submit" && textOf(e.props.children).includes("Pay"))!;
+    let els = render();
+    expect(pay(els).props.disabled).toBe(false);
+    for (let i = 0; i < 899; i++) els = tick();
+    expect(textOf(timer(els).props.children)).toBe("00:01");
+    expect(pay(els).props.disabled).toBe(false);
+    els = tick();
+    expect(textOf(timer(els).props.children)).toBe("00:00");
+    expect(pay(els).props.disabled).toBe(true);
+  });
+});

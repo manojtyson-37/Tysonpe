@@ -93,6 +93,20 @@ describe("RazorpayDemoModal: skin and honesty", () => {
   });
 });
 
+describe("RazorpayDemoModal: amount and outcome labels", () => {
+  it("pads whole-rupee amounts to two decimals in the header and on the Pay button, with tabular figures", () => {
+    const out = renderToStaticMarkup(createElement(RazorpayDemoModal, { ...props, amountPaise: 50000 }));
+    expect(out).toMatch(/tabular-nums[^>]*>₹500\.00</);
+    expect(out).toMatch(/<span class="tabular-nums">Pay ₹500\.00<\/span>/);
+  });
+
+  it("names both outcome choices", () => {
+    const out = html();
+    expect(out).toContain("Simulate success");
+    expect(out).toContain("Simulate decline");
+  });
+});
+
 describe("RazorpayDemoModal: narrow header", () => {
   it("lets the merchant name wrap to two lines and keeps the amount label on one line", () => {
     const out = html();

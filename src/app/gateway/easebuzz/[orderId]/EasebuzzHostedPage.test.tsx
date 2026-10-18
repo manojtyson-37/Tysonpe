@@ -71,6 +71,12 @@ describe("EasebuzzHostedPage: the 15-minute clock", () => {
     expect(timer).not.toMatch(/aria-live/);
   });
 
+  it("amounts read the money variable, not the dark-band one", () => {
+    // The Easebuzz page is light throughout (no dark band), so it never reads --skin-head-money.
+    expect(source.match(/text-\(--skin-money\)/g)).toHaveLength(2);
+    expect(source).not.toMatch(/--skin-head-money/);
+  });
+
   it("keeps announcements in one separate, empty-at-start status line that is visually hidden", () => {
     const out = html();
     expect(out.match(/role="status"/g)).toHaveLength(1);
@@ -88,6 +94,17 @@ describe("EasebuzzHostedPage: the 15-minute clock", () => {
 });
 
 describe("EasebuzzHostedPage: controls", () => {
+  it("names the three outcome choices, each with its icon before the label", () => {
+    const out = html();
+    for (const label of ["Success", "Decline", "Cancel"]) expect(out).toMatch(new RegExp(`</svg>${label}</span>`));
+  });
+
+  it("the outcome note is plain language, not a developer term", () => {
+    const out = html();
+    expect(out).toContain("You return to the store after paying.");
+    expect(out).not.toMatch(/HTTP|303/);
+  });
+
   it("the three UPI sub-tabs have short labels that stay on one line at 390px", () => {
     const out = html();
     for (const label of ["UPI apps", "Scan QR", "Enter VPA"]) expect(out).toContain(`>${label}<`);

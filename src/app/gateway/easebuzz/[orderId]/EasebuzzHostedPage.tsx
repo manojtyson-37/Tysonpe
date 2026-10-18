@@ -171,7 +171,7 @@ export function EasebuzzHostedPage({
 
             <div className="hidden text-right sm:block">
               <span className="t-label block text-(--skin-muted)">Total payable</span>
-              <span className="text-base font-semibold tabular-nums text-(--skin-head-money)">₹{formattedAmount}</span>
+              <span className="text-base font-semibold tabular-nums text-(--skin-money)">₹{formattedAmount}</span>
             </div>
           </div>
         </div>
@@ -199,7 +199,7 @@ export function EasebuzzHostedPage({
                 </div>
                 <div className="flex items-baseline justify-between gap-3 border-t border-(--skin-line) pt-2 font-semibold">
                   <dt>Amount due</dt>
-                  <dd className="text-lg tabular-nums text-(--skin-head-money)">₹{formattedAmount}</dd>
+                  <dd className="text-lg tabular-nums text-(--skin-money)">₹{formattedAmount}</dd>
                 </div>
               </dl>
 
@@ -470,7 +470,7 @@ export function EasebuzzHostedPage({
                 {/* Outcome the simulation will settle with */}
                 <fieldset className="space-y-2 rounded-card border border-(--skin-line) bg-(--skin-surface-2) p-3">
                   <legend className="t-label px-1 text-(--skin-muted)">Simulated outcome</legend>
-                  <p className="t-meta text-(--skin-muted)">HTTP 303 redirect flow</p>
+                  <p className="t-meta text-(--skin-muted)">You return to the store after paying.</p>
                   <div className="grid grid-cols-3 gap-2 text-sm">
                     {outcomes.map((o) => (
                       <label key={o.id} className="relative block">
