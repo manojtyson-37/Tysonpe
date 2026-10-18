@@ -7,7 +7,19 @@ import { isValidElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-const H = vi.hoisted(() => ({ on: false, slots: [] as unknown[], i: 0, ctx: undefined as unknown, form: null as unknown }));
+const H = vi.hoisted(() => ({
+  on: false,
+  slots: [] as unknown[],
+  i: 0,
+  ctx: undefined as unknown,
+  form: null as unknown,
+  closest: [] as string[],
+  /** The ref object the last render got from useRef, so a test can check it is the one attached to the DOM. */
+  ref: null as unknown,
+  /** What the effect last returned (its cleanup) and the dependency list it was given. */
+  cleanup: undefined as unknown,
+  deps: undefined as unknown,
+}));
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const useState = (init: unknown) => {
@@ -17,14 +29,23 @@ vi.mock("react", async (importOriginal) => {
     return [H.slots[idx], (v: unknown) => { H.slots[idx] = v; }];
   };
   const useContext = (c: never) => (H.on ? H.ctx : actual.useContext(c));
-  const useRef = (init: unknown) => (H.on ? { current: { closest: () => H.form } } : actual.useRef(init as never));
-  const useEffect = (fn: () => void | (() => void), deps?: unknown[]) => (H.on ? void fn() : actual.useEffect(fn, deps));
+  const useRef = (init: unknown) => {
+    if (!H.on) return actual.useRef(init as never);
+    H.ref = { current: { closest: (selector: string) => { (H.closest as string[]).push(selector); return H.form; } } };
+    return H.ref;
+  };
+  const useEffect = (fn: () => void | (() => void), deps?: unknown[]) => {
+    if (!H.on) return actual.useEffect(fn, deps);
+    H.deps = deps;
+    H.cleanup = fn();
+  };
   const useId = () => (H.on ? ":r0:" : actual.useId());
   return { ...actual, default: { ...actual, useState, useContext, useRef, useEffect, useId }, useState, useContext, useRef, useEffect, useId };
 });
 
 import { legacyStyleFindings } from "@/test/style-scan";
 import { classTokens, text } from "@/test/community-fixtures";
+import { ActionForm, FormError, SavedNote, SubmitButton } from "@/components/form";
 import { ChannelForm } from "./ChannelForm";
 
 const SOURCE = readFileSync(new URL("./ChannelForm.tsx", import.meta.url), "utf8");
@@ -43,6 +64,10 @@ beforeEach(() => {
   H.i = 0;
   H.ctx = undefined;
   H.form = null;
+  H.closest = [];
+  H.ref = null;
+  H.cleanup = undefined;
+  H.deps = undefined;
 });
 
 describe("ChannelForm: fields", () => {
@@ -86,6 +111,10 @@ describe("ChannelForm: fields", () => {
     expect(html).toMatch(/<label for="[^"]+" class="flex cursor-pointer[^"]*"><input\b[^>]*type="checkbox"/);
   });
 
+  it("names the product list with a legend, as the fieldset's first child", () => {
+    expect(html).toMatch(/<fieldset\b[^>]*><legend\b[^>]*>Products that unlock this channel<\/legend>/);
+  });
+
   it("wraps a long product title instead of pushing the row wider", () => {
     expect(html).toMatch(/wrap-anywhere/);
     expect(html).toMatch(/<fieldset class="[^"]*\bmin-w-0\b/);
@@ -117,6 +146,41 @@ describe("ChannelForm: submit", () => {
     expect(SOURCE).toMatch(/<SubmitButton\b[^>]*variant="primary"/);
     expect(SOURCE).toMatch(/<SubmitButton\b[^>]*size="sm"/);
     expect(SOURCE).not.toMatch(/className="btn /);
+  });
+});
+
+describe("ChannelForm: plumbing (hook store: ChannelForm() is called as a plain function)", () => {
+  type Node = { type: unknown; props: { children?: unknown; [k: string]: unknown } };
+  const tree = () => ChannelForm({ action, channel: open, products, submitLabel: "Save channel" }) as unknown as Node;
+  const flat = (n: unknown, out: Node[] = []): Node[] => {
+    if (Array.isArray(n)) n.forEach((c) => flat(c, out));
+    else if (isValidElement(n)) {
+      out.push(n as unknown as Node);
+      flat((n.props as { children?: unknown }).children, out);
+    }
+    return out;
+  };
+
+  it("forwards the action to ActionForm, which wraps the fields, the error line, the submit and the saved note", () => {
+    const root = tree();
+    expect(root.type).toBe(ActionForm);
+    expect(root.props.action).toBe(action);
+    const types = flat(root.props.children).map((n) => n.type);
+    expect(types).toContain(FormError);
+    expect(types).toContain(SavedNote);
+    expect(types).toContain(SubmitButton);
+  });
+
+  it("shows 'Saving…' while pending, and the submit label otherwise", () => {
+    const submit = flat(tree().props.children).find((n) => n.type === SubmitButton)!;
+    expect(submit.props.pendingText).toBe("Saving…");
+    expect(submit.props.children).toBe("Save channel");
+  });
+
+  it("puts the error line before the submit row and the saved note beside the submit button", () => {
+    const kids = tree().props.children as Node[];
+    expect(kids.map((k) => k.type)).toEqual([kids[0].type, FormError, "div"]);
+    expect((kids[2].props.children as Node[]).map((k) => k.type)).toEqual([SubmitButton, SavedNote]);
   });
 });
 
@@ -160,14 +224,58 @@ describe("ChannelForm: the product list follows the select, and the form reset d
     expect(hasFieldset(fields())).toBe(true);
   });
 
+  /** A form stand-in that records each listener by the event NAME it was added or removed under. */
+  function recordingForm() {
+    const added: Array<[string, () => void]> = [];
+    const removed: Array<[string, () => void]> = [];
+    H.form = {
+      addEventListener: (type: string, fn: () => void) => added.push([type, fn]),
+      removeEventListener: (type: string, fn: () => void) => removed.push([type, fn]),
+    } as never;
+    return { added, removed };
+  }
+
   it("registers a reset listener on the enclosing form, and a reset puts the access back to the channel's own value", () => {
-    const listeners: Array<() => void> = [];
-    H.form = { addEventListener: (_t: string, fn: () => void) => listeners.push(fn), removeEventListener: () => undefined } as never;
+    const { added } = recordingForm();
     const first = fields();
-    expect(listeners).toHaveLength(1);
+    expect(added.map(([type]) => type)).toEqual(["reset"]);
     accessSelect(first).props.onChange("product_gated");
     expect(hasFieldset(fields())).toBe(true);
-    listeners[0]();
+    added[0][1]();
     expect(hasFieldset(fields())).toBe(false);
+  });
+
+  it("only a 'reset' event drops the pick; the listener is not registered under any other name", () => {
+    const { added } = recordingForm();
+    fields();
+    expect(added.filter(([type]) => type !== "reset")).toEqual([]);
+  });
+
+  it("removes the very same listener, under the same event name, on cleanup", () => {
+    const { added, removed } = recordingForm();
+    fields();
+    expect(typeof H.cleanup).toBe("function");
+    expect(removed).toEqual([]);
+    (H.cleanup as () => void)();
+    expect(removed).toEqual([["reset", added[0][1]]]);
+  });
+
+  it("looks the form up with closest('form') from the ref'd element, and attaches that ref to the fields' wrapper", () => {
+    recordingForm();
+    const out = fields() as { props: { ref?: unknown } };
+    expect(H.closest).toEqual(["form"]);
+    expect(out.props.ref).toBe(H.ref);
+  });
+
+  it("runs the effect once (empty deps) rather than on every render", () => {
+    recordingForm();
+    fields();
+    expect(H.deps).toEqual([]);
+  });
+
+  it("with no enclosing form it registers nothing and has nothing to clean up", () => {
+    H.form = null;
+    expect(() => fields()).not.toThrow();
+    expect(H.cleanup).toBeUndefined();
   });
 });

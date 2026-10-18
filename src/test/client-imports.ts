@@ -29,7 +29,9 @@ import ts from "typescript";
  *  - `import("./client").then((m) => m.X.p)` (dynamic import) and `require()` are not followed;
  *  - enumeration by other means: `Array.from(X)`, `Reflect.ownKeys(X)`, `structuredClone(X)`, `JSON.stringify(X)`, and a comma
  *    expression `(0, X).p`; only the `Object.*` list above is recognised;
- *  - a computed namespace key (`C[k].p`) or a namespace nested inside a namespace (`B.ns.X.p`) is not resolved;
+ *  - a computed namespace key (`C[k].p`) or a namespace nested inside a namespace (`B.ns.X.p`) is not resolved; so
+ *    `import * as B` of a module whose ONLY client exports are namespaces (`export * as ns from`) is counted as importing a
+ *    client module (importsClientExport) but never registered as a namespace, and `B.ns.KIND.p` is not flagged;
  *  - a local that shadows an imported client name is treated as the import (a false POSITIVE, the one over-flag).
  */
 
@@ -236,7 +238,7 @@ export function importsClientExport(srcDir: string, file: string, imp: NamedImpo
   const target = resolveFirstParty(srcDir, file, imp.spec);
   if (!target) return false;
   const exports = clientExportsOf(srcDir, target);
-  return imp.imported === "*" ? exports.all || exports.names.size > 0 : exports.all || exports.names.has(imp.imported) || exports.namespaces.has(imp.imported);
+  return imp.imported === "*" ? exports.all || exports.names.size > 0 || exports.namespaces.size > 0 : exports.all || exports.names.has(imp.imported) || exports.namespaces.has(imp.imported);
 }
 
 const ENUMERATING_OBJECT_METHODS = new Set(["entries", "keys", "values", "assign", "fromEntries", "getOwnPropertyNames", "getOwnPropertyDescriptors", "getOwnPropertySymbols"]);

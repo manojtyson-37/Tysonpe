@@ -202,6 +202,21 @@ describe("clientReferenceMisuse (the checker itself)", () => {
         expect(misuseWith(prelude, source)).toEqual([]);
       });
 
+      // `import * as M` of a module whose only client exports are namespaces still binds a client module's member.
+      it.each([
+        ["a namespace-only barrel (`export * as ns from`)", "nsbarrel"],
+        ["a namespace-only re-export (`import * as C; export { C }`)", "nsreexport"],
+        ["a star over a namespace-only barrel", "nsstar"],
+        ["a module whose default is a namespace", "nsdefault"],
+      ])("importsClientExport counts `import * as M` of %s", (_label, mod) => {
+        expect(importsClientExport(root, at("page.tsx"), { local: "M", imported: "*", spec: `@/components/${mod}` })).toBe(true);
+      });
+
+      it("importsClientExport does not count `import * as M` of a module with no client export", () => {
+        expect(importsClientExport(root, at("page.tsx"), { local: "M", imported: "*", spec: "@/components/plain" })).toBe(false);
+        expect(importsClientExport(root, at("page.tsx"), { local: "M", imported: "*", spec: "@/components/serverbarrel" })).toBe(false);
+      });
+
       it("knows the namespaces a barrel exports", () => {
         expect([...clientExportsOf(root, at("components/nsbarrel.ts")).namespaces.keys()]).toEqual(["ns"]);
         expect([...clientExportsOf(root, at("components/nsreexport.ts")).namespaces.keys()].sort()).toEqual(["C", "D"]);
@@ -256,7 +271,8 @@ describe("clientReferenceMisuse (the checker itself)", () => {
 });
 
 describe("static scan: server modules never read into a client module's export", () => {
-  // The scan answers from the real tree: start with no kept answer, so nothing an earlier test in this file cached can colour it.
+  // Defensive: start with no kept answer so the scan always reads the real tree. Today it changes nothing, because
+  // the earlier tests in this file cache under their temp root, not SRC; this only guards a future test that does.
   beforeAll(() => resetClientExportsCache());
   const files = [...sourceFiles(path.join(SRC, "app")), ...sourceFiles(path.join(SRC, "components"))];
   const server = files.filter((file) => !declaresUseClient(readFileSync(file, "utf8"), file));

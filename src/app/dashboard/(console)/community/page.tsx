@@ -58,7 +58,6 @@ export default async function CommunityConsole() {
               {channels.map((c, i) => (
                 <li key={c.id}>
                   <Disclosure
-                    className="px-1.5"
                     label={
                       <span className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
                         <span className="min-w-0 wrap-anywhere font-semibold">{c.name}</span>

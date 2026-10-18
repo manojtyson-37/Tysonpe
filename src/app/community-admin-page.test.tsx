@@ -125,6 +125,20 @@ describe("community admin: layout and surfaces", () => {
     expect(page).not.toContain("the panel clips overflow");
   });
 
+  it("gives the Disclosure no padding of its own: the primitive carries the row's px-1.5", async () => {
+    M.listChannelsAdmin.mockResolvedValue(three());
+    const disclosures = elements(await call()).filter((e) => e.type === Disclosure);
+    expect(disclosures).toHaveLength(3);
+    for (const d of disclosures) expect(d.props.className).toBeUndefined();
+    expect(readFileSync(PAGE_PATH, "utf8")).not.toMatch(/<Disclosure[^>]*px-1\.5/);
+  });
+
+  it("wraps a long channel name anywhere instead of pushing the row wider", async () => {
+    M.listChannelsAdmin.mockResolvedValue([chan({ id: "ch_1", name: "A".repeat(80) })]);
+    const html = await render();
+    expect(html).toMatch(new RegExp(`<span class="[^"]*\\bmin-w-0\\b[^"]*\\bwrap-anywhere\\b[^"]*">${"A".repeat(80)}</span>`));
+  });
+
   it("passes the style scan on both touched sources, and names no hand-built chevron or glyph", () => {
     for (const file of [PAGE_PATH, FORM_PATH]) {
       const src = readFileSync(file, "utf8");
@@ -374,6 +388,7 @@ describe("community admin: gamification", () => {
     expect(bound(on).args).toEqual([true]);
     expect(on.props.variant).toBe("secondary");
     expect(on.props.size).toBe("sm");
+    expect(on.props.className).toContain("pointer-coarse:min-h-11");
     expect(els.some((e) => e.type === ConfirmButton && e.props.children === "Turn off")).toBe(false);
     expect(els.some((e) => e.type === Button && e.props.children === "Recalculate from progress")).toBe(false);
   });
