@@ -51,7 +51,7 @@ export function PageHeader({ title, sub, back, meta, actions, action, className 
         {back && (
           <Link
             href={back.href}
-            className="mb-2 inline-flex items-center gap-1 text-sm text-muted hover:text-ink transition-colors"
+            className="mb-2 inline-flex items-center gap-1 text-sm text-muted hover:text-ink transition-colors pointer-coarse:min-h-11"
           >
             <ArrowLeftIcon />
             {back.label}

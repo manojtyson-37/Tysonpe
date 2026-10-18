@@ -34,6 +34,9 @@ describe("ConsoleTopBar", () => {
   it("the wordmark goes to the dashboard, not the marketing site, and has an accessible name", () => {
     const logo = tagAttrs(bar(), "a").find((a) => a["aria-label"] === "Tysonpe dashboard")!;
     expect(logo.href).toBe("/dashboard");
+    // 33px tall without this: a 44px target under a coarse pointer
+    expect(logo.class).toContain("pointer-coarse:min-h-11");
+    expect(logo.class).toContain("inline-flex");
   });
 
   it("shows the creator's display name and links to their own storefront", () => {

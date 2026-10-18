@@ -50,7 +50,39 @@ export type StatStripItem = {
   deltaTone?: DeltaTone;
 };
 
-/** A hairline-separated row of stats: two columns on phones, one divided row from sm up. */
+/*
+ * StatStrip answers to ITS OWN width, not the viewport's: the console sidebar and gutters make the content column
+ * much narrower than the window, so a viewport breakpoint (`sm:`) put four wide figures in one row that did not fit.
+ * The wrapper is a container; two columns until the container is wide enough for `k` cells of about 16rem each, then
+ * one row of `k` cells (at most four) with hairline dividers. A longer list wraps into further rows of `k`. Class
+ * names are written out whole because Tailwind only emits classes it can find in the source.
+ */
+const WIDE_GRID: Record<number, string> = {
+  1: "",
+  2: "",
+  3: "@3xl:grid-cols-3",
+  4: "@5xl:grid-cols-4",
+};
+/** First cell of a row: no rule on its left, no left padding. Others: a hairline on the left and padding either side. */
+const WIDE_FIRST: Record<number, string> = {
+  1: "",
+  2: "@xl:pr-6",
+  3: "@3xl:pr-6",
+  4: "@5xl:pr-6",
+};
+const WIDE_REST: Record<number, string> = {
+  1: "",
+  2: "@xl:border-l @xl:border-line @xl:px-6",
+  3: "@3xl:border-l @3xl:border-line @3xl:px-6",
+  4: "@5xl:border-l @5xl:border-line @5xl:px-6",
+};
+
+/** Columns of the wide layout for a strip of `count` items: one per item, at most four. */
+export function stripColumns(count: number): number {
+  return Math.min(Math.max(count, 1), 4);
+}
+
+/** A hairline-separated strip of stats: two columns until its own width fits one row, never wider than its container. */
 export function StatStrip({
   items,
   labelCase = "upper",
@@ -60,18 +92,22 @@ export function StatStrip({
   labelCase?: StatLabelCase;
   className?: string;
 }) {
-  const cls = [
-    "grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-4 sm:flex sm:gap-0 sm:divide-x sm:divide-line",
-    className,
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const k = stripColumns(items.length);
+  const cls = ["@container", className].filter(Boolean).join(" ");
+  const grid = ["grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-4", WIDE_GRID[k]].filter(Boolean).join(" ");
   return (
     <div className={cls}>
-      {/* Index key: a strip may legitimately repeat a label (two "Net" columns for two periods). */}
-      {items.map((item, i) => (
-        <Stat key={i} {...item} labelCase={labelCase} className="sm:px-6 sm:first:pl-0" />
-      ))}
+      <div className={grid}>
+        {/* Index key: a strip may legitimately repeat a label (two "Net" columns for two periods). */}
+        {items.map((item, i) => (
+          <Stat
+            key={i}
+            {...item}
+            labelCase={labelCase}
+            className={["min-w-0 [overflow-wrap:anywhere]", i % k === 0 ? WIDE_FIRST[k] : WIDE_REST[k]].filter(Boolean).join(" ")}
+          />
+        ))}
+      </div>
     </div>
   );
 }

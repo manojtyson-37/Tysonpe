@@ -24,7 +24,7 @@ export function ConsoleTopBar({ creatorName, storefrontHref, logoutAction }: Con
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-2">
           <DashDrawer creatorName={creatorName} storefrontHref={storefrontHref} logoutAction={logoutAction} />
-          <Link href="/dashboard" aria-label="Tysonpe dashboard" className="shrink-0">
+          <Link href="/dashboard" aria-label="Tysonpe dashboard" className="inline-flex shrink-0 items-center pointer-coarse:min-h-11">
             <Logo className="text-ink" />
           </Link>
         </div>

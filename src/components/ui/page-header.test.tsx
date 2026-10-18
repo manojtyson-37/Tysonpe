@@ -29,6 +29,14 @@ describe("PageHeader", () => {
     expect(html).toContain("Back to orders");
   });
 
+  it("the back link is a 44px target under a coarse pointer and keeps its compact desktop look", () => {
+    const html = render(<PageHeader title="Edit" back={{ label: "Products", href: "/dashboard/products" }} />);
+    const cls = /<a [^>]*class="([^"]*)"/.exec(html)?.[1] ?? "";
+    expect(cls).toContain("pointer-coarse:min-h-11");
+    expect(cls).toContain("inline-flex items-center");
+    expect(cls).not.toMatch(/(?<!pointer-coarse:)min-h-/);
+  });
+
   it("includes an SVG arrow icon in the back link", () => {
     const html = render(<PageHeader title="Details" back={{ label: "Back", href: "/" }} />);
     expect(html).toContain("<svg");

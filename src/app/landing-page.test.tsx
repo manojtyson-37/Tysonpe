@@ -149,7 +149,7 @@ describe("landing: section rhythm and layouts", () => {
       "hero-split": "lg:grid-cols-[1.25fr_1fr]",
       "header-split-wide": "lg:grid-cols-[1fr_1.2fr]",
       "sticky-left-fragments": "lg:grid-cols-[1fr_1.4fr]",
-      strip: "sm:divide-x sm:divide-line",
+      strip: "@container",
       "sticky-left-rules": "lg:grid-cols-[1fr_1.6fr]",
       table: "<table",
       wordmark: "font-display",

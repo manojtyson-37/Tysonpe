@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MetricList, MetricRow, Stat, StatStrip } from "./stat";
+import { MetricList, MetricRow, Stat, StatStrip, stripColumns } from "./stat";
 import { Stat as StatFromUi, StatStrip as StripFromIndex, MetricRow as RowFromUi } from "@/components/ui";
 import { Money } from "./money";
 
@@ -51,7 +51,7 @@ describe("StatStrip", () => {
   it("renders one hairline-separated Stat per item inside a bordered row", () => {
     const html = render(<StatStrip items={items} />);
     expect(html).toContain("border-y border-line");
-    expect(html).toContain("sm:divide-x sm:divide-line");
+    expect(html).toContain("@3xl:border-l @3xl:border-line");
     expect((html.match(/class="t-label"/g) ?? []).length).toBe(3);
     expect(html).toContain(">+8%<");
     expect(html).toContain(">After GST<");
@@ -73,6 +73,69 @@ describe("StatStrip", () => {
   });
 });
 
+describe("StatStrip layout answers to its own width (it overflowed the console column at 768 and 1024)", () => {
+  const four = [
+    { label: "Gross", value: "₹1,29,999.99" },
+    { label: "Fees", value: "−₹1,29,999.99" },
+    { label: "GST", value: "₹1,29,999.99" },
+    { label: "Net", value: "₹1,29,999.99" },
+  ];
+  const outer = (n: number, cls = "") => {
+    const html = render(<StatStrip items={four.slice(0, n)} className={cls || undefined} />);
+    return { html, wrapper: /^<div class="([^"]*)"/.exec(html)![1], grid: /^<div class="[^"]*"><div class="([^"]*)"/.exec(html)![1] };
+  };
+
+  it("is a container: the root carries @container and the caller's className, the grid sits inside it", () => {
+    const { wrapper } = outer(4, "mb-6");
+    expect(wrapper).toBe("@container mb-6");
+  });
+
+  it("uses no viewport breakpoint and no non-wrapping flex row at any size", () => {
+    // The figure's own font size may follow the viewport (Stat); the layout classes may not.
+    const { html, wrapper, grid } = outer(4);
+    const cells = [...html.matchAll(/<div class="(min-w-0[^"]*)"/g)].map((m) => m[1]);
+    const layout = [wrapper, grid, ...cells].join(" ");
+    expect(layout).not.toMatch(/(?:^|\s)(?:sm|md|lg|xl|2xl):/);
+    expect(layout).not.toMatch(/(?:^|\s)(?:\S+:)?flex(?:\s|$)/);
+    expect(html).not.toContain("whitespace-nowrap");
+  });
+
+  it("starts as two columns and only goes wide at a container width that fits its cells", () => {
+    expect(outer(4).grid).toBe("grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-4 @5xl:grid-cols-4");
+    expect(outer(3).grid).toBe("grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-4 @3xl:grid-cols-3");
+    expect(outer(2).grid).toBe("grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-4");
+    expect(outer(1).grid).toBe("grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-4");
+  });
+
+  it("cells can shrink and break a figure that would still overflow", () => {
+    expect(render(<StatStrip items={four} />)).toContain("min-w-0 [overflow-wrap:anywhere]");
+  });
+
+  it("hairlines sit between cells, not before the first cell of a row", () => {
+    const cells = [...render(<StatStrip items={four} />).matchAll(/<div class="(min-w-0[^"]*)"/g)].map((m) => m[1]);
+    expect(cells).toHaveLength(4);
+    expect(cells[0]).toContain("@5xl:pr-6");
+    expect(cells[0]).not.toContain("border-l");
+    for (const c of cells.slice(1)) expect(c).toContain("@5xl:border-l @5xl:border-line @5xl:px-6");
+  });
+
+  it("a long list wraps into rows of four, each row starting without a rule", () => {
+    const six = [...four, { label: "A", value: "1" }, { label: "B", value: "2" }];
+    const cells = [...render(<StatStrip items={six} />).matchAll(/<div class="(min-w-0[^"]*)"/g)].map((m) => m[1]);
+    expect(cells).toHaveLength(6);
+    const starts = cells.map((c) => !c.includes("border-l"));
+    expect(starts).toEqual([true, false, false, false, true, false]);
+  });
+
+  it("has no card box", () => {
+    expect(outer(4).html).not.toMatch(/\bcard\b|rounded|shadow|bg-surface/);
+  });
+
+  it("stripColumns is one per item, between one and four", () => {
+    expect([0, 1, 2, 3, 4, 5, 9].map(stripColumns)).toEqual([1, 1, 2, 3, 4, 4, 4]);
+  });
+});
+
 describe("StatStrip keys", () => {
   const items = [
     { label: "Net", value: "₹100" },
@@ -89,8 +152,8 @@ describe("StatStrip keys", () => {
   it("gives each item a distinct React key", () => {
     // React's server renderer does not warn on a repeated key, so inspect the element tree directly: keyed by
     // label, two "Net" columns would collide and a client re-render could drop or reorder one.
-    const root = StatStrip({ items }) as React.ReactElement<{ children: React.ReactElement[] }>;
-    const keys = root.props.children.map((child) => child.key);
+    const wrapper = StatStrip({ items }) as React.ReactElement<{ children: React.ReactElement<{ children: React.ReactElement[] }> }>;
+    const keys = wrapper.props.children.props.children.map((child) => child.key);
     expect(keys).toHaveLength(2);
     expect(new Set(keys).size).toBe(2);
   });
