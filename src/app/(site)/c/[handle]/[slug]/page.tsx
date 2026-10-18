@@ -6,6 +6,9 @@ import { Money, TYPE_LABEL } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { resetDemoEnrollmentAction } from "@/app/actions/checkout";
+import { getCreatorIntegrations } from "@/lib/integrations/service";
+import { recordAffiliateClick } from "@/lib/affiliates/service";
+import { TrackingPixels } from "@/components/integrations/TrackingPixels";
 
 async function getProduct(handle: string, slug: string) {
   const normHandle = handle.toLowerCase();
@@ -66,10 +69,26 @@ export async function generateMetadata({ params }: PageProps<"/c/[handle]/[slug]
 
 const kindLabel: Record<string, string> = { video: "Video", pdf: "PDF", text: "Reading", link: "Link", quiz: "Quiz" };
 
-export default async function ProductPage({ params }: PageProps<"/c/[handle]/[slug]">) {
+export default async function ProductPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ handle: string; slug: string }>;
+  searchParams?: Promise<{ ref?: string }>;
+}) {
   const { handle, slug } = await params;
+  const sp = searchParams ? await searchParams : undefined;
   const [product, user] = await Promise.all([getProduct(handle, slug), getCurrentUser()]);
   if (!product) notFound();
+
+  // If referral code is present in query parameters, record affiliate click
+  if (sp?.ref && typeof sp.ref === "string") {
+    recordAffiliateClick(product.creatorId, sp.ref).catch((err) =>
+      console.error("Affiliate click error:", err)
+    );
+  }
+
+  const integrations = await getCreatorIntegrations(product.creatorId);
 
   const isOwner = !!user?.creator && user.creator.id === product.creatorId;
   if (product.status !== "published" && !isOwner) notFound();
@@ -79,8 +98,13 @@ export default async function ProductPage({ params }: PageProps<"/c/[handle]/[sl
     : false;
   const c = product.creator;
 
+  const checkoutUrl = `/checkout/${product.id}${
+    sp?.ref ? `?ref=${encodeURIComponent(sp.ref)}` : ""
+  }`;
+
   return (
     <BrandScope color={c.brandColor}>
+      <TrackingPixels config={integrations.tracking} />
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
         {product.status !== "published" && (
           <p className="mb-6 rounded-xl bg-warn-soft px-4 py-3 text-sm font-medium">
@@ -143,7 +167,7 @@ export default async function ProductPage({ params }: PageProps<"/c/[handle]/[sl
               ) : isOwner ? (
                 <Link href={`/dashboard/products/${product.id}`} className="btn btn-secondary btn-lg mt-5 w-full">Edit product</Link>
               ) : product.status === "published" ? (
-                <Link href={`/checkout/${product.id}`} className="btn btn-primary btn-lg mt-5 w-full">
+                <Link href={checkoutUrl} className="btn btn-primary btn-lg mt-5 w-full">
                   {product.pricePaise === 0 ? "Get it free" : "Buy now"}
                 </Link>
               ) : null}

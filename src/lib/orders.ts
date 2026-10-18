@@ -11,6 +11,8 @@ type Tx = Prisma.TransactionClient;
 
 import { AppError } from "./errors";
 import { maybeIssueCertificate, revokeIfNoAccess } from "./learning/certificates";
+import { dispatchCreatorWebhook } from "./integrations/service";
+import { recordAffiliateConversion } from "./affiliates/service";
 
 export { AppError };
 
@@ -225,7 +227,7 @@ export async function markOrderPaid(input: {
   /** Amount the gateway says it captured (webhooks). Must equal the order total when given. */
   expectedAmountPaise?: number;
 }) {
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const order = await tx.order.findUnique({
       where: { providerOrderId: input.providerOrderId },
       include: { creator: true },
@@ -280,6 +282,38 @@ export async function markOrderPaid(input: {
     }
     return tx.order.findUniqueOrThrow({ where: { id: order.id } });
   });
+
+  if (result.status === "paid") {
+    db.order
+      .findUnique({
+        where: { id: result.id },
+        include: { product: true, user: true, coupon: true },
+      })
+      .then((fullOrder) => {
+        if (!fullOrder) return;
+        dispatchCreatorWebhook(fullOrder.creatorId, "order.paid", {
+          orderId: fullOrder.id,
+          amountPaise: fullOrder.totalPaise,
+          currency: "INR",
+          productTitle: fullOrder.product?.title || "Product",
+          productId: fullOrder.productId,
+          buyerName: fullOrder.user?.name || "Customer",
+          buyerEmail: fullOrder.user?.email || "",
+          invoiceNo: fullOrder.invoiceNo,
+          couponCode: fullOrder.coupon?.code || null,
+          provider: fullOrder.provider,
+          paidAt: fullOrder.paidAt?.toISOString(),
+        }).catch((err) => console.error("Webhook dispatch error:", err));
+
+        if (fullOrder.coupon?.code) {
+          recordAffiliateConversion(fullOrder.id, fullOrder.creatorId, fullOrder.coupon.code, fullOrder.totalPaise)
+            .catch((err) => console.error("Affiliate conversion error:", err));
+        }
+      })
+      .catch((err) => console.error("Order lookup error for webhook:", err));
+  }
+
+  return result;
 }
 
 /** Gateway reported failure. Only a still-pending order is affected; a paid order is never downgraded. */

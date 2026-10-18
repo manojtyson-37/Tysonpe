@@ -13,6 +13,9 @@ import { TestimonialsSection } from "@/components/storefront/TestimonialsSection
 import { FaqSection } from "@/components/storefront/FaqSection";
 import { NewsletterSection } from "@/components/storefront/NewsletterSection";
 import { StorefrontFooter } from "@/components/storefront/StorefrontFooter";
+import { getCreatorIntegrations } from "@/lib/integrations/service";
+import { recordAffiliateClick } from "@/lib/affiliates/service";
+import { TrackingPixels } from "@/components/integrations/TrackingPixels";
 
 async function getCreator(handle: string) {
   const normHandle = handle.toLowerCase();
@@ -84,14 +87,33 @@ export async function generateMetadata({ params }: PageProps<"/c/[handle]">): Pr
   };
 }
 
-export default async function StorefrontPage({ params }: PageProps<"/c/[handle]">) {
-  const creator = await getCreator((await params).handle);
+export default async function StorefrontPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ handle: string }>;
+  searchParams?: Promise<{ ref?: string }>;
+}) {
+  const { handle } = await params;
+  const sp = searchParams ? await searchParams : undefined;
+  const creator = await getCreator(handle);
   if (!creator) notFound();
 
-  const config = parseStorefrontConfig(creator.storefrontConfig, creator);
+  // If referral code is present in query parameters, record affiliate click
+  if (sp?.ref && typeof sp.ref === "string") {
+    recordAffiliateClick(creator.id, sp.ref).catch((err) =>
+      console.error("Affiliate click error:", err)
+    );
+  }
+
+  const [config, integrations] = await Promise.all([
+    parseStorefrontConfig(creator.storefrontConfig, creator),
+    getCreatorIntegrations(creator.id),
+  ]);
 
   return (
     <BrandScope color={creator.brandColor}>
+      <TrackingPixels config={integrations.tracking} />
       <div className="min-h-screen bg-bg text-ink selection:bg-brand selection:text-brand-ink">
         {/* 1. Announcement Bar */}
         <AnnouncementBar announcement={config.announcement} />

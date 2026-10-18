@@ -13,7 +13,8 @@ import {
   BanknoteIcon,
   SettingsIcon,
   WhatsAppIcon,
-
+  IntegrationsIcon,
+  AffiliateIcon,
 } from "./dashboard/icons";
 
 interface NavLinkItem {
@@ -30,6 +31,8 @@ const links: NavLinkItem[] = [
   { href: "/dashboard/products", label: "Products", icon: PackageIcon },
   { href: "/dashboard/orders", label: "Orders", icon: ReceiptIcon },
   { href: "/dashboard/crm", label: "WhatsApp CRM", icon: WhatsAppIcon, badge: "AI Agent" },
+  { href: "/dashboard/affiliates", label: "Affiliates", icon: AffiliateIcon, badge: "Growth" },
+  { href: "/dashboard/integrations", label: "Integrations & APIs", icon: IntegrationsIcon, badge: "Webhooks" },
   { href: "/dashboard/learners", label: "Learners", icon: UsersIcon },
   { href: "/dashboard/community", label: "Community", icon: MessageIcon },
   { href: "/dashboard/coupons", label: "Coupons", icon: TicketIcon },

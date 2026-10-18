@@ -508,7 +508,7 @@ describe("pending-order reuse (review round 2)", () => {
       createCheckoutOrder({ userId: ctx.buyer.id, productId: ctx.product.id }),
       createCheckoutOrder({ userId: ctx.buyer.id, productId: ctx.product.id }),
     ]);
-    expect(new Set(results.map((r) => r.id)).size).toBe(1);
+    expect(new Set(results.map((r: { id: string }) => r.id)).size).toBe(1);
     expect(await db.order.count({ where: { userId: ctx.buyer.id, productId: ctx.product.id } })).toBe(1);
   });
 
