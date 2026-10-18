@@ -393,6 +393,8 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
   The variables are defined on `[data-skin]` and nowhere else, so nothing outside a replica can pick them up, and the app
   palette above is not redefined. `--skin-head-*` is the dark band on a replica (the Razorpay header); a skin that is light
   throughout sets it to the same light values.
+  `--skin-money` is money written as body text on a light surface (the Easebuzz amounts); Razorpay's modal body is light, so its
+  block defines it too, although today only the header amount (`--skin-head-money`, on the dark band) shows money there.
 */
 [data-skin="razorpay"] {
   --skin-head-bg: #0b1c33;

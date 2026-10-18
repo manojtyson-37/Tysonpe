@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { settleEasebuzzDemoAction } from "@/app/actions/checkout";
+import { SkipLink } from "@/components/SkipLink";
 import {
   AxisBankIcon,
   BankIcon,
@@ -138,6 +139,7 @@ export function EasebuzzHostedPage({
 
   return (
     <div data-skin="easebuzz" className="flex min-h-screen flex-col bg-(--skin-bg) font-sans text-(--skin-ink)">
+      <SkipLink />
       {/* Top bar */}
       <header className="sticky top-0 z-30 border-b border-(--skin-line) bg-(--skin-surface)">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
@@ -178,7 +180,7 @@ export function EasebuzzHostedPage({
       </header>
 
       {/* Main content */}
-      <main className="mx-auto flex w-full max-w-6xl flex-1 items-center justify-center p-4 sm:p-6 lg:p-8">
+      <main id="main" tabIndex={-1} className="mx-auto flex w-full max-w-6xl flex-1 items-center justify-center p-4 focus:outline-none sm:p-6 lg:p-8">
         <div className="grid w-full grid-cols-1 overflow-hidden rounded-dialog border border-(--skin-line) bg-(--skin-surface) lg:grid-cols-[340px_1fr]">
           {/* Left column: order summary */}
           <div className="flex flex-col justify-between border-b border-(--skin-line) bg-(--skin-surface-2) p-6 sm:p-7 lg:border-b-0 lg:border-r">
@@ -470,7 +472,7 @@ export function EasebuzzHostedPage({
                 {/* Outcome the simulation will settle with */}
                 <fieldset className="space-y-2 rounded-card border border-(--skin-line) bg-(--skin-surface-2) p-3">
                   <legend className="t-label px-1 text-(--skin-muted)">Simulated outcome</legend>
-                  <p className="t-meta text-(--skin-muted)">You return to the store after paying.</p>
+                  <p className="t-meta text-(--skin-muted)">You return to the store when this finishes.</p>
                   <div className="grid grid-cols-3 gap-2 text-sm">
                     {outcomes.map((o) => (
                       <label key={o.id} className="relative block">

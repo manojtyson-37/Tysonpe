@@ -118,9 +118,11 @@ export function RazorpayDemoModal({
         router.push(res.to);
       } else if (view === "declined") {
         // The action answers ok with the failure page for a decline. The modal stays on the declined screen with Try again
-        // and Cancel; a forced redirect would race them.
+        // and Cancel (a forced redirect would race them); refresh re-renders the pay page behind it, which reads the
+        // order's status, so its failed banner shows without navigating.
         setStatus("failed");
         setErrorMsg(DECLINED);
+        router.refresh();
       } else {
         setStatus("failed");
         setErrorMsg(res.error || DECLINED);

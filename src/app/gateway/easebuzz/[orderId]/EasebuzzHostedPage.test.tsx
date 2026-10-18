@@ -63,6 +63,20 @@ describe("EasebuzzHostedPage: skin and honesty", () => {
   });
 });
 
+describe("EasebuzzHostedPage: skip link and main landmark", () => {
+  it("starts with a skip link to #main, and main is the focus target without an outline", () => {
+    const out = html();
+    expect(out).toMatch(/<a href="#main"[^>]*>Skip to content<\/a>/);
+    expect(out.indexOf("Skip to content")).toBeLessThan(out.indexOf("<header"));
+    expect(out).toMatch(/<main id="main" tabindex="-1" class="[^"]*focus:outline-none/);
+  });
+
+  it("the skip link is the first focusable element in the page", () => {
+    const out = html();
+    expect(out.search(/<a |<button|<input/)).toBe(out.indexOf('<a href="#main"'));
+  });
+});
+
 describe("EasebuzzHostedPage: the 15-minute clock", () => {
   it("starts at 15:00 in a timer element with tabular figures, and the timer does not announce itself", () => {
     const timer = html().match(/<span[^>]*role="timer"[^>]*>[^<]*<\/span>/)![0];
@@ -101,7 +115,7 @@ describe("EasebuzzHostedPage: controls", () => {
 
   it("the outcome note is plain language, not a developer term", () => {
     const out = html();
-    expect(out).toContain("You return to the store after paying.");
+    expect(out).toContain("You return to the store when this finishes.");
     expect(out).not.toMatch(/HTTP|303/);
   });
 

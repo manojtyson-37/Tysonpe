@@ -90,6 +90,11 @@ describe("settledView: what the Razorpay modal shows once the action answers", (
     expect(settledView({ ok: true, to: "/checkout/pay/ord_1?failed=1" })).toBe("declined");
   });
 
+  it("only the success page itself counts as success, not a path that merely starts like it", () => {
+    expect(settledView({ ok: true, to: "/checkout/success" })).toBe("declined");
+    expect(settledView({ ok: true, to: "/checkout/successful/ord_1" })).toBe("declined");
+  });
+
   it("shows an error when the action refused", () => {
     expect(settledView({ ok: false, to: "/checkout/pay/ord_1?failed=1" })).toBe("error");
     expect(settledView({ ok: false, to: "/checkout/success/ord_1" })).toBe("error");

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { contrastRatio } from "@/lib/color";
 
 // The replicas read their colours from --skin-* variables. A variable the JSX reads but the skin block does not define
 // resolves to nothing in a browser (the property is dropped), which no render test can see.
@@ -33,5 +34,17 @@ describe("gateway skin variables", () => {
   it("--skin-* variables are defined only inside the two [data-skin] blocks (no leak to :root or another scope)", () => {
     const owners = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => /(^|[;\s])--skin-[a-z0-9-]+\s*:/.test(m[2]));
     expect(owners.map((m) => m[1].trim()).sort()).toEqual(['[data-skin="easebuzz"]', '[data-skin="razorpay"]']);
+  });
+
+  it("--skin-money is legible (>= 4.5:1) on the --skin-surface it is used on, in each skin", () => {
+    const hex = (b: string, v: string) => {
+      const m = b.match(new RegExp(`(?:^|[;\\s])${v}\\s*:\\s*(#[0-9a-fA-F]{6})\\b`));
+      expect(m, `${v} must be a #rrggbb colour`).not.toBeNull();
+      return m![1];
+    };
+    for (const skin of ["razorpay", "easebuzz"]) {
+      const b = block(skin);
+      expect(contrastRatio(hex(b, "--skin-money"), hex(b, "--skin-surface")), skin).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });

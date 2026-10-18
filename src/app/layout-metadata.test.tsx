@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 // next/font/google needs the Next compiler; the metadata under test does not depend on the fonts.
@@ -54,17 +54,29 @@ describe("root layout metadata", () => {
     expect(html).toMatch(/^<html lang="en"/);
   });
 
-  it("ships no leftover create-next-app svgs", () => {
-    for (const f of ["file", "globe", "next", "vercel", "window"]) {
-      expect(() => readFileSync(path.join(process.cwd(), "public", `${f}.svg`))).toThrow();
-    }
+  it("ships no leftover create-next-app svgs: public/ is absent or holds no .svg", () => {
+    const dir = path.join(process.cwd(), "public");
+    const files = existsSync(dir) ? readdirSync(dir) : [];
+    expect(files.filter((f) => f.endsWith(".svg"))).toEqual([]);
   });
 });
 
 describe("favicon", () => {
+  const svg = () => readFileSync(path.join(process.cwd(), "src/app/icon.svg"), "utf8");
+
   it("icon.svg is the standalone logo mark: emerald square, no fonts or text", () => {
-    const svg = readFileSync(path.join(process.cwd(), "src/app/icon.svg"), "utf8");
-    expect(svg).toContain('fill="#0f7b4d"');
-    expect(svg).not.toMatch(/<text|font-family|var\(|href=/);
+    expect(svg()).toContain('fill="#0f7b4d"');
+    expect(svg()).not.toMatch(/<text|font-family|var\(|href=/);
+  });
+
+  it("draws the same mark as the Logo: emerald rounded square, white t, amber dot", () => {
+    const s = svg();
+    expect(s).toMatch(/<rect [^>]*rx="8"[^>]*fill="#0f7b4d"/);
+    expect(s).toContain('d="M7 8.5h12M13 8.5V19"');
+    expect(s).toMatch(/<circle cx="19.2" cy="17.8" r="2.1" fill="#f59e0b"/);
+  });
+
+  it("src/app/favicon.ico does not exist, so icon.svg is the only icon route", () => {
+    expect(existsSync(path.join(process.cwd(), "src/app/favicon.ico"))).toBe(false);
   });
 });

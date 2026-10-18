@@ -9,6 +9,7 @@ const H = vi.hoisted(() => ({
   slots: [] as unknown[],
   i: 0,
   push: (() => {}) as (...a: unknown[]) => unknown,
+  refresh: (() => {}) as (...a: unknown[]) => unknown,
   settle: (async () => ({})) as (...a: unknown[]) => Promise<unknown>,
 }));
 vi.mock("react", async (importOriginal) => {
@@ -25,7 +26,7 @@ vi.mock("react", async (importOriginal) => {
   const useRef = (v: unknown) => ({ current: v });
   return { ...actual, default: { ...actual, useState, useEffect, useRef }, useState, useEffect, useRef };
 });
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: (to: string) => H.push(to) }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: (to: string) => H.push(to), refresh: () => H.refresh() }) }));
 vi.mock("@/app/actions/checkout", () => ({ settleDemoAction: (...a: unknown[]) => H.settle(...a) }));
 
 import { RazorpayDemoModal, type RazorpayDemoModalProps } from "./RazorpayDemoModal";
@@ -62,6 +63,7 @@ beforeEach(() => {
   H.slots = [];
   H.i = 0;
   H.push = vi.fn();
+  H.refresh = vi.fn();
   H.settle = vi.fn(async () => ({ ok: true, to: "/checkout/success/ord_42" }));
   onClose.mockClear();
 });
@@ -79,6 +81,7 @@ describe("outcome choice reaches the settle action", () => {
     await pay(render().els);
     expect(H.settle).toHaveBeenCalledTimes(1);
     expect(H.settle).toHaveBeenCalledWith("ord_42", "success");
+    expect(H.refresh).not.toHaveBeenCalled(); // an approved payment navigates instead
   });
 
   it("settles with failure after the decline radio is picked", async () => {
@@ -115,6 +118,8 @@ describe("outcome choice reaches the settle action", () => {
     expect(H.settle).toHaveBeenCalledWith("ord_42", "failure");
     await vi.advanceTimersByTimeAsync(5000);
     expect(H.push).not.toHaveBeenCalled(); // no forced redirect racing Try again and Cancel
+    // The pay page behind the modal re-renders (its failed banner) without navigating.
+    expect(H.refresh).toHaveBeenCalledTimes(1);
     expect(byType(after.els, "button").some((e) => textOf(e.props.children) === "Try again")).toBe(true);
   });
 
@@ -130,6 +135,13 @@ describe("outcome choice reaches the settle action", () => {
     await pay(render().els);
     expect(textOf(render().els.map((e) => e.props.children))).toContain("Payment declined");
     expect(H.push).not.toHaveBeenCalled();
+    expect(H.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("a refused call (ok false) does not refresh the page behind the modal", async () => {
+    H.settle = vi.fn(async () => ({ ok: false, error: "x" }));
+    await pay(render().els);
+    expect(H.refresh).not.toHaveBeenCalled();
   });
 
   it("a chosen success with an ok answer shows the success screen", async () => {
@@ -245,6 +257,20 @@ describe("processing steps", () => {
     await vi.advanceTimersByTimeAsync(700);
     expect(stepText(render().els)).toContain("Authorizing the simulated transaction");
     await vi.advanceTimersByTimeAsync(5000);
+    await done;
+  });
+});
+
+describe("success redirect timing", () => {
+  it("shows success, then pushes the success page exactly 800ms later (not before)", async () => {
+    const done = payButton(render().els).props.onClick();
+    await vi.advanceTimersByTimeAsync(1300); // both 650ms simulated delays
+    expect(textOf(render().els.map((e) => e.props.children))).toContain("Payment successful");
+    await vi.advanceTimersByTimeAsync(799);
+    expect(H.push).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(H.push).toHaveBeenCalledTimes(1);
+    expect(H.push).toHaveBeenCalledWith("/checkout/success/ord_42");
     await done;
   });
 });
