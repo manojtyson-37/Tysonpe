@@ -95,6 +95,13 @@ describe("SignupForm: role and gateway radios are uncontrolled and survive a fai
     expect(input(html, "handle")).toBeUndefined();
   });
 
+  it("the test-mode note is tied to the gateway fieldset by id", () => {
+    const html = render();
+    const id = /<fieldset aria-describedby="([^"]+)"/.exec(html)?.[1];
+    expect(id).toBeTruthy();
+    expect(html).toContain(`<p id="${id}" class="t-meta mb-2">Payments run in test mode.</p>`);
+  });
+
   it("the radios sit in fieldsets whose first child is the legend", () => {
     const html = render();
     const sets = [...html.matchAll(/<fieldset\b[^>]*>([\s\S]*?)<\/fieldset>/g)].map((m) => m[1]);
@@ -192,6 +199,7 @@ describe("SignupForm: show/hide password (44px target, pressed state)", () => {
     expect(tag).toContain('type="button"');
     expect(tag).toContain('aria-pressed="false"');
     expect(tag).toContain('aria-label="Show password"');
+    expect(tag).toContain("focus-visible:-outline-offset-2");
     expect(tag).toContain("pointer-coarse:min-h-11");
     expect(tag).toContain("min-w-11");
   });
@@ -273,5 +281,60 @@ describe("SignupForm follows the design rules", () => {
   it("builds on the form primitives", () => {
     expect(source).toMatch(/from "\.\/form"/);
     for (const n of ["ActionForm", "RadioCard", "SubmitButton", "FormError", "InputGroup"]) expect(source).toContain(n);
+  });
+});
+
+describe("SignupForm: the whole visible copy is pinned (a blacklist such as BANNED only catches claims someone already thought of)", () => {
+  const visible = (html: string) =>
+    html
+      .replace(/<(script|svg)\b[\s\S]*?<\/\1>/g, "")
+      .replace(/<[^>]+>/g, "\n")
+      .split("\n")
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+  it("a learner form shows exactly this text, and nothing else", () => {
+    expect(visible(render("learner"))).toEqual([
+      "I want to",
+      "Sell my content",
+      "Open a storefront for courses and downloads.",
+      "Learn from creators",
+      "Buy from creators and learn in your library.",
+      "Full name",
+      "Email",
+      "Password",
+      "8 or more characters, 72 bytes at most.",
+      "Checkout gateway",
+      "Payments run in test mode.",
+      "Razorpay",
+      "Checkout opens in a pop-up on the page.",
+      "Easebuzz",
+      "Checkout moves to a hosted page with a 15-minute timer.",
+      "Create account",
+    ]);
+  });
+
+  it("a creator form shows exactly this text, and nothing else", () => {
+    expect(visible(render("creator"))).toEqual([
+      "I want to",
+      "Sell my content",
+      "Open a storefront for courses and downloads.",
+      "Learn from creators",
+      "Buy from creators and learn in your library.",
+      "Full name",
+      "Email",
+      "Password",
+      "8 or more characters, 72 bytes at most.",
+      "Store handle",
+      "/c/",
+      "Starts with a letter or number. Letters, numbers and hyphens, 3 to 30 characters.",
+      "Checkout gateway",
+      "Payments run in test mode.",
+      "Razorpay",
+      "Checkout opens in a pop-up on the page.",
+      "Easebuzz",
+      "Checkout moves to a hosted page with a 15-minute timer.",
+      "Open your store",
+    ]);
   });
 });

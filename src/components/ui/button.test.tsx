@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { createRef, type ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -10,6 +12,16 @@ describe("buttonClass", () => {
     expect(buttonClass({ variant: "secondary", size: "sm" })).toBe("btn btn-secondary btn-sm");
     expect(buttonClass({ variant: "ghost", size: "lg" })).toBe("btn btn-ghost btn-lg");
     expect(buttonClass({ variant: "danger" })).toBe("btn btn-danger");
+  });
+});
+
+describe("touch size", () => {
+  const css = readFileSync(path.resolve(import.meta.dirname, "../../app/globals.css"), "utf8");
+  const coarse = /@media \(pointer: coarse\) \{([\s\S]*?)\n  \}/.exec(css)?.[1] ?? "";
+
+  it("default and large buttons are 44px on touch; the compact one keeps its drawn size and the hit-area extension", () => {
+    expect(coarse).toContain(".btn:not(.btn-sm) { min-height: 44px; }");
+    expect(coarse).toContain(".btn::after");
   });
 });
 

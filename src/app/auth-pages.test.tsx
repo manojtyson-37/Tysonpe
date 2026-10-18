@@ -2,6 +2,7 @@ import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
+const demo = vi.hoisted(() => ({ password: null as null | string }));
 const session = vi.hoisted(() => ({ user: null as null | { id: string; name: string; creator: unknown } }));
 
 vi.mock("next/navigation", () => ({
@@ -21,9 +22,11 @@ vi.mock("@/lib/auth/session", async (importActual) => ({
   getCurrentUser: async () => session.user,
   requireUser: async () => ({ id: "u1", name: "Asha Rao", creator: null }),
 }));
+vi.mock("@/lib/demo", () => ({ demoLoginPassword: () => demo.password, DEMO_HANDLE: "" }));
 vi.mock("@/components/SiteNav", () => ({ SiteNav: () => <nav data-testid="site-nav" /> }));
 
 import { AuthShell } from "@/components/AuthShell";
+import { LoginForm } from "@/components/LoginForm";
 import { SignupForm } from "@/components/SignupForm";
 import LoginPage from "./(site)/login/page";
 import SignupPage, { generateMetadata as signupMetadata } from "./(site)/signup/page";
@@ -122,5 +125,47 @@ describe("the auth pages render through AuthShell", () => {
     expect(out).toContain("Pick the name and link buyers will see.");
     expect(out).toContain('name="handle"');
     expect(out).not.toContain("text-center text-sm text-muted");
+  });
+});
+
+describe("the pages hand the forms what they act on (mutation survivors M80 to M83, M87, M91)", () => {
+  const props = async <T,>(page: Promise<ReactNode>, form: unknown) => {
+    const found = elementsOfType(await page, form);
+    expect(found).toHaveLength(1);
+    return found[0].props as T;
+  };
+
+  it("sign up passes a safe next to SignupForm, and drops an unsafe one", async () => {
+    expect((await props<{ next?: string }>(SignupPage(params({ next: "/library/p1" })), SignupForm)).next).toBe("/library/p1");
+    expect((await props<{ next?: string }>(SignupPage(params()), SignupForm)).next).toBeUndefined();
+    expect((await props<{ next?: string }>(SignupPage(params({ next: "https://evil.example" })), SignupForm)).next).toBeUndefined();
+  });
+
+  it("log in passes a safe next to LoginForm, and drops an unsafe one", async () => {
+    expect((await props<{ next?: string }>(LoginPage(params({ next: "/library/p1" })), LoginForm)).next).toBe("/library/p1");
+    expect((await props<{ next?: string }>(LoginPage(params()), LoginForm)).next).toBeUndefined();
+    expect((await props<{ next?: string }>(LoginPage(params({ next: "//evil.example" })), LoginForm)).next).toBeUndefined();
+  });
+
+  it("log in shows the demo accounts only where lib/demo says so", async () => {
+    demo.password = null;
+    expect((await props<{ demoPassword?: string }>(LoginPage(params()), LoginForm)).demoPassword).toBeUndefined();
+    expect(html(await LoginPage(params()))).not.toContain("demo.tysonpe.test");
+    demo.password = "pw-demo";
+    expect((await props<{ demoPassword?: string }>(LoginPage(params()), LoginForm)).demoPassword).toBe("pw-demo");
+    expect(html(await LoginPage(params()))).toContain("Asha (creator)");
+    expect(html(await LoginPage(params()))).not.toContain("pw-demo");
+    demo.password = null;
+  });
+
+  it("a signed-in user visiting sign up goes to next, else the library", async () => {
+    session.user = { id: "u1", name: "Asha", creator: null };
+    await expect(SignupPage(params({ next: "/library/p1" }))).rejects.toThrow("REDIRECT /library/p1");
+    await expect(SignupPage(params({ next: "https://evil.example" }))).rejects.toThrow("REDIRECT /library");
+    session.user = null;
+  });
+
+  it("sign up's subtitle is exactly the promised line, nothing appended", async () => {
+    expect(html(await SignupPage(params()))).toMatch(/<p class="[^"]*">Free to start\. No card needed\.<\/p>/);
   });
 });

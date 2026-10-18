@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { login } from "@/app/actions/auth";
 import { Button } from "./ui/button";
 import { ActionForm, FormError, Input, SubmitButton } from "./form";
@@ -12,7 +12,9 @@ const DEMO_ACCOUNTS = [
 
 export function LoginForm({ next, demoPassword }: { next?: string; demoPassword?: string }) {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  // The password is uncontrolled: a controlled value is mirrored into the DOM value attribute, where devtools and
+  // attribute selectors can read it. The demo fill writes it straight to the input instead.
+  const passwordRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="space-y-5">
@@ -30,7 +32,7 @@ export function LoginForm({ next, demoPassword }: { next?: string; demoPassword?
                 className="flex-col items-start gap-0.5 text-left"
                 onClick={() => {
                   setEmail(a.email);
-                  setPassword(demoPassword);
+                  if (passwordRef.current) passwordRef.current.value = demoPassword;
                 }}
               >
                 <span>{a.who}</span>
@@ -61,8 +63,7 @@ export function LoginForm({ next, demoPassword }: { next?: string; demoPassword?
           name="password"
           label="Password"
           type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          ref={passwordRef}
           autoComplete="current-password"
           required
         />

@@ -42,6 +42,12 @@ describe("LoginForm fields", () => {
     expect(input(html, "password")).toContain("required");
   });
 
+  it("renders the password input without any value attribute: it is uncontrolled, so a typed password is never mirrored into the DOM", () => {
+    expect(input(render(), "password")).not.toContain("value=");
+    expect(input(render({ demoPassword: "pw-demo" }), "password")).not.toContain("value=");
+    expect(input(render({ demoPassword: "pw-demo" }), "email")).toContain('value=""');
+  });
+
   it("labels both fields", () => {
     const html = render();
     expect(html).toMatch(/<label[^>]*for="[^"]+"[^>]*>Email<\/label>/);
@@ -119,5 +125,26 @@ describe("LoginForm follows the design rules", () => {
   });
   it("carries none of the invented claims", () => {
     for (const phrase of ["256-bit", "PCI", "T+1", "tysonpe.com", "Secure", "Instant UPI", "1-Click Fill"]) expect(source).not.toContain(phrase);
+  });
+});
+
+describe("LoginForm: the whole visible copy is pinned (a blacklist only catches claims someone already thought of)", () => {
+  const visible = (html: string) =>
+    html
+      .replace(/<(script|svg)\b[\s\S]*?<\/\1>/g, "")
+      .replace(/<[^>]+>/g, "\n")
+      .split("\n")
+      .map((t) => t.trim())
+      .filter(Boolean);
+  const FORM = ["Email", "Password", "Log in"];
+  const DEMO = ["Demo accounts", "Fill the form with a seeded test account.", "Asha (creator)", "Opens /dashboard", "Ravi (learner)", "Opens /library"];
+
+  it("without demo accounts it shows exactly the two fields and the button", () => {
+    expect(visible(render())).toEqual(FORM);
+  });
+
+  it("with demo accounts it shows exactly this text, and with a next target no route line", () => {
+    expect(visible(render({ demoPassword: "pw" }))).toEqual([...DEMO, ...FORM]);
+    expect(visible(render({ demoPassword: "pw", next: "/library/p1" }))).toEqual(["Demo accounts", "Fill the form with a seeded test account.", "Asha (creator)", "Ravi (learner)", ...FORM]);
   });
 });

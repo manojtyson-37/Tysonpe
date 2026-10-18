@@ -42,7 +42,7 @@ import { InputGroup } from "./form";
 import { SignupFields } from "./SignupForm";
 
 type P = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
-type El = { type: unknown; props: P };
+type El = { type: unknown; props: P; key: string | null };
 
 // Local wrapper components of SignupForm.tsx are called here (their hooks run on the same store) and replaced by what
 // they render, so the primitives they put on screen are what the tests see. Primitives from ./form are never called.
@@ -56,7 +56,7 @@ function walk(node: ReactNode, out: El[] = []): El[] {
       walk((node.type as (p: P) => ReactNode)(props), out);
       return out;
     }
-    out.push({ type: node.type, props });
+    out.push({ type: node.type, props, key: node.key });
     walk(props.children, out);
     for (const slot of ["trailing", "suffix", "prefix", "hint", "label"]) if (props[slot] && typeof props[slot] === "object") walk(props[slot], out);
   }
@@ -174,12 +174,14 @@ describe("SignupFields: the handle (audit B3, B6)", () => {
     expect(m.handle()!.value).toBe("my-shop");
   });
 
-  it("while typing: lowercases and drops characters outside a-z 0-9 hyphen, but never trims a hyphen", () => {
+  it("while typing: lowercases and drops characters outside a-z 0-9 hyphen, never starts with a hyphen, never trims a trailing one", () => {
     const m = mount("creator");
     m.type("handle", "My Shop_9!-");
     expect(m.handle()!.value).toBe("myshop9-");
     m.type("handle", "-lead");
-    expect(m.handle()!.value).toBe("-lead");
+    expect(m.handle()!.value).toBe("lead");
+    m.type("handle", "---a-b");
+    expect(m.handle()!.value).toBe("a-b");
   });
 
   it("caps what is typed at 30 characters", () => {
@@ -234,6 +236,7 @@ describe("SignupFields: the handle (audit B3, B6)", () => {
     const text = (node: ReactNode): string =>
       typeof node === "string" ? node : walk(node).map((e) => e.props.children).flat().filter((c) => typeof c === "string").join("");
     expect(text(m.handle()!.hint)).toMatch(/3 to 30/);
+    expect(text(m.handle()!.hint)).toMatch(/Starts with a letter or number/);
     m.type("handle", "my-shop");
     const hint = m.handle()!.hint;
     expect(text(hint)).toContain("Your store address:");
@@ -256,7 +259,7 @@ describe("SignupFields: the handle (audit B3, B6)", () => {
 });
 
 describe("SignupFields: show/hide password", () => {
-  it("toggles the field type and aria-pressed, name and label", () => {
+  it("toggles the field type and aria-pressed; the accessible name stays fixed so the state is announced once", () => {
     const m = mount();
     const pw = () => m.all().find((e) => e.type === InputGroup && e.props.name === "password")!.props;
     expect(pw().type).toBe("password");
@@ -265,7 +268,7 @@ describe("SignupFields: show/hide password", () => {
     m.click(m.toggle());
     expect(pw().type).toBe("text");
     expect(m.toggle().props["aria-pressed"]).toBe(true);
-    expect(m.toggle().props["aria-label"]).toBe("Hide password");
+    expect(m.toggle().props["aria-label"]).toBe("Show password");
     m.click(m.toggle());
     expect(pw().type).toBe("password");
   });
@@ -277,10 +280,28 @@ describe("SignupFields: show/hide password", () => {
     expect(t.className).toContain("min-w-11");
   });
 
+  it("the toggle draws its own inset focus ring (the group ring does not show when the button itself is focused)", () => {
+    const cls = mount().toggle().props.className as string;
+    expect(cls).toContain("focus-visible:outline-2");
+    expect(cls).toContain("focus-visible:-outline-offset-2");
+    expect(cls).toContain("focus-visible:outline-ink");
+    expect(cls).not.toContain("focus-visible:outline-none");
+  });
+
   it("the password is uncontrolled: no value or defaultValue is ever set on it", () => {
     const pw = mount().all().find((e) => e.type === InputGroup && e.props.name === "password")!.props;
     expect("value" in pw).toBe(false);
     expect("defaultValue" in pw).toBe(false);
+  });
+});
+
+describe("SignupFields: the test-mode note belongs to the gateway fieldset", () => {
+  it("the fieldset is described by the note's id", () => {
+    const els = mount().all();
+    const set = els.filter((e) => e.type === "fieldset").at(-1)!;
+    const note = els.find((e) => e.type === "p" && e.props.id)!;
+    expect(set.props["aria-describedby"]).toBe(note.props.id);
+    expect(note.props.children).toBe("Payments run in test mode.");
   });
 });
 
@@ -291,5 +312,41 @@ describe("SignupFields: errors reach the fields", () => {
     expect(m.one("name").props.error).toBe("Enter your name");
     expect(m.one("email").props.error).toBe("Enter a valid email");
     expect(m.one("password").props.error).toBe("Use at least 8 characters");
+  });
+});
+
+describe("SignupFields: restore and remount contract (mutation survivors M38, M40, M41, M42, M49)", () => {
+  it("a handle suggested from a name with leading symbols never starts with a hyphen", () => {
+    const m = mount("creator");
+    m.type("name", "(Asha) Rao");
+    expect(m.handle()!.value).toBe("asha-rao");
+  });
+
+  it("restores the submitted name, so a creator's suggested handle survives a failed submit", () => {
+    H.values = { role: "creator", name: "Asha Rao" };
+    const m = mount("creator");
+    expect(m.handle()!.value).toBe("asha-rao");
+  });
+
+  it("text fields are keyed by name + the server-returned value: they remount when it changes, never while typing", () => {
+    const keyOf = (values?: Record<string, string>) => {
+      H.values = values;
+      return mount("creator").one("email").key;
+    };
+    expect(keyOf(undefined)).toBe("email:");
+    expect(keyOf({ email: "a@example.com" })).toBe("email:a@example.com");
+    expect(keyOf({ email: "b@example.com" })).not.toBe(keyOf({ email: "a@example.com" }));
+    const m = mount("creator");
+    const before = m.one("name").key;
+    m.type("name", "Asha");
+    expect(m.one("name").key).toBe(before);
+  });
+
+  it("the pending text names what the submit is doing, per role", () => {
+    const pending = (m: ReturnType<typeof mount>) => m.all().find((e) => e.props.pendingText)?.props.pendingText;
+    const m = mount("learner");
+    expect(pending(m)).toBe("Creating account\u2026");
+    m.pickRole("creator");
+    expect(pending(m)).toBe("Opening your store\u2026");
   });
 });

@@ -4,7 +4,9 @@ import {
   createContext,
   useActionState,
   useContext,
+  useEffect,
   useId,
+  useRef,
   useState,
   type ComponentProps,
   type ReactNode,
@@ -39,9 +41,16 @@ export function ActionForm({
     }
     return { ...res, values };
   }, undefined);
+  const formRef = useRef<HTMLFormElement>(null);
+  // After a failed submit, hand focus to the first invalid field so keyboard and screen-reader users land on the
+  // problem (the fields remount with the returned values, which would otherwise drop focus to the page).
+  useEffect(() => {
+    if (!state?.fields) return;
+    formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [state]);
   return (
     <Ctx.Provider value={state}>
-      <form action={formAction} className={className}>
+      <form ref={formRef} action={formAction} className={className}>
         {children}
       </form>
     </Ctx.Provider>

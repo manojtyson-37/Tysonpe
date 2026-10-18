@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { signup } from "@/app/actions/auth";
 import { ActionForm, FormError, Input, InputGroup, RadioCard, SubmitButton, useFormError, useFormValues, type InputProps } from "./form";
 import { IconEye, IconEyeOff } from "./icons";
@@ -22,11 +22,12 @@ import {
 const HANDLE_MAX = 30;
 
 /**
- * What the handle box accepts while the user types: lowercase letters, digits and hyphens only. It must not trim or
- * collapse, or typing "my-shop" would lose its hyphen the moment it is typed.
+ * What the handle box accepts while the user types: lowercase letters, digits and hyphens, never starting with a
+ * hyphen (the server needs a letter or number first). It must not trim a TRAILING hyphen or collapse, or typing
+ * "my-shop" would lose its hyphen the moment it is typed.
  */
 export function cleanHandleInput(raw: string): string {
-  return raw.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, HANDLE_MAX);
+  return raw.toLowerCase().replace(/[^a-z0-9-]/g, "").replace(/^-+/, "").slice(0, HANDLE_MAX);
 }
 
 /** A handle to offer from the name: a full slug (trimmed, collapsed), capped, never ending in a hyphen. */
@@ -69,9 +70,9 @@ function PasswordInput() {
         <button
           type="button"
           aria-pressed={shown}
-          aria-label={shown ? "Hide password" : "Show password"}
+          aria-label="Show password"
           onClick={() => setShown((v) => !v)}
-          className="-mx-3 flex min-w-11 items-center justify-center self-stretch text-muted transition-colors duration-(--dur-fast) ease-(--ease-standard) hover:text-ink focus-visible:outline-none pointer-coarse:min-h-11"
+          className="-mx-3 flex min-w-11 items-center justify-center self-stretch text-muted transition-colors duration-(--dur-fast) ease-(--ease-standard) hover:text-ink focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ink pointer-coarse:min-h-11"
         >
           {shown ? <IconEyeOff size={18} /> : <IconEye size={18} />}
         </button>
@@ -114,10 +115,12 @@ export function SignupFields({ initialRole }: { initialRole: "learner" | "creato
   const [pickedRole, setPickedRole] = useState<string | null>(null);
   const role = pickedRole ?? submitted?.role ?? initialRole;
   const gateway = submitted?.preferredGateway ?? "razorpay";
+  const gatewayNoteId = `${useId()}-gateway-note`;
 
   const [name, setName] = useState(submitted?.name ?? "");
-  // null until the user touches the handle: then the box follows the name. A handle that came back from a failed
-  // submit counts as typed.
+  // null until the user touches the handle: then the box follows the name. SignupFields stays mounted across submits,
+  // so these initialisers only matter for a first render that already carries a failed submit (a no-JS post answered
+  // by the server); a handle that came back that way counts as typed.
   const [typedHandle, setTypedHandle] = useState<string | null>(submitted?.handle ?? null);
   const handle = typedHandle ?? suggestHandle(name);
 
@@ -180,15 +183,15 @@ export function SignupFields({ initialRole }: { initialRole: "learner" | "creato
                 Your store address: <span className="font-mono text-ink">/c/{handle}</span>
               </>
             ) : (
-              "Letters, numbers and hyphens, 3 to 30 characters."
+              "Starts with a letter or number. Letters, numbers and hyphens, 3 to 30 characters."
             )
           }
         />
       )}
 
-      <fieldset>
+      <fieldset aria-describedby={gatewayNoteId}>
         <legend className="label">Checkout gateway</legend>
-        <p className="t-meta mb-2">Payments run in test mode.</p>
+        <p id={gatewayNoteId} className="t-meta mb-2">Payments run in test mode.</p>
         <div className="space-y-2">
           {GATEWAYS.map((g) => (
             <RadioCard

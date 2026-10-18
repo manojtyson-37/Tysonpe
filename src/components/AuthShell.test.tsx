@@ -14,7 +14,9 @@ describe("AuthShell", () => {
     expect(html).toMatch(/<h1[^>]*>Welcome back<\/h1>/);
     expect(html).toMatch(/<p class="mt-1 text-sm text-muted">Log in to continue\.<\/p>/);
     expect(html).toMatch(/<div class="card mt-6 p-6"><form id="the-form"><\/form><\/div>/);
-    expect(html).toMatch(/<p class="mt-5 text-center text-sm text-muted"><a href="\/signup">Create an account<\/a><\/p>/);
+    expect(html).toContain(
+      '<p class="mt-5 text-center text-sm text-muted [&amp;_a]:inline-flex [&amp;_a]:items-center [&amp;_a]:pointer-coarse:min-h-11"><a href="/signup">Create an account</a></p>',
+    );
   });
 
   it("keeps the narrow centred column", () => {

@@ -5,7 +5,7 @@
 import { isValidElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-const H = vi.hoisted(() => ({ slots: [] as unknown[], i: 0 }));
+const H = vi.hoisted(() => ({ slots: [] as unknown[], i: 0, ref: { current: null as null | { value: string } } }));
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const useState = (init: unknown) => {
@@ -16,7 +16,8 @@ vi.mock("react", async (importOriginal) => {
     };
     return [H.slots[idx], set];
   };
-  return { ...actual, default: { ...actual, useState }, useState };
+  const useRef = () => H.ref;
+  return { ...actual, default: { ...actual, useState, useRef }, useState, useRef };
 });
 vi.mock("@/app/actions/auth", () => ({ login: async () => ({}) }));
 
@@ -40,6 +41,7 @@ const textOf = (node: ReactNode): string =>
 
 function mount(props: { next?: string; demoPassword?: string }) {
   H.slots = [];
+  H.ref = { current: { value: "" } }; // the test plays the DOM: the password input
   let els: El[] = [];
   const render = () => {
     H.i = 0;
@@ -58,7 +60,17 @@ describe("LoginForm demo fill", () => {
     m.demo("Asha").props.onClick();
     m.render();
     expect(m.field("email").value).toBe("asha@demo.tysonpe.test");
-    expect(m.field("password").value).toBe("pw-demo");
+    expect(H.ref.current!.value).toBe("pw-demo");
+  });
+
+  it("the password is uncontrolled: no value prop, the demo fill goes through the input's ref", () => {
+    const m = mount({ demoPassword: "pw-demo" });
+    expect("value" in m.field("password")).toBe(false);
+    expect(m.field("password").ref).toBe(H.ref);
+    m.demo("Ravi").props.onClick();
+    m.render();
+    expect("value" in m.field("password")).toBe(false);
+    expect(H.ref.current!.value).toBe("pw-demo");
   });
 
   it("Ravi fills the learner account", () => {
@@ -66,7 +78,7 @@ describe("LoginForm demo fill", () => {
     m.demo("Ravi").props.onClick();
     m.render();
     expect(m.field("email").value).toBe("learner@demo.tysonpe.test");
-    expect(m.field("password").value).toBe("pw-demo");
+    expect(H.ref.current!.value).toBe("pw-demo");
   });
 
   it("typing still works after a fill", () => {

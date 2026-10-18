@@ -227,6 +227,9 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
       inset-inline: 0;
       inset-block: min(0px, calc((100% - 44px) / 2));
     }
+    /* Default and large buttons (the submit of every form) are drawn at 44px on touch. The compact `btn-sm` keeps its
+       drawn size and relies on the hit-area extension above, because it sits in dense rows. */
+    .btn:not(.btn-sm) { min-height: 44px; }
   }
 
   .input {
