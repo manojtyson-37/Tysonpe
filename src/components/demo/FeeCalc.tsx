@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { Money, MoneyCell, Table, Td, Th, Tr } from "@/components/ui";
+import { Money, MoneyCell, Table, Td, HeadRow, Th, Tr } from "@/components/ui";
 import {
   DEFAULT_SALES_RUPEES,
   SALES_MAX_RUPEES,
@@ -68,12 +68,12 @@ export function FeeCalc() {
 
       <Table caption="Take-home by plan after the monthly plan fee" stack labelCase="sentence" className="mt-4">
         <thead>
-          <tr>
+          <HeadRow>
             <Th>Plan</Th>
             <Th>Fees</Th>
             <Th align="right">Monthly plan fee</Th>
             <Th align="right">Take-home</Th>
-          </tr>
+          </HeadRow>
         </thead>
         <tbody>
           {rows.map((r) => (

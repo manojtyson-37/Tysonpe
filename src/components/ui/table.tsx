@@ -67,8 +67,9 @@ export type TableProps = TableName & {
  * hairlines and the head carries the `.t-label` style. Compose with <thead>/<tbody>, Tr, Th and Td.
  *
  * The wrapper always reserves a fixed `pr-5` of end padding (from `sm` up with `stack`) for the scroll fade,
- * so do not override its right padding via `className`. Header rows should use a plain <tr>, not Tr, which
- * applies a hover fill meant for body rows. Needs `caption` or `aria-label` (it names the focusable region).
+ * so do not override its right padding via `className`. Header rows use HeadRow, not Tr (whose hover fill is meant
+ * for body rows) and not a bare <tr> (which has no role="row", leaving its column headers without a row in WebKit's
+ * stack mode). Needs `caption` or `aria-label` (it names the focusable region).
  */
 export function Table({ children, className, caption, "aria-label": ariaLabel, stickyHeader = false, stack = false, labelCase = "upper" }: TableProps) {
   const regionName = ariaLabel ?? caption;
@@ -109,6 +110,14 @@ export function Th({
       {...rest}
     />
   );
+}
+
+/**
+ * The row inside <thead>: always role="row" (the Table pins explicit ARIA roles, so a header row without one leaves its
+ * column headers with no row parent), and no hover fill. The role comes last so a caller cannot replace it.
+ */
+export function HeadRow({ className, ...rest }: ComponentPropsWithoutRef<"tr">) {
+  return <tr className={className} {...rest} role="row" />;
 }
 
 /** A row with a hover fill and no other motion. */

@@ -3,7 +3,7 @@ import { HomeInteractiveDemo } from "@/components/HomeInteractiveDemo";
 import { Logo } from "@/components/Logo";
 import { CheckoutFragment, InvoiceFragment, PayoutsFragment } from "@/components/landing/Fragments";
 import { HeroLedger } from "@/components/landing/HeroLedger";
-import { ButtonLink, MoneyCell, Table, Td, Th } from "@/components/ui";
+import { ButtonLink, MoneyCell, Table, Td, HeadRow, Th } from "@/components/ui";
 import { DEMO_HANDLE } from "@/lib/demo";
 import { DEFAULT_LEDGER, PLAN_OPTIONS, ledgerFor } from "@/lib/landing-ledger";
 import { formatINR } from "@/lib/money";
@@ -169,13 +169,13 @@ export default function Home() {
           {/* Plain rows (marketing rows are not clickable, so no Tr hover fill) that still carry the role="row" the Table pins for WebKit's stack mode. */}
           <Table caption={`Fees by plan for one ${SALE_TEXT} sale`} stack labelCase="sentence" className="mt-10">
             <thead>
-              <tr role="row">
+              <HeadRow>
                 <Th className={HEAD}>Plan</Th>
                 <Th align="right" className={HEAD}>Monthly</Th>
                 <Th align="right" className={HEAD}>Platform fee</Th>
                 <Th align="right" className={HEAD}>Gateway fee</Th>
                 <Th align="right" className={HEAD}>Net after fees</Th>
-              </tr>
+              </HeadRow>
             </thead>
             <tbody>
               {PLANS.map((p) => (

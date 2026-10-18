@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DateCell, EmptyRow, Money, MoneyCell, PageHeader, StatStrip, Table, Td, Th, Tr } from "@/components/ui";
+import { DateCell, EmptyRow, Money, MoneyCell, PageHeader, StatStrip, Table, Td, HeadRow, Th, Tr } from "@/components/ui";
 import { requireCreator } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 
@@ -42,14 +42,14 @@ export default async function PayoutsPage() {
       />
       <Table aria-label="Ledger" stack className="mt-6">
         <thead>
-          <tr>
+          <HeadRow>
             <Th>Date</Th>
             <Th>Order</Th>
             <Th align="right">Gross</Th>
             <Th align="right">Platform</Th>
             <Th align="right">Gateway</Th>
             <Th align="right">Net</Th>
-          </tr>
+          </HeadRow>
         </thead>
         <tbody>
           {entries.length === 0 ? (

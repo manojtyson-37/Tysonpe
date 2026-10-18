@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { headRowTags } from "@/test/table-rows";
 
 // The creator is cr_1. vi.mock factories are hoisted, so the id is written inline there.
 const mocks = vi.hoisted(() => ({
@@ -83,6 +84,12 @@ describe("products list: structure", () => {
     expect(html).not.toMatch(/class="[^"]*\bcard\b/);
     expect(html).not.toMatch(/class="[^"]*\btable\b/);
     expect(html).not.toContain("hover:text-brand");
+  });
+});
+
+describe("products list: header row", () => {
+  it("is marked role=row, like every body row", async () => {
+    expect(headRowTags(await render())).toEqual(['<tr role="row">']);
   });
 });
 

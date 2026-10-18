@@ -41,8 +41,9 @@ export function HeroLedger({ gstRates }: { gstRates: readonly number[] }) {
     if (PLAN_OPTIONS.some((p) => p.key === e.target.value)) setPlanKey(e.target.value);
   };
 
-  // The live region is announced on its own, so it says when the figure belongs to the sample price and not the typed one.
-  const netLabel = `${l.usedDefault ? `Price not read, showing the ${formatINR(DEFAULT_PRICE_RUPEES * 100)} sample. ` : ""}Net after fees `;
+  // The live region is announced on its own, so it says when the figure belongs to the sample price and not the typed one. While
+  // usedDefault is set the ledger IS the sample, so the amount shown is read from it and not retyped here.
+  const netLabel = `${l.usedDefault ? `Not a usable price, showing the ${formatINR(l.salePaise)} sample. ` : ""}Net after fees `;
 
   const planNote = l.planLive
     ? "Monthly plan fees are not netted."
@@ -73,7 +74,7 @@ export function HeroLedger({ gstRates }: { gstRates: readonly number[] }) {
             aria-invalid={l.usedDefault || undefined}
             hint={
               l.usedDefault
-                ? `Enter whole rupees from ${formatINR(MIN_PRICE_RUPEES * 100)} to ${formatINR(MAX_PRICE_RUPEES * 100)}. Showing ${formatINR(DEFAULT_PRICE_RUPEES * 100)} until then.`
+                ? `Enter whole rupees from ${formatINR(MIN_PRICE_RUPEES * 100)} to ${formatINR(MAX_PRICE_RUPEES * 100)}. Showing ${formatINR(l.salePaise)} until then.`
                 : "Whole rupees. GST is already inside this price."
             }
             className="sm:col-span-2"

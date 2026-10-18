@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Avatar, Callout, EmptyRow, Table, Tabs, Td, Th, Tr } from "@/components/ui";
+import { Avatar, Callout, EmptyRow, Table, Tabs, Td, HeadRow, Th, Tr } from "@/components/ui";
 import { requireUser } from "@/lib/auth/session";
 import { ensureDefaultChannel, listChannelsFor } from "@/lib/community/channels";
 import { resolveCommunity } from "@/lib/community/viewer";
@@ -49,12 +49,12 @@ export default async function LeaderboardPage({
 
       <Table aria-label="Leaderboard" stack>
         <thead>
-          <tr>
+          <HeadRow>
             <Th>Rank</Th>
             <Th>Member</Th>
             <Th>Level</Th>
             <Th align="right">Points</Th>
-          </tr>
+          </HeadRow>
         </thead>
         <tbody>
           {lb.top.length === 0 ? (

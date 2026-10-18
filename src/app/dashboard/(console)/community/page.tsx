@@ -6,7 +6,7 @@ import {
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ChannelForm } from "@/components/community/ChannelForm";
 import { IconArrowDown, IconArrowUp, IconExternal } from "@/components/icons";
-import { Button, ButtonLink, DateCell, Disclosure, PageHeader, RowActions, Table, Td, Th, Tr } from "@/components/ui";
+import { Button, ButtonLink, DateCell, Disclosure, PageHeader, RowActions, Table, Td, HeadRow, Th, Tr } from "@/components/ui";
 import { requireCreator } from "@/lib/auth/session";
 import { ensureDefaultChannel, listChannelsAdmin } from "@/lib/community/channels";
 import { listBans } from "@/lib/community/posts";
@@ -112,11 +112,11 @@ export default async function CommunityConsole() {
               <div className="mt-3 border-t border-line">
                 <Table aria-label="Banned members" stack>
                   <thead>
-                    <tr>
+                    <HeadRow>
                       <Th>Member</Th>
                       <Th>Since</Th>
                       <Th><span className="sr-only">Actions</span></Th>
-                    </tr>
+                    </HeadRow>
                   </thead>
                   <tbody>
                     {bans.map((b) => (

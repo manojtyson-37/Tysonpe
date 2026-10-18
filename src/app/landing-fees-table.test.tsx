@@ -10,6 +10,7 @@ vi.mock("next/navigation", () => ({
 
 import Home from "./(site)/page";
 import { FeeCalc } from "@/components/demo/FeeCalc";
+import { headRowTags } from "@/test/table-rows";
 
 const html = renderToStaticMarkup(<Home />);
 const fees = [...html.matchAll(/<section\b[^>]*>[\s\S]*?<\/section>/g)].map((m) => m[0]).find((s) => s.includes('id="fees-h"'))!;
@@ -29,5 +30,10 @@ describe("landing fees table: phone labels", () => {
     const calc = renderToStaticMarkup(<FeeCalc />);
     expect(calc).toContain('data-stack="true"');
     expect(calc).not.toContain("before:uppercase");
+  });
+
+  it("marks the header rows of both tables role=row, so their columnheaders have a row to belong to", () => {
+    expect(headRowTags(fees)).toEqual(['<tr role="row">']);
+    expect(headRowTags(renderToStaticMarkup(<FeeCalc />))).toEqual(['<tr role="row">']);
   });
 });

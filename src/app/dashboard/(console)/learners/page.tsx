@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Avatar, DateCell, EmptyRow, PageHeader, Table, Td, Th, Tr } from "@/components/ui";
+import { Avatar, DateCell, EmptyRow, PageHeader, Table, Td, HeadRow, Th, Tr } from "@/components/ui";
 import { requireCreator } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 
@@ -34,11 +34,11 @@ export default async function LearnersPage() {
       <PageHeader title={PAGE_TITLE} sub={sub} />
       <Table aria-label="Learners" stack>
         <thead>
-          <tr>
+          <HeadRow>
             <Th>Learner</Th>
             <Th>Product</Th>
             <Th>Joined</Th>
-          </tr>
+          </HeadRow>
         </thead>
         <tbody>
           {enrollments.length === 0 ? (

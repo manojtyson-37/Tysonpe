@@ -7,8 +7,8 @@ const noSubscription = () => () => {};
 const lacksObserver = () => typeof IntersectionObserver === "undefined";
 
 /**
- * True once the referenced element has first scrolled into view, and then for good. The observer watches until the first
- * intersection and disconnects, so a later scroll away and back does not fire anything. Without IntersectionObserver
+ * True once the referenced element has first scrolled into view (at least `threshold` of it visible), and then for good.
+ * The observer watches until the first such entry and disconnects, so a later scroll away and back does not fire anything. Without IntersectionObserver
  * (old browsers, non-DOM runtimes) it reports true from the first client render, so the thing it gates still happens.
  * The server render and hydration both report false (the server snapshot), so hydration matches.
  */
@@ -22,7 +22,9 @@ export function useInViewOnce(ref: RefObject<Element | null>, threshold: number 
     if (!element) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (!entries.some((entry) => entry.isIntersecting)) return;
+        // isIntersecting is true for any overlap, and the observer delivers an opening entry as soon as it starts watching,
+        // so the ratio is checked against the threshold too: only a genuinely visible element counts as seen.
+        if (!entries.some((entry) => entry.isIntersecting && entry.intersectionRatio >= threshold)) return;
         setSeen(true);
         observer.disconnect();
       },

@@ -53,4 +53,28 @@ describe("session clock: the demo's shared countdown, outside React", () => {
     expect(one.get()).toBe(9);
     expect(two.get()).toBe(10);
   });
+
+  it("start() twice runs one interval: the clock ticks once a second, not twice, and one stop ends it", () => {
+    const clock = createSessionClock(10);
+    const first = clock.start();
+    const second = clock.start();
+    expect(vi.getTimerCount()).toBe(1);
+    vi.advanceTimersByTime(3000);
+    expect(clock.get()).toBe(7);
+    second();
+    expect(vi.getTimerCount()).toBe(0);
+    first(); // stopping again is harmless
+    vi.advanceTimersByTime(3000);
+    expect(clock.get()).toBe(7);
+  });
+
+  it("can be started again after it was stopped (the effect cleanup and re-run of React's dev double-invoke)", () => {
+    const clock = createSessionClock(10);
+    clock.start()();
+    expect(vi.getTimerCount()).toBe(0);
+    clock.start();
+    expect(vi.getTimerCount()).toBe(1);
+    vi.advanceTimersByTime(2000);
+    expect(clock.get()).toBe(8);
+  });
 });

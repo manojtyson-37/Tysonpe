@@ -14,6 +14,7 @@ import {
   StatusBadge,
   Table,
   Td,
+  HeadRow,
   Th,
   Tr,
 } from "@/components/ui";
@@ -124,13 +125,13 @@ export default async function Overview() {
         </div>
         <Table caption="Recent orders" stack className="mt-2">
           <thead>
-            <tr>
+            <HeadRow>
               <Th>Product</Th>
               <Th>Learner</Th>
               <Th>Status</Th>
               <Th align="right">Amount</Th>
               <Th>Date</Th>
-            </tr>
+            </HeadRow>
           </thead>
           <tbody>
             {recent.length === 0 ? (

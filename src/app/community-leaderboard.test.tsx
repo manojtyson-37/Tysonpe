@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { headRowTags } from "@/test/table-rows";
 
 const M = vi.hoisted(() => ({
   path: "/c/meera/community/leaderboard",
@@ -113,6 +114,10 @@ describe("leaderboard: the ranking table", () => {
     expect([...html.matchAll(/<th\b[^>]*>(.*?)<\/th>/g)].map((m) => text(m[1]).trim())).toEqual(["Rank", "Member", "Level", "Points"]);
     for (const l of ["Rank", "Member", "Level", "Points"]) expect(html).toContain(`data-label="${l}"`);
     expect(elements(await page()).some((e) => e.type === Table)).toBe(true);
+  });
+
+  it("marks its header row role=row, like every body row", async () => {
+    expect(headRowTags(await render())).toEqual(['<tr role="row">']);
   });
 
   it("lists each member with an Avatar tile, name, level and points, ties sharing a rank", async () => {

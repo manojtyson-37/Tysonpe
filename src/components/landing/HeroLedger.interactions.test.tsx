@@ -159,19 +159,38 @@ describe("HeroLedger: input -> derived rows", () => {
     expect(m.control(PRICE)["aria-invalid"]).toBeUndefined();
   });
 
+  // [typed, what the field shows afterwards]: written out, not computed, so a change to the component's own clean-up is seen.
   it.each([
-    ["29.99"], ["12.5"], ["2999.00"], ["12ab3"], ["₹1,00,00,00,000"], ["1,00,00,001"],
+    ["29.99", "29.99"],
+    ["12.5", "12.5"],
+    ["2999.00", "2999.00"],
+    ["12ab3", "12ab3"],
+    ["₹1,00,00,00,000", "1,00,00,00,000"],
+    ["1,00,00,001", "1,00,00,001"],
     // a comma that is not Indian or Western grouping is not removed to make a number
-    ["29,99"], ["2,99"], ["1,0,0"], ["1,00,0"], ["1,0000"], [",100"], ["100,"], ["1,,000"], ["0,500"],
-    // spaces are not a grouping separator: " 1 2 " must not become 12, and "1 000" is refused rather than guessed
-    [" 1 2 "], ["1 000"], ["1\u00a0000"],
+    ["29,99", "29,99"],
+    ["2,99", "2,99"],
+    ["1,0,0", "1,0,0"],
+    ["1,00,0", "1,00,0"],
+    ["1,0000", "1,0000"],
+    [",100", ",100"],
+    ["100,", "100,"],
+    ["1,,000", "1,,000"],
+    ["0,500", "0,500"],
+    // a leading zero is refused whether or not the number is grouped ("007" like "01,000"), one rule
+    ["007", "007"],
+    ["01,000", "01,000"],
+    // spaces are not a grouping separator: " 1 2 " must not become 12 (only the leading blank goes), and "1 000" is refused, not guessed
+    [" 1 2 ", "1 2 "],
+    ["1 000", "1 000"],
+    ["1\u00a0000", "1\u00a0000"],
   ])(
-    "%j is not rewritten into another price: the field keeps it, the ledger falls back and says so",
-    (typed) => {
+    "%j is not rewritten into another price: the field keeps %j, the ledger falls back and says so",
+    (typed, shown) => {
       const m = mount();
       m.type("5000");
       m.type(typed);
-      expect(m.control(PRICE).value).toBe(typed.replace(/₹/g, "").trimStart());
+      expect(m.control(PRICE).value).toBe(shown);
       expect(m.net()).toBe("₹2,639.12");
       expect(m.text()).toContain("Showing ₹2,999 until then");
       expect(m.control(PRICE)["aria-invalid"]).toBe(true);
@@ -337,15 +356,18 @@ describe("HeroLedger: announcements", () => {
     expect(sr()).toBe("Net after fees ");
     m.type("abc");
     // the sample price comes from the model, not a literal in the component
-    expect(sr()).toBe(`Price not read, showing the ${formatINR(DEFAULT_PRICE_RUPEES * 100)} sample. Net after fees `);
+    expect(sr()).toBe(`Not a usable price, showing the ${formatINR(DEFAULT_PRICE_RUPEES * 100)} sample. Net after fees `);
     expect(sr()).toContain("₹2,999 sample");
     expect(m.net()).toBe("₹2,639.12");
     for (const bad of ["", "0", "29.", "29,99"]) {
       m.type(bad);
-      expect(sr(), bad).toMatch(/^Price not read, showing the/);
+      expect(sr(), bad).toMatch(/^Not a usable price, showing the ₹2,999 sample\. Net after fees $/);
     }
     m.type("750");
     expect(sr()).toBe("Net after fees ");
-    expect(sr()).not.toContain("Price not read");
+    expect(sr()).not.toContain("usable");
+    // out of range reads as "not usable" too: "Price not read" would be wrong for a price that was read and refused
+    m.type("1,00,00,00,000");
+    expect(sr()).toBe("Not a usable price, showing the ₹2,999 sample. Net after fees ");
   });
 });

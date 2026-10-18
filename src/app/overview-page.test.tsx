@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { headRowTags } from "@/test/table-rows";
 
 // The clock is fixed in the mock below to 2026-10-15 12:00 UTC (17:30 IST on 15 Oct), so the 14 bars run 2 Oct to 15 Oct (IST).
 // The creator is cr_1 / meera / Meera Nair. vi.mock factories are hoisted, so those values are written inline there.
@@ -269,6 +270,10 @@ describe("overview: recent orders", () => {
     expect(recent).toContain('data-stack="true"');
     expect(recent).toContain('<caption class="sr-only">Recent orders</caption>');
     for (const label of ["Product", "Learner", "Status", "Amount", "Date"]) expect(recent).toContain(`data-label="${label}"`);
+  });
+
+  it("marks its header row role=row, like every body row", async () => {
+    expect(headRowTags(section(await render(), "overview-recent"))).toEqual(['<tr role="row">']);
   });
 
   it("shows the order: title, learner, status badge, formatINR amount, IST date", async () => {

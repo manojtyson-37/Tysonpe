@@ -1,4 +1,6 @@
-// The QR's one-shot scan plays when the demo first scrolls into view, not at mount (below the fold nobody would see it).
+// The QR's one-shot scan plays ONCE per page load, when the demo first scrolls into view (not at mount: below the fold nobody
+// would see it). Whether it has played is the shell's flag (HomeInteractiveDemo), handed to the tab as `scanPlayed` /
+// `onScanPlayed`; here the harness plays the shell's part.
 // The repo has no DOM runner, so React's hooks are replaced with a tiny synchronous store (as in flow.interactions.test.tsx)
 // and IntersectionObserver with a fake that records its options, targets and disconnects and lets a test fire its callback.
 //
@@ -87,7 +89,8 @@ function unmount() {
 }
 
 // A fake IntersectionObserver: records what the component asks of it and lets a test deliver entries.
-type Callback = (entries: Array<{ isIntersecting: boolean }>) => void;
+type Entry = { isIntersecting: boolean; intersectionRatio: number };
+type Callback = (entries: Entry[]) => void;
 const observers: FakeObserver[] = [];
 class FakeObserver {
   observed: unknown[] = [];
@@ -105,12 +108,30 @@ class FakeObserver {
   disconnect() {
     this.disconnects++;
   }
+  /** Entries as a real observer reports them: `true` is a fully visible element, `false` an offscreen one. */
   fire(...flags: boolean[]) {
-    this.callback(flags.map((isIntersecting) => ({ isIntersecting })));
+    this.callback(flags.map((isIntersecting) => ({ isIntersecting, intersectionRatio: isIntersecting ? 1 : 0 })));
+  }
+  /** Entries with an explicit visible fraction (isIntersecting is true for any overlap, as in a browser). */
+  fireRatios(...ratios: number[]) {
+    this.callback(ratios.map((intersectionRatio) => ({ isIntersecting: intersectionRatio > 0, intersectionRatio })));
   }
 }
 
 const ROOT = { name: "the QR tab root" };
+
+// The shell's "has the scan played" flag lives outside any one mount, as it does in HomeInteractiveDemo (which stays mounted
+// while a tab's content comes and goes). A test that wants a fresh page load calls resetShell().
+let played = false;
+let playedCalls = 0;
+const resetShell = () => {
+  played = false;
+  playedCalls = 0;
+};
+const onScanPlayed = () => {
+  played = true;
+  playedCalls++;
+};
 
 function mount(component: typeof QrTab | typeof HostedTab = QrTab) {
   H.slots = [];
@@ -123,7 +144,7 @@ function mount(component: typeof QrTab | typeof HostedTab = QrTab) {
     H.i = 0;
     H.e = 0;
     H.pending = [];
-    tree = all(expand(component({ clock }) as ReactNode));
+    tree = all(expand((component as (p: unknown) => ReactNode)({ clock, scanPlayed: played, onScanPlayed }) as ReactNode));
     // Stand-in for the DOM node behind the root ref, which React attaches before the effects run.
     const rootRef = tree[0]?.props.ref as { current: unknown } | undefined;
     if (rootRef) rootRef.current = ROOT;
@@ -140,10 +161,29 @@ function mount(component: typeof QrTab | typeof HostedTab = QrTab) {
     b!.props.onClick({});
     render();
   };
-  return { render, scan, click };
+  const scanNode = () => tree.find((n) => n.tag === "div" && n.props["aria-hidden"] === "true" && /border-t-2/.test(n.props.className ?? ""));
+  /** The scan overlay's own animationend, as the browser delivers it when the pass finishes. */
+  const animationEnd = () => {
+    const el = scanNode();
+    expect(el, "the scan overlay is on screen").toBeDefined();
+    expect(typeof el!.props.onAnimationEnd, "the overlay listens for animationend").toBe("function");
+    el!.props.onAnimationEnd({});
+    render();
+  };
+  /** The tab is left (tab switch) and shown again: a fresh mount, same shell. The new observer reports the demo in view. */
+  const remount = () => {
+    unmount();
+    const first = observers.length;
+    const fresh = mount(component);
+    if (observers.length > first) observers[first].fireRatios(1);
+    fresh.render();
+    return fresh;
+  };
+  return { render, scan, click, animationEnd, remount };
 }
 
 beforeEach(() => {
+  resetShell();
   observers.length = 0;
   vi.stubGlobal("IntersectionObserver", FakeObserver);
   vi.stubGlobal("document", { activeElement: null, body: {} });
@@ -190,6 +230,38 @@ describe("QrTab: the scan plays when the tab first scrolls into view", () => {
     expect(t.scan()).toMatch(/^qr-scan-once /);
     expect(t.scan()).toContain("opacity-0"); // the keyframes take over while it plays; at rest it is invisible
     expect(observers[0].disconnects).toBe(1);
+  });
+
+  it("an intersecting entry below the 40% threshold does not count: the observer's opening entry is not a sighting", () => {
+    const t = mount();
+    // A real observer delivers an entry as soon as it starts observing, and a sliver overlap is isIntersecting too.
+    observers[0].callback([{ isIntersecting: true, intersectionRatio: 0.1 }]);
+    t.render();
+    expect(t.scan()).not.toContain("qr-scan-once");
+    expect(observers[0].disconnects).toBe(0);
+    observers[0].fireRatios(0, 0.39, 0.399999);
+    t.render();
+    expect(t.scan()).not.toContain("qr-scan-once");
+    expect(observers[0].disconnects).toBe(0);
+  });
+
+  it("an entry at the threshold counts (0.4 exactly, and anything above)", () => {
+    const t = mount();
+    observers[0].fireRatios(0.4);
+    t.render();
+    expect(t.scan()).toMatch(/^qr-scan-once /);
+    expect(observers[0].disconnects).toBe(1);
+    const u = mount();
+    observers[1].fireRatios(0.1, 0.75);
+    u.render();
+    expect(u.scan()).toMatch(/^qr-scan-once /);
+  });
+
+  it("a ratio at or above the threshold does not count when the entry is not intersecting", () => {
+    const t = mount();
+    observers[0].callback([{ isIntersecting: false, intersectionRatio: 0.9 }]);
+    t.render();
+    expect(t.scan()).not.toContain("qr-scan-once");
   });
 
   it("any intersecting entry among several counts", () => {
@@ -253,23 +325,122 @@ describe("QrTab: the scan plays when the tab first scrolls into view", () => {
     H.pending = [];
     H.i = 0;
     H.e = 0;
-    QrTab({ clock: createSessionClock(892) }); // the ref is never attached
+    QrTab({ clock: createSessionClock(892), scanPlayed: false, onScanPlayed }); // the ref is never attached
     expect(() => flush()).not.toThrow();
     expect(observers).toHaveLength(0);
   });
 
-  it("a fresh checkout after Run it again still carries the class (seen is remembered) and asks for no new observer", () => {
+  it("plays once: a fresh checkout after Run it again carries no scan class, and asks for no new observer", () => {
     const t = mount();
     observers[0].fire(true);
     t.render();
+    expect(t.scan()).toContain("qr-scan-once");
     t.click("Pay with Google Pay");
     t.click("Approve payment");
     vi.advanceTimersByTime(1200);
     t.render();
     expect(t.scan()).toBeUndefined(); // the checkout step is gone, and so is the overlay
     t.click("Run it again");
-    expect(t.scan()).toContain("qr-scan-once");
+    expect(t.scan()).toBeDefined();
+    expect(t.scan()).not.toContain("qr-scan-once");
+    expect(t.scan()).toContain("opacity-0"); // at rest it is invisible
     expect(observers).toHaveLength(1);
+  });
+
+  it("plays once: coming back with Back to the QR (before the pass ended) does not replay it", () => {
+    const t = mount();
+    observers[0].fire(true);
+    t.render();
+    expect(t.scan()).toContain("qr-scan-once");
+    t.click("Pay with Google Pay"); // the overlay unmounts mid-pass
+    t.click("Back to the QR");
+    expect(t.scan()).toBeDefined();
+    expect(t.scan()).not.toContain("qr-scan-once");
+  });
+
+  it("plays once: Try again after a declined payment does not replay it", () => {
+    const t = mount();
+    observers[0].fire(true);
+    t.render();
+    t.animationEnd();
+    t.click("Pay with Google Pay");
+    t.click("Decline");
+    vi.advanceTimersByTime(1200);
+    t.render();
+    t.click("Try again");
+    expect(t.scan()).toBeDefined();
+    expect(t.scan()).not.toContain("qr-scan-once");
+  });
+
+  it("removes the class when the animation ends, and nothing brings it back", () => {
+    const t = mount();
+    observers[0].fire(true);
+    t.render();
+    expect(t.scan()).toContain("qr-scan-once");
+    expect(playedCalls).toBe(0); // still playing: not spent yet
+    t.animationEnd();
+    expect(played).toBe(true);
+    expect(t.scan()).not.toContain("qr-scan-once");
+    expect(t.scan()).toContain("opacity-0");
+    t.render();
+    t.render();
+    expect(t.scan()).not.toContain("qr-scan-once");
+  });
+
+  it("plays once: switching away and back (the tab remounts) does not replay it, after a full pass", () => {
+    const t = mount();
+    observers[0].fire(true);
+    t.render();
+    t.animationEnd();
+    const again = t.remount();
+    expect(again.scan()).toBeDefined();
+    expect(again.scan()).not.toContain("qr-scan-once");
+  });
+
+  it("plays once: leaving the tab mid-pass spends it too, so coming back does not start another", () => {
+    const t = mount();
+    observers[0].fire(true);
+    t.render();
+    expect(t.scan()).toContain("qr-scan-once");
+    expect(played).toBe(false);
+    const again = t.remount(); // unmount before animationend
+    expect(played).toBe(true);
+    expect(again.scan()).not.toContain("qr-scan-once");
+  });
+
+  it("a tab left before it was ever seen has not spent the pass: it still plays on the first view", () => {
+    const t = mount();
+    unmount(); // switched away while the demo was still below the fold
+    expect(played).toBe(false);
+    const again = mount();
+    expect(again.scan()).not.toContain("qr-scan-once");
+    observers[observers.length - 1].fireRatios(0.6);
+    again.render();
+    expect(again.scan()).toMatch(/^qr-scan-once /);
+    void t;
+  });
+
+  it("a visitor who steps through the flow before the demo was ever in view has not spent the pass: it plays on the first view", () => {
+    const t = mount();
+    t.click("Pay with Google Pay"); // acted without the 40% sighting (keyboard, deep link): nothing has played
+    t.click("Back to the QR");
+    expect(played).toBe(false);
+    expect(t.scan()).not.toContain("qr-scan-once");
+    observers[0].fireRatios(0.8);
+    t.render();
+    expect(t.scan()).toMatch(/^qr-scan-once /);
+  });
+
+  it("without IntersectionObserver the scan plays at mount, once", () => {
+    vi.stubGlobal("IntersectionObserver", undefined);
+    const t = mount();
+    t.render();
+    expect(t.scan()).toMatch(/^qr-scan-once /);
+    t.animationEnd();
+    expect(t.scan()).not.toContain("qr-scan-once");
+    t.click("Pay with Google Pay");
+    t.click("Back to the QR");
+    expect(t.scan()).not.toContain("qr-scan-once");
   });
 
   it("the Easebuzz tab has no scan and watches nothing", () => {

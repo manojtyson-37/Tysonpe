@@ -41,7 +41,7 @@ const text = (h: string) => h.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").r
 const count = (h: string, needle: string | RegExp) => (typeof needle === "string" ? h.split(needle).length - 1 : (h.match(needle) ?? []).length);
 
 const shell = renderToStaticMarkup(<HomeInteractiveDemo />);
-const qr = renderToStaticMarkup(<QrTab clock={createSessionClock(892)} />);
+const qr = renderToStaticMarkup(<QrTab clock={createSessionClock(892)} scanPlayed={false} onScanPlayed={() => {}} />);
 const hosted = renderToStaticMarkup(<HostedTab clock={createSessionClock(892)} />);
 const fees = renderToStaticMarkup(<FeeCalc />);
 

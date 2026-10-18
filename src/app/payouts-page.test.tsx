@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { headRowTags } from "@/test/table-rows";
 
 // The creator is cr_1. vi.mock factories are hoisted, so values are written inline there.
 const mocks = vi.hoisted(() => ({
@@ -135,6 +136,12 @@ describe("payouts: ledger table", () => {
     expect(html).toContain("<thead");
     expect(html).toContain('colSpan="6"');
     expect(rowCells(html)).toEqual([["Nothing to pay out yet Each paid order adds a line here with its fees and your net amount."]]);
+  });
+});
+
+describe("payouts: header row", () => {
+  it("is marked role=row, like every body row", async () => {
+    expect(headRowTags(await render())).toEqual(['<tr role="row">']);
   });
 });
 

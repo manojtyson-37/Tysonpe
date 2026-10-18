@@ -50,6 +50,7 @@ import { createSessionClock } from "@/lib/session-clock";
 import { Stage } from "./parts";
 import { HostedTab } from "./HostedTab";
 import { QrTab } from "./QrTab";
+import { focusIsFree } from "./use-flow";
 
 type P = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 type Node = { tag: string; props: P; kids: Array<Node | string> };
@@ -100,7 +101,10 @@ const INSIDE = { name: "a control inside the demo" };
 const OUTSIDE = { name: "a link elsewhere on the page" };
 const dom = { active: BODY as unknown };
 
-function mount(component: (props: { clock: ReturnType<typeof createSessionClock> }) => ReactNode, countdown = 892) {
+function mount(
+  component: (props: { clock: ReturnType<typeof createSessionClock>; scanPlayed: boolean; onScanPlayed: () => void }) => ReactNode,
+  countdown = 892,
+) {
   H.slots = [];
   H.fx = [];
   H.pending = [];
@@ -119,7 +123,7 @@ function mount(component: (props: { clock: ReturnType<typeof createSessionClock>
     H.i = 0;
     H.e = 0;
     H.pending = [];
-    tree = all(expand(component({ clock }) as ReactNode));
+    tree = all(expand(component({ clock, scanPlayed: false, onScanPlayed: () => {} }) as ReactNode));
     // Stand-in for the DOM node behind the heading's ref, so the focus effect has something to call.
     const heading = tree.find((n) => n.tag === "h3");
     const ref = heading?.props.ref as { current: unknown } | undefined;
@@ -605,5 +609,38 @@ describe("step plumbing: status region, entering step, heading ref", () => {
     unmount();
     const full = mount(HostedTab, 900);
     expect(full.text()).toContain("Page expires in 15:00");
+  });
+});
+
+describe("focusIsFree: may a timer-driven focus move happen?", () => {
+  // Distinct objects, so an `===` slip between any two of them shows up.
+  const body = { name: "body" };
+  const inside = { name: "a control inside the demo" };
+  const outside = { name: "a link in the page nav" };
+  const root = { contains: (node: unknown) => node === inside };
+
+  it("is free when focus is nowhere or on the body (the old step's controls were just removed)", () => {
+    expect(focusIsFree(null, { root, body })).toBe(true);
+    expect(focusIsFree(undefined, { root, body })).toBe(true);
+    expect(focusIsFree(body, { root, body })).toBe(true);
+  });
+
+  it("is free when focus is anywhere inside the demo root", () => {
+    expect(focusIsFree(inside, { root, body })).toBe(true);
+  });
+
+  it("is not free when focus is on something outside the demo: the visitor's own place is left alone", () => {
+    expect(focusIsFree(outside, { root, body })).toBe(false);
+  });
+
+  it("is not free for an outside element even when the demo root is not attached yet", () => {
+    expect(focusIsFree(outside, { root: null, body })).toBe(false);
+    expect(focusIsFree(body, { root: null, body })).toBe(true);
+  });
+
+  it("only the body counts as the body: another element is not free just because it is not null", () => {
+    expect(focusIsFree(outside, { root, body: inside })).toBe(false);
+    expect(focusIsFree(0, { root, body })).toBe(false);
+    expect(focusIsFree("", { root, body })).toBe(false);
   });
 });

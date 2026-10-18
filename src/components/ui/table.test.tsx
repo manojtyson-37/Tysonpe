@@ -1,13 +1,14 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { DateCell, EmptyRow, MoneyCell, RowActions, Table, Td, Th, Tr } from "./table";
+import { DateCell, EmptyRow, HeadRow, MoneyCell, RowActions, Table, Td, Th, Tr } from "./table";
 import {
   Table as TableFromUi,
   Th as ThFromIndex,
   Td as TdFromUi,
   MoneyCell as MoneyCellFromUi,
   EmptyRow as EmptyRowFromIndex,
+  HeadRow as HeadRowFromIndex,
 } from "@/components/ui";
 
 const render = (el: React.ReactElement) => renderToStaticMarkup(el);
@@ -345,5 +346,32 @@ describe("stack label case", () => {
     );
     expect(html).not.toContain("data-stack");
     expect(html).not.toContain("max-sm:");
+  });
+});
+
+describe("HeadRow", () => {
+  const head = (row: React.ReactElement) => render(<table><thead>{row}</thead></table>);
+
+  it("is a header row that always carries role=row (the Table pins explicit roles for WebKit's stack mode)", () => {
+    expect(head(<HeadRow><Th>Order</Th></HeadRow>)).toBe(
+      '<table><thead><tr role="row"><th scope="col" role="columnheader" class="t-label px-3 py-2.5 align-bottom text-left">Order</th></tr></thead></table>',
+    );
+  });
+
+  it("has no hover fill and no transition: header rows are not interactive (Tr is the hover row)", () => {
+    const html = head(<HeadRow><Th>Order</Th></HeadRow>);
+    expect(html).not.toContain("hover:");
+    expect(html).not.toContain("transition");
+    expect(head(<Tr><Th>Order</Th></Tr>)).toContain("hover:bg-surface-2");
+  });
+
+  it("takes a className and other tr props, and the role cannot be overridden", () => {
+    const html = head(<HeadRow className="bg-surface-2" id="h1" role="presentation"><Th>Order</Th></HeadRow>);
+    expect(html).toContain('<tr class="bg-surface-2" id="h1" role="row">');
+    expect(html).not.toContain("presentation");
+  });
+
+  it("is exported from the ui index", () => {
+    expect(HeadRowFromIndex).toBe(HeadRow);
   });
 });

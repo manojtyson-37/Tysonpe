@@ -41,18 +41,22 @@ export type LedgerState = LedgerView & {
   usedDefault: boolean;
 };
 
-// Commas are accepted only where they are real digit grouping: Indian (1,00,000) or Western (100,000). Anything else, such as
-// "29,99" (two decimals typed with the wrong mark) or "1,0,0", is refused: dropping the commas would read it as a different,
-// much larger price. A first group may not start with 0.
+// One grammar for the typed price. A price is plain digits (1000) or digits with commas that are real grouping: Indian
+// (1,00,000) or Western (100,000). Anything else is refused, never repaired: dropping the commas of "29,99" (two decimals typed
+// with the wrong mark) or "1,0,0" would read a different, much larger price. The first digit is 1-9 in both forms, so a leading
+// zero ("007", "01,000", "0,500") is refused whether or not the number is grouped: a price does not start with 0, and one rule
+// is easier to explain next to the field than two.
+const PLAIN = /^[1-9]\d*$/;
 const GROUPED = /^(?!0)(?:\d{1,2}(?:,\d{2})*,\d{3}|\d{1,3}(?:,\d{3})*)$/;
 
 /**
- * A whole-rupee price from the field's text, or null when it is empty, not digits, badly grouped, or outside the bounds.
- * Surrounding blanks (including no-break spaces) are ignored; a space inside the number is not a separator and is refused.
+ * A whole-rupee price from the field's text, or null when it is empty, not digits, badly grouped, led by a zero, or outside
+ * the bounds. Surrounding blanks (including no-break spaces) are ignored; a space inside the number is not a separator and
+ * is refused.
  */
 export function parsePriceRupees(text: string): number | null {
   const trimmed = text.trim();
-  if (!/^\d+$/.test(trimmed) && !GROUPED.test(trimmed)) return null;
+  if (!PLAIN.test(trimmed) && !GROUPED.test(trimmed)) return null;
   const rupees = Number(trimmed.replaceAll(",", ""));
   return rupees >= MIN_PRICE_RUPEES && rupees <= MAX_PRICE_RUPEES ? rupees : null;
 }

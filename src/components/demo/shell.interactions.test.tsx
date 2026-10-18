@@ -31,7 +31,13 @@ vi.mock("react", async (importOriginal) => {
     H.pending.push({ idx: H.e++, fn, deps });
   };
   const useSyncExternalStore = (_subscribe: unknown, getSnapshot: () => unknown) => getSnapshot();
-  const stubs = { useState, useEffect, useSyncExternalStore };
+  // Keeps the first function it was given (the shell passes no dependencies), as React does for an empty array.
+  const useCallback = (fn: unknown) => {
+    const idx = H.i++;
+    if (!(idx in H.slots)) H.slots[idx] = fn;
+    return H.slots[idx];
+  };
+  const stubs = { useState, useEffect, useSyncExternalStore, useCallback };
   return { ...actual, default: { ...actual, ...stubs }, ...stubs };
 });
 
@@ -153,6 +159,51 @@ describe("HomeInteractiveDemo: tab switching", () => {
     t.select("upi-qr");
     expect(t.tabs().value).toBe("upi-qr");
     expect(t.mounted()).toEqual({ qr: 1, hosted: 0, fees: 0 });
+  });
+});
+
+describe("HomeInteractiveDemo: the scan-played flag", () => {
+  it("starts unplayed and hands the QR tab the flag and a setter", () => {
+    const t = mount();
+    expect(t.qr()!.scanPlayed).toBe(false);
+    expect(typeof t.qr()!.onScanPlayed).toBe("function");
+  });
+
+  it("the setter flips the flag for good, and the same callback is handed down on every render", () => {
+    const t = mount();
+    const first = t.qr()!.onScanPlayed;
+    first();
+    t.render();
+    expect(t.qr()!.scanPlayed).toBe(true);
+    expect(t.qr()!.onScanPlayed).toBe(first); // an unstable callback would re-run the tab's effect cleanup and spend the pass early
+    t.render();
+    expect(t.qr()!.scanPlayed).toBe(true);
+  });
+
+  it("survives the QR tab unmounting: switching to another tab and back still says played", () => {
+    const t = mount();
+    t.qr()!.onScanPlayed();
+    t.render();
+    t.select("easebuzz");
+    expect(t.mounted().qr).toBe(0);
+    t.select("fees");
+    t.select("upi-qr");
+    expect(t.mounted().qr).toBe(1);
+    expect(t.qr()!.scanPlayed).toBe(true);
+  });
+
+  it("stays unplayed through tab switches when nothing played", () => {
+    const t = mount();
+    t.select("easebuzz");
+    t.select("upi-qr");
+    expect(t.qr()!.scanPlayed).toBe(false);
+  });
+
+  it("the Easebuzz tab is not handed the flag", () => {
+    const t = mount();
+    t.select("easebuzz");
+    expect(t.hosted()).not.toHaveProperty("scanPlayed");
+    expect(t.hosted()).not.toHaveProperty("onScanPlayed");
   });
 });
 

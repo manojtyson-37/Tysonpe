@@ -32,7 +32,8 @@ vi.mock("react", async (importOriginal) => {
     H.cleanups.push(subscribe(() => H.subscribed.forEach((f) => f())));
     return getSnapshot();
   };
-  const stubs = { useState, useEffect, useSyncExternalStore };
+  const useCallback = (fn: unknown) => fn;
+  const stubs = { useState, useEffect, useSyncExternalStore, useCallback };
   return { ...actual, default: { ...actual, ...stubs }, ...stubs };
 });
 

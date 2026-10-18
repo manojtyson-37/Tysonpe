@@ -8,13 +8,22 @@ export type SessionClock = {
   get: () => number;
   /** Register a listener; returns the unsubscribe. */
   subscribe: (listener: () => void) => () => void;
-  /** Start the one-second interval; returns the stop. The owner calls this from an effect. */
+  /**
+   * Start the one-second interval; returns the stop. The owner calls this from an effect. Starting a clock that is already
+   * running starts nothing new (one interval, one tick a second) and returns the same stop; after a stop it can start again.
+   */
   start: () => () => void;
 };
 
 export function createSessionClock(initialSeconds: number = COUNTDOWN_START_SECONDS): SessionClock {
   let seconds = initialSeconds;
   const listeners = new Set<() => void>();
+  let timer: ReturnType<typeof setInterval> | null = null;
+  const stop = () => {
+    if (timer === null) return;
+    clearInterval(timer);
+    timer = null;
+  };
   return {
     get: () => seconds,
     subscribe(listener) {
@@ -24,11 +33,13 @@ export function createSessionClock(initialSeconds: number = COUNTDOWN_START_SECO
       };
     },
     start() {
-      const timer = setInterval(() => {
-        seconds = nextCountdown(seconds);
-        for (const listener of [...listeners]) listener();
-      }, 1000);
-      return () => clearInterval(timer);
+      if (timer === null) {
+        timer = setInterval(() => {
+          seconds = nextCountdown(seconds);
+          for (const listener of [...listeners]) listener();
+        }, 1000);
+      }
+      return stop;
     },
   };
 }

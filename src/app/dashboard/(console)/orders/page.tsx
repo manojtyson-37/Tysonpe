@@ -13,6 +13,7 @@ import {
   Table,
   Tabs,
   Td,
+  HeadRow,
   Th,
   Tr,
 } from "@/components/ui";
@@ -97,14 +98,14 @@ export default async function OrdersPage({ searchParams }: PageProps<"/dashboard
       />
       <Table aria-label="Orders" stack className={TABLE_FIT}>
         <thead>
-          <tr>
+          <HeadRow>
             <Th>Date</Th>
             <Th>Buyer</Th>
             <Th>Product</Th>
             <Th align="right">Total</Th>
             <Th>Status</Th>
             <Th><span className="sr-only">Actions</span></Th>
-          </tr>
+          </HeadRow>
         </thead>
         <tbody>
           {orders.length === 0 ? (

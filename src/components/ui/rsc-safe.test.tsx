@@ -15,7 +15,7 @@ import { Progress } from "./progress";
 import { Avatar } from "./avatar";
 import { AvatarImage } from "./avatar-image";
 import { Skeleton, SkeletonText, SkeletonAvatar } from "./skeleton";
-import { Table, Th, Tr, Td, MoneyCell, DateCell, RowActions, EmptyRow } from "./table";
+import { Table, Th, HeadRow, Tr, Td, MoneyCell, DateCell, RowActions, EmptyRow } from "./table";
 import { BarChart, Sparkline } from "./chart";
 import * as ui from "./index";
 import { IconPlus } from "../icons";
@@ -218,10 +218,10 @@ const cases: Record<string, { covers: string[]; render: () => Tree }> = {
     ),
   },
   "Table and every cell": {
-    covers: ["Table", "Th", "Tr", "Td", "MoneyCell", "DateCell", "RowActions", "EmptyRow"],
+    covers: ["Table", "Th", "HeadRow", "Tr", "Td", "MoneyCell", "DateCell", "RowActions", "EmptyRow"],
     render: () => (
       <Table caption="Orders" stack stickyHeader>
-        <thead><tr><Th>Order</Th><Th align="right">Amount</Th></tr></thead>
+        <thead><HeadRow><Th>Order</Th><Th align="right">Amount</Th></HeadRow></thead>
         <tbody>
           <Tr><Td label="Order">#1</Td><MoneyCell paise={100} label="Amount" /><DateCell date={new Date(0)} /><RowActions><ButtonLink href="/o/1" variant="ghost">View</ButtonLink></RowActions></Tr>
           <EmptyRow colSpan={4} title="Nothing" action={<ButtonLink href="/x">Add</ButtonLink>} />

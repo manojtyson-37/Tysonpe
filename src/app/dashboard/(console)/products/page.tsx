@@ -9,6 +9,7 @@ import {
   StatusBadge,
   Table,
   Td,
+  HeadRow,
   Th,
   Tr,
   TYPE_LABEL,
@@ -43,14 +44,14 @@ export default async function ProductsPage() {
       />
       <Table aria-label="Products" stack>
         <thead>
-          <tr>
+          <HeadRow>
             <Th>Product</Th>
             <Th>Type</Th>
             <Th align="right">Price</Th>
             <Th align="right">Learners</Th>
             <Th>Status</Th>
             <Th><span className="sr-only">Actions</span></Th>
-          </tr>
+          </HeadRow>
         </thead>
         <tbody>
           {products.length === 0 ? (

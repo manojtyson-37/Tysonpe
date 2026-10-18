@@ -16,6 +16,7 @@ vi.mock("@/lib/db", () => ({ db: { enrollment: { findMany: mocks.findMany, count
 import { Avatar, EmptyRow, Table } from "@/components/ui";
 import { functionProps } from "@/test/rsc-safe";
 import { legacyStyleFindings } from "@/test/style-scan";
+import { headRowTags } from "@/test/table-rows";
 import LearnersPage from "./dashboard/(console)/learners/page";
 
 const PAGE_PATH = new URL("./dashboard/(console)/learners/page.tsx", import.meta.url);
@@ -58,6 +59,10 @@ describe("learners: structure", () => {
     expect(html).toContain('data-stack="true"');
     expect([...html.matchAll(/<th\b[^>]*>(.*?)<\/th>/g)].map((m) => text(m[1]).trim())).toEqual(["Learner", "Product", "Joined"]);
     for (const l of ["Learner", "Product", "Joined"]) expect(html).toContain(`data-label="${l}"`);
+  });
+
+  it("marks its header row role=row, like every body row", async () => {
+    expect(headRowTags(await render())).toEqual(['<tr role="row">']);
   });
 
   it("uses no legacy .card or .table class and no rounded-xl", async () => {

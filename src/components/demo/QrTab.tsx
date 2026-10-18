@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { GooglePayIcon, PaytmIcon, PhonePeIcon, UpiIcon } from "@/components/gateway-icons";
 import { IconArrowLeft, IconLock } from "@/components/icons";
 import { Button } from "@/components/ui";
@@ -32,11 +33,22 @@ const APP_BUTTON =
   "flex min-h-11 items-center gap-3 rounded-control border border-line bg-surface px-3 py-2 text-left text-sm font-medium text-ink " +
   "transition-[background-color,border-color,scale] duration-(--dur-fast) ease-(--ease-standard) hover:border-ink hover:bg-surface-2 active:scale-(--scale-press-lg)";
 
-/** The simulated UPI checkout: a sample QR, four app buttons, a phone prompt, then processing and a result. */
-export function QrTab({ clock }: { clock: Clock }) {
+/**
+ * The simulated UPI checkout: a sample QR, four app buttons, a phone prompt, then processing and a result.
+ *
+ * The QR scan plays once per page load, the first time the checkout is on screen and at least 40% in view (at mount it
+ * would run below the fold, unseen). Whether it has played is the shell's flag (`scanPlayed`), not this tab's state: this
+ * tab unmounts on a tab switch and its overlay unmounts on every step change, and none of those may replay it. The pass
+ * is spent as soon as it can no longer finish here: it ended (animationend), the checkout step was left, or the tab was.
+ */
+export function QrTab({ clock, scanPlayed, onScanPlayed }: { clock: Clock; scanPlayed: boolean; onScanPlayed: () => void }) {
   const { flow, send, headingRef, rootRef } = useDemoFlow();
-  // The scan plays once, when the tab first scrolls into view: at mount it would run below the fold, unseen.
-  const scanning = useInViewOnce(rootRef);
+  const seen = useInViewOnce(rootRef);
+  const scanning = seen && !scanPlayed && flow.step === "checkout";
+  useEffect(() => {
+    if (!scanning) return;
+    return onScanPlayed; // runs when `scanning` turns off (ended, or the step was left) and on unmount (the tab was left)
+  }, [scanning, onScanPlayed]);
   const total = formatINR(DEMO_TOTAL_PAISE);
   const reset = () => send({ type: "reset" });
 
@@ -67,8 +79,13 @@ export function QrTab({ clock }: { clock: Clock }) {
           <div className="grid gap-6 px-5 py-5 sm:grid-cols-[auto_1fr]">
             <div className="flex flex-col items-center">
               <div className="relative overflow-hidden rounded-card border border-line bg-surface p-3">
-                {/* Invisible until the tab is first in view, then one pass over the code, then it rests invisible. Reduced motion: hidden outright. */}
-                <div aria-hidden="true" className={`${scanning ? "qr-scan-once " : ""}pointer-events-none absolute inset-0 border-t-2 border-ink opacity-0`} />
+                {/* Invisible until the demo is first in view, then one pass over the code; after animationend the class is dropped and it
+                    rests invisible for good (the shell's flag keeps it from coming back). Reduced motion: hidden outright. */}
+                <div
+                  aria-hidden="true"
+                  className={`${scanning ? "qr-scan-once " : ""}pointer-events-none absolute inset-0 border-t-2 border-ink opacity-0`}
+                  onAnimationEnd={onScanPlayed}
+                />
                 <SampleQr className="size-32" />
               </div>
               <p className="mt-2 text-sm text-muted">Sample QR, not scannable</p>

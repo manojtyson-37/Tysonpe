@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { IconArrowRight } from "@/components/icons";
 import { TabPanel, Tabs } from "@/components/ui";
 import { DEMO_MODES, isDemoMode, type DemoMode } from "@/lib/demo-model";
@@ -25,6 +25,10 @@ const PANEL = "px-3 py-5 sm:px-6 sm:py-6";
 export function HomeInteractiveDemo() {
   const [mode, setMode] = useState<DemoMode>("upi-qr");
   const [clock] = useState(() => createSessionClock());
+  // Has the QR scan played? It plays once per page load, so the flag lives here: the QR tab unmounts on a tab switch and is
+  // remounted afresh, and a flag in the tab would forget.
+  const [scanPlayed, setScanPlayed] = useState(false);
+  const markScanPlayed = useCallback(() => setScanPlayed(true), []);
 
   // One clock for the session timers on both checkout tabs. Starting it writes no React state.
   useEffect(() => clock.start(), [clock]);
@@ -45,7 +49,7 @@ export function HomeInteractiveDemo() {
       </div>
 
       <TabPanel id={TABS_ID} value="upi-qr" selected={mode === "upi-qr"} className={PANEL}>
-        {mode === "upi-qr" && <QrTab clock={clock} />}
+        {mode === "upi-qr" && <QrTab clock={clock} scanPlayed={scanPlayed} onScanPlayed={markScanPlayed} />}
       </TabPanel>
       <TabPanel id={TABS_ID} value="easebuzz" selected={mode === "easebuzz"} className={PANEL}>
         {mode === "easebuzz" && <HostedTab clock={clock} />}

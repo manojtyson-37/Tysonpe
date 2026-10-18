@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { headRowTags } from "@/test/table-rows";
 
 // The creator is cr_1. vi.mock factories are hoisted, so the stand-in actions are built inside vi.hoisted.
 const M = vi.hoisted(() => {
@@ -332,6 +333,13 @@ describe("community admin: banned members", () => {
     M.listBans.mockResolvedValue([ban({ name: "A".repeat(80) })]);
     const cell = elements(await call()).find((e) => e.type === Td && e.props.label === "Member")!;
     expect(cell.props.className).toMatch(/wrap-anywhere|break-words/);
+  });
+});
+
+describe("community admin: banned members header row", () => {
+  it("is marked role=row, like every body row", async () => {
+    M.listBans.mockResolvedValue([ban()]);
+    expect(headRowTags(await render())).toEqual(['<tr role="row">']);
   });
 });
 

@@ -313,8 +313,9 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
   .exit { animation: exit var(--dur-exit) var(--ease-standard) both; }
   /* The success moment (rare tier): the check mark pops in once at --dur-reveal. Transform and opacity only. */
   .reveal-pop { animation: reveal-pop var(--dur-reveal) var(--ease-pop) 1 both; }
-  /* The home demo's QR scan: one pass when the code mounts (the overlay's top edge travels the box once, ~960ms), then it
-     rests invisible. Transform and opacity only; the duration is the reveal token x3 so reduced motion collapses it.
+  /* The home demo's QR scan: one pass, once per page load, the first time the demo is in view (the overlay's top edge
+     travels the box once, ~960ms). QrTab adds this class then and drops it for good after animationend, so it never
+     replays on a remount or a fresh checkout; at rest the overlay is invisible. Transform and opacity only; the duration is the reveal token x3 so reduced motion collapses it.
      In the components layer so a utility on the same element still wins; the reduced-motion override below is
      unlayered on purpose and beats it. */
   .qr-scan-once {

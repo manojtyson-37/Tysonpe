@@ -143,7 +143,6 @@ describe("landing ledger: price input", () => {
     ["2999", 2999],
     ["1", 1],
     [" 450 ", 450],
-    ["007", 7],
     [String(MAX_PRICE_RUPEES), MAX_PRICE_RUPEES],
   ])("%j parses to %i", (text, rupees) => {
     expect(parsePriceRupees(text)).toBe(rupees);
@@ -153,6 +152,8 @@ describe("landing ledger: price input", () => {
     [""], ["   "], ["0"], ["00"], ["-5"], ["12.5"], ["1e3"], ["abc"], ["₹500"], ["NaN"], ["Infinity"], [String(MAX_PRICE_RUPEES + 1)],
     ["29,99"], ["2,99"], ["1,0,0"], ["1,00,0"], ["1,0000"], [",100"], ["100,"], ["1,,000"], ["0,500"], ["1, 000"], ["1 2"], ["1 000"], ["1\u00a0000"],
     ["1,000,00"], ["12,3456"], ["10,00,00,00,000"],
+    // one rule for leading zeros, plain or grouped: a price never starts with 0 ("007" is refused like "01,000")
+    ["007"], ["05"], ["01"], ["0999"], ["01,000"], ["00,500"], ["01,00,000"], ["0,500"],
   ])(
     "%j is not a usable price",
     (text) => {
@@ -187,7 +188,7 @@ describe("landing ledger: price input", () => {
 
   it.each([
     ["1,000", 1000], ["12,345", 12345], ["1,00,000", 100000], ["10,00,000", 1000000], ["1,000,000", 1000000], ["100,000", 100000],
-    ["1,23,456", 123456], ["123,456", 123456], ["999", 999], ["007", 7], [" 1,000 ", 1000], ["\u00a01,000\u202f", 1000],
+    ["1,23,456", 123456], ["123,456", 123456], ["999", 999], [" 1,000 ", 1000], ["\u00a01,000\u202f", 1000],
   ])("%j is a price when its commas are well-formed Indian or Western grouping", (text, rupees) => {
     expect(parsePriceRupees(text)).toBe(rupees);
   });

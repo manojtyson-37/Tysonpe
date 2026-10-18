@@ -3,16 +3,15 @@ import { INITIAL_FLOW, flowReducer, settleDelay, type FlowAction } from "@/lib/d
 
 /**
  * May a timer-driven focus move happen? Only when the visitor has not gone elsewhere: focus is on the body or nowhere
- * (the old step's controls were just removed), on the previous step's heading, or somewhere inside the demo. Anything
- * else is the visitor's own place on the page (a link, a field, the nav) and is left alone. Structural types keep this
- * testable without a DOM.
+ * (the old step's controls were just removed), or somewhere inside the demo (the previous step's heading is inside it
+ * too). Anything else is the visitor's own place on the page (a link, a field, the nav) and is left alone. Structural
+ * types keep this testable without a DOM.
  */
 export function focusIsFree(
   active: unknown,
-  { root, previousHeading, body }: { root: { contains(node: never): boolean } | null; previousHeading: unknown; body: unknown },
+  { root, body }: { root: { contains(node: never): boolean } | null; body: unknown },
 ): boolean {
   if (active === null || active === undefined || active === body) return true;
-  if (active === previousHeading) return true;
   return Boolean(root?.contains(active as never));
 }
 
@@ -28,7 +27,6 @@ export function useDemoFlow() {
   const [flow, setFlow] = useState(INITIAL_FLOW);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-  const previousHeading = useRef<HTMLHeadingElement | null>(null);
   const timerSettled = useRef(false);
   const send = useCallback((action: FlowAction) => setFlow((f) => flowReducer(f, action)), []);
 
@@ -50,11 +48,10 @@ export function useDemoFlow() {
     if (flow.touched) {
       if (!byTimer) {
         headingRef.current?.focus();
-      } else if (focusIsFree(document.activeElement, { root: rootRef.current, previousHeading: previousHeading.current, body: document.body })) {
+      } else if (focusIsFree(document.activeElement, { root: rootRef.current, body: document.body })) {
         headingRef.current?.focus({ preventScroll: true });
       }
     }
-    previousHeading.current = headingRef.current;
   }, [flow.step, flow.touched]);
 
   return { flow, send, headingRef, rootRef };
