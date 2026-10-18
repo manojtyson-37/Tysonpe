@@ -35,11 +35,11 @@ export const announcement = (r: QuizSubmission) => (r.passed ? passedLine(r) : "
 
 /**
  * The result, in a wrapper the player can focus. tabIndex -1 makes it focusable by script only (not a tab stop) and
- * scroll-mt-24 keeps it clear of the sticky header when focus() scrolls it into view.
+ * the page's scroll padding (globals.css) keeps it clear of the sticky header when focus() scrolls it into view.
  */
 function ResultFocus({ resultRef, children }: { resultRef?: Ref<HTMLDivElement>; children: ReactNode }) {
   return (
-    <div ref={resultRef} tabIndex={-1} className="outline-none scroll-mt-24">
+    <div ref={resultRef} tabIndex={-1} className="outline-none">
       {children}
     </div>
   );

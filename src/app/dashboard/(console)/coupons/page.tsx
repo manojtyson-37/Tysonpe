@@ -78,7 +78,7 @@ export default async function CouponsPage() {
             </ul>
           )}
         </div>
-        <section id="new-coupon" aria-labelledby="new-coupon-h" className="scroll-mt-24 min-w-0 xl:border-l xl:border-line xl:pl-8">
+        <section id="new-coupon" aria-labelledby="new-coupon-h" className="min-w-0 xl:border-l xl:border-line xl:pl-8">
           <h2 id="new-coupon-h" className="mb-3 text-base font-semibold">New coupon</h2>
           <CouponForm action={createCoupon} submitLabel="Create coupon" />
         </section>

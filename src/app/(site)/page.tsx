@@ -83,7 +83,7 @@ export default function Home() {
       </section>
 
       {/* Interactive checkout simulation: HomeInteractiveDemo and its tabs live in components/demo. */}
-      <section id="sandbox-demo" data-layout="header-split-wide" aria-labelledby="demo-h" className="scroll-mt-14 border-b border-line py-20 sm:py-28">
+      <section id="sandbox-demo" data-layout="header-split-wide" aria-labelledby="demo-h" className="border-b border-line py-20 sm:py-28">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr] lg:gap-16">
             <h2 id="demo-h" className="text-3xl font-semibold sm:text-4xl">Pay the way your learners will.</h2>
@@ -158,7 +158,7 @@ export default function Home() {
       </section>
 
       {/* Fees: one table, figures computed from the ledger maths */}
-      <section id="pricing" data-layout="table" aria-labelledby="fees-h" className="scroll-mt-14 border-b border-line py-20 sm:py-28">
+      <section id="pricing" data-layout="table" aria-labelledby="fees-h" className="border-b border-line py-20 sm:py-28">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <h2 id="fees-h" className="max-w-2xl text-3xl font-semibold sm:text-4xl">
             What lands in the ledger from one {SALE_TEXT} sale, by plan.

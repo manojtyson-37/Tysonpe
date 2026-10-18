@@ -16,6 +16,20 @@ function sources(dir: string, out: Array<[string, string]> = []): Array<[string,
   return out;
 }
 
+/** Application sources only: test helpers under src/test/ import whatever they like and are not consumers. */
+const appSources = () => sources(SRC).filter(([file]) => !file.startsWith(path.join(SRC, "test") + path.sep));
+
+/** Source with block comments, line comments and template-literal text blanked, so an import that is only mentioned does not count. */
+function code(src: string): string {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|\s)\/\/[^\n]*/g, "$1")
+    .replace(/`(?:\\.|[^`\\])*`/g, "``");
+}
+
+const importsMark = (src: string, name: string) =>
+  new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*"[^"]*gateway-icons"`).test(code(src));
+
 describe("gateway-icons", () => {
   it("every export renders one decorative svg that takes a className", () => {
     const names = Object.keys(marks);
@@ -44,11 +58,22 @@ describe("gateway-icons", () => {
   });
 
   it("every exported mark is imported by a non-test file in src (nothing unused)", () => {
-    const files = sources(SRC);
+    const files = appSources();
+    expect(files.length).toBeGreaterThan(50);
+    expect(files.some(([file]) => file.includes(`${path.sep}src${path.sep}test${path.sep}`))).toBe(false);
     for (const name of Object.keys(marks)) {
-      const used = files.some(([, src]) => new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*"[^"]*gateway-icons"`).test(src));
-      expect(used, name).toBe(true);
+      expect(files.some(([, src]) => importsMark(src, name)), name).toBe(true);
     }
+  });
+
+  it("the importer scan ignores comments and template strings (checker self-test)", () => {
+    const real = 'import { UpiIcon } from "@/components/gateway-icons";\nexport const a = 1;';
+    expect(importsMark(real, "UpiIcon")).toBe(true);
+    expect(importsMark(real, "VisaIcon")).toBe(false);
+    expect(importsMark('// import { UpiIcon } from "./gateway-icons";\nexport const a = 1;', "UpiIcon")).toBe(false);
+    expect(importsMark('/* import { UpiIcon } from "./gateway-icons"; */\nexport const a = 1;', "UpiIcon")).toBe(false);
+    expect(importsMark('const s = `import { UpiIcon } from "./gateway-icons"`;', "UpiIcon")).toBe(false);
+    expect(importsMark('import {\n  VisaIcon,\n  UpiIcon,\n} from "./gateway-icons";', "UpiIcon")).toBe(true);
   });
 
   it("keeps the brand hex on purpose and says so, and ends with exactly one newline", () => {

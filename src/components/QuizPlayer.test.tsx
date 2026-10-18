@@ -279,12 +279,12 @@ describe("QuizView: one persistent, empty live region in every state", () => {
 describe("the result is wrapped in a focus target", () => {
   it("passed: a tabindex=-1 wrapper holds the Callout, with scroll margin for the sticky header", () => {
     const html = render(<QuizPassed questions={questions} result={sub({ passed: true, scorePct: 100, correctCount: 2, reveal })} nextHref={null} />);
-    expect(html).toMatch(/<div tabindex="-1" class="outline-none scroll-mt-24"><div class="[^"]*bg-good-soft/);
+    expect(html).toMatch(/<div tabindex="-1" class="outline-none"><div class="[^"]*bg-good-soft/);
   });
 
   it("failed: the same wrapper holds the alert", () => {
     const html = render(<QuizFailed questions={questions} result={sub()} passPct={60} />);
-    expect(html).toMatch(/<div tabindex="-1" class="outline-none scroll-mt-24"><div role="alert"/);
+    expect(html).toMatch(/<div tabindex="-1" class="outline-none"><div role="alert"/);
   });
 
   it("the form shows exactly one wrapper after a failed attempt, and none before any attempt", () => {

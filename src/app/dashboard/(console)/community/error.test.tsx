@@ -29,6 +29,12 @@ describe("community console error boundary", () => {
     expect(html).toMatch(/<button [^>]*type="button"[^>]*>Try again<\/button>/);
   });
 
+  it("says what failed and that nothing was lost", () => {
+    const html = renderToStaticMarkup(CommunityConsoleError({ reset: () => {} }));
+    expect(html).toContain("Couldn&#x27;t load community settings");
+    expect(html).toMatch(/Something went wrong on our side\. Your channels and posts are unchanged\./);
+  });
+
   it("leaves the button height to the Button primitive: a fixed min-h-10 would beat its 44px touch floor", () => {
     expect(SOURCE).not.toMatch(/min-h-10|\bmin-h-\d/);
     expect(renderToStaticMarkup(CommunityConsoleError({ reset: () => {} }))).toContain('class="btn btn-primary mt-5"');
