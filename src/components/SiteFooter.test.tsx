@@ -49,6 +49,11 @@ describe("SiteFooter", () => {
     expect(html).toMatch(/<p class="[^"]*text-\[15px\][^"]*">Storefront, UPI checkout/);
   });
 
+  it("the wordmark link is a 44px target under a coarse pointer (it was 17px tall)", () => {
+    const tag = /<a [^>]*aria-label="Tysonpe home"[^>]*>/.exec(html)![0];
+    expect(tag).toContain("inline-flex items-center pointer-coarse:min-h-11");
+  });
+
   it("clips the oversized wordmark so the page never scrolls sideways", () => {
     expect(html).toMatch(/^<footer [^>]*class="[^"]*overflow-hidden/);
   });

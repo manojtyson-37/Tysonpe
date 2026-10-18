@@ -273,6 +273,7 @@ describe("SignupFields: show/hide password", () => {
     expect(m.toggle().props["aria-pressed"]).toBe(false);
     expect(m.toggle().props["aria-label"]).toBe("Show password");
     expect((m.toggle().props.children as { type: unknown }).type).toBe(IconEye);
+    expect((m.toggle().props.children as { props: { size: number } }).props.size).toBe(18);
     m.click(m.toggle());
     expect((m.toggle().props.children as { type: unknown }).type).toBe(IconEyeOff);
     expect(pw().type).toBe("text");

@@ -11,7 +11,7 @@ export function SiteFooter({ storefrontHandle = DEMO_HANDLE }: { storefrontHandl
       <div className="mx-auto max-w-6xl px-4 pt-12 sm:px-6 sm:pt-16">
         <div className="grid gap-10 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
           <div>
-            <Link href="/" aria-label="Tysonpe home">
+            <Link href="/" aria-label="Tysonpe home" className="inline-flex items-center pointer-coarse:min-h-11">
               <Logo className="!text-base text-ink" />
             </Link>
             <p className="mt-4 max-w-xs text-[15px]">

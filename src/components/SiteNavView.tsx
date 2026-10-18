@@ -18,7 +18,7 @@ export function SiteNavView({ items, logoutAction }: Props) {
   return (
     <header className="sticky top-0 z-50 border-b border-line bg-bg/90 backdrop-blur-md print:hidden">
       <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6" aria-label="Main">
-        <Link href="/" aria-label="Tysonpe home">
+        <Link href="/" aria-label="Tysonpe home" className="inline-flex items-center pointer-coarse:min-h-11">
           <Logo className="text-ink" />
         </Link>
         <div className="flex items-center gap-1 sm:gap-3">

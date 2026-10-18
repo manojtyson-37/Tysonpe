@@ -96,6 +96,14 @@ describe("the auth pages render through AuthShell", () => {
     expect(link(html(await SignupPage(params({ next: "//evil.example" }))))).toBe("/login");
   });
 
+  it("sign up: the footer link encodes a next that carries its own ? & and #, and it reads back unchanged", async () => {
+    const next = "/checkout?plan=pro&seats=2#pay";
+    const out = html(await SignupPage(params({ next })));
+    const href = /Already have an account\? <a [^>]*href="([^"]*)"/.exec(out)![1].replace(/&amp;/g, "&");
+    expect(href).toBe("/login?next=%2Fcheckout%3Fplan%3Dpro%26seats%3D2%23pay");
+    expect(new URL(href, "https://example.test").searchParams.get("next")).toBe(next);
+  });
+
   it("sign up: role=creator opens a store, and the footer links to log in", async () => {
     const tree = await SignupPage(params({ role: "creator" }));
     expect(elementsOfType(tree, AuthShell)).toHaveLength(1);

@@ -18,6 +18,11 @@ describe("SiteNavView", () => {
     expect(render(null)).toMatch(/^<header [^>]*class="[^"]*\bprint:hidden\b[^"]*"/);
   });
 
+  it("the wordmark link is a 44px target under a coarse pointer (it was 33px tall)", () => {
+    const tag = /<a [^>]*aria-label="Tysonpe home"[^>]*>/.exec(render(null))![0];
+    expect(tag).toContain("inline-flex items-center pointer-coarse:min-h-11");
+  });
+
   it("links the wordmark home with an accessible name", () => {
     expect(render(null)).toMatch(/<a [^>]*aria-label="Tysonpe home"[^>]*href="\/"|<a [^>]*href="\/"[^>]*aria-label="Tysonpe home"/);
   });

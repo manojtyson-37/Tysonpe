@@ -29,6 +29,12 @@ describe("community console error boundary", () => {
     expect(html).toMatch(/<button [^>]*type="button"[^>]*>Try again<\/button>/);
   });
 
+  it("renders the button with exactly the primitive's classes and nothing inline (no style, no disabled)", () => {
+    expect(renderToStaticMarkup(CommunityConsoleError({ reset: () => {} }))).toContain(
+      '<button type="button" class="btn btn-primary mt-5">Try again</button>',
+    );
+  });
+
   it("says what failed and that nothing was lost", () => {
     const html = renderToStaticMarkup(CommunityConsoleError({ reset: () => {} }));
     expect(html).toContain("Couldn&#x27;t load community settings");

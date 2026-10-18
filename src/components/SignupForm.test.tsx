@@ -15,7 +15,7 @@ vi.mock("react", async (importOriginal) => {
 vi.mock("@/app/actions/auth", () => ({ signup: async () => ({}) }));
 
 import { legacyStyleFindings } from "@/test/style-scan";
-import { SignupForm } from "./SignupForm";
+import { SignupForm, suggestHandle } from "./SignupForm";
 
 type Role = "learner" | "creator";
 const render = (initialRole: Role = "learner", next?: string, state?: unknown) => {
@@ -107,6 +107,20 @@ describe("SignupForm: role and gateway radios are uncontrolled and survive a fai
     const sets = [...html.matchAll(/<fieldset\b[^>]*>([\s\S]*?)<\/fieldset>/g)].map((m) => m[1]);
     expect(sets).toHaveLength(2);
     for (const s of sets) expect(s).toMatch(/^<legend\b/);
+  });
+});
+
+describe("suggestHandle", () => {
+  it("makes a lowercase slug from a name", () => {
+    expect(suggestHandle("Asha Rao")).toBe("asha-rao");
+    expect(suggestHandle("  (Asha)  Rao!! ")).toBe("asha-rao");
+  });
+
+  it("never starts or ends with a hyphen and is capped at 30 characters", () => {
+    expect(suggestHandle("!!" + "a".repeat(40))).toBe("a".repeat(30));
+    expect(suggestHandle("a".repeat(29) + " bcd")).toBe("a".repeat(29)); // the cut leaves a hyphen, which is dropped
+    expect(suggestHandle("!!!")).toBe("");
+    expect(suggestHandle("")).toBe("");
   });
 });
 
