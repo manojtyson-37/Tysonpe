@@ -12,6 +12,10 @@ const SALE = DEFAULT_LEDGER;
 const SAMPLE_PAID_AT = new Date("2026-10-15T10:00:00+05:30");
 export const SAMPLE_INVOICE_NO = formatInvoiceNo(fiscalYear(SAMPLE_PAID_AT), 1);
 
+// These two fragments sit on the inset tone, where the default hairline is ~1.17:1 and vanishes, so their rules use the strong line.
+// MetricList sets divide-line on itself, so its row dividers are recoloured through a child selector.
+const RULES = "border-line-strong [&>*]:border-line-strong";
+
 // priceOrder with no coupon cannot reject, so the narrowing below is only for the compiler.
 function sampleOrder() {
   const priced = priceOrder({ pricePaise: SALE.salePaise, gstRatePct: SALE.gstRate }, null, SAMPLE_PAID_AT);
@@ -28,7 +32,7 @@ export function CheckoutFragment() {
         <p className="text-sm text-muted">Your order</p>
         <p className="mt-1 text-lg font-semibold">Sample course</p>
         <p className="text-sm text-muted">by Sample creator</p>
-        <MetricList className="mt-4 border-t border-line">
+        <MetricList className={`mt-4 border-t ${RULES}`}>
           <MetricRow label="Total payable" value={<Money paise={order.totalPaise} size="lg" />} strong />
           <MetricRow label={`Includes GST (${SALE.gstRate}%)`} value={<Money paise={order.gstPaise} />} />
         </MetricList>
@@ -58,7 +62,7 @@ export function InvoiceFragment() {
   return (
     <figure className="min-w-0">
       <Surface as="article" tone="inset" padding="lg" aria-label="Sample tax invoice">
-        <header className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-4">
+        <header className="flex flex-wrap items-start justify-between gap-4 border-b border-line-strong pb-4">
           <div>
             <p className="font-display text-xl font-extrabold">Tax invoice</p>
             <p className="mt-1 font-mono text-sm text-muted">{SAMPLE_INVOICE_NO}</p>
@@ -68,7 +72,7 @@ export function InvoiceFragment() {
             <p className="font-semibold">{formatDate(SAMPLE_PAID_AT)}</p>
           </div>
         </header>
-        <div className="grid gap-4 border-b border-line py-4 text-sm sm:grid-cols-2">
+        <div className="grid gap-4 border-b border-line-strong py-4 text-sm sm:grid-cols-2">
           <div>
             <p className="text-muted">Sold by</p>
             <p className="mt-1 font-semibold">Sample creator</p>
@@ -82,7 +86,7 @@ export function InvoiceFragment() {
           <p>Sample course</p>
           <Money paise={SALE.salePaise} />
         </div>
-        <MetricList className="ml-auto w-full max-w-xs border-t border-line">
+        <MetricList className={`ml-auto w-full max-w-xs border-t ${RULES}`}>
           <MetricRow label="Taxable value" value={<Money paise={taxable} />} />
           <MetricRow label={`GST @ ${SALE.gstRate}% (included)`} value={<Money paise={SALE.gstPaise} />} />
           <MetricRow label="Total paid" value={<Money paise={SALE.salePaise} />} strong />

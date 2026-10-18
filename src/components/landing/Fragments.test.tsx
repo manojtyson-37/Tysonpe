@@ -37,3 +37,24 @@ describe("landing fragments: the sample invoice does not read the clock", () => 
     expect(text(renderToStaticMarkup(<InvoiceFragment />))).toContain("Total paid ₹2,999");
   });
 });
+
+// The checkout and invoice fragments sit on the inset tone (bg-surface-2), where the default hairline (--line) is about
+// 1.17:1 and the internal rules all but vanish. Their own rules therefore use --line-strong.
+describe("landing fragments: internal rules are visible on the inset tone", () => {
+  const classes = (h: string) => [...h.matchAll(/\sclass="([^"]*)"/g)].map((m) => m[1].replace(/&amp;/g, "&").replace(/&gt;/g, ">").split(/\s+/));
+
+  it.each([["CheckoutFragment", 1], ["InvoiceFragment", 3]] as const)("%s uses no plain border-line rule and recolours its list dividers", async (name, rules) => {
+    const mod = await load();
+    const Fragment = mod[name];
+    const h = renderToStaticMarkup(<Fragment />);
+    expect(h).toContain("rounded-card bg-surface-2"); // it really is on the inset tone
+    const tokens = classes(h).flat();
+    expect(tokens.filter((t) => t === "border-line")).toEqual([]);
+    // every drawn rule (a border side or a divide) is paired with the strong colour on the same element
+    const ruled = classes(h).filter((c) => c.some((t) => /^(border-[tb]|divide-y)$/.test(t)));
+    expect(ruled).toHaveLength(rules); // checkout: the list; invoice: header, parties, list
+    for (const c of ruled) expect(c).toContain(c.includes("divide-y") ? "[&>*]:border-line-strong" : "border-line-strong");
+    // the MetricList primitive puts divide-line on the list itself, so its row dividers are recoloured through a child selector
+    expect(classes(h).filter((c) => c.includes("divide-y")).length).toBeGreaterThanOrEqual(1);
+  });
+});

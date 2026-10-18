@@ -28,7 +28,8 @@ vi.mock("react", async (importOriginal) => {
 });
 
 import { GST_RATES } from "@/lib/validation";
-import { PLAN_OPTIONS } from "@/lib/landing-ledger";
+import { DEFAULT_PRICE_RUPEES, PLAN_OPTIONS } from "@/lib/landing-ledger";
+import { formatINR } from "@/lib/money";
 import { HeroLedger } from "./HeroLedger";
 
 type P = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -129,44 +130,62 @@ describe("HeroLedger: input -> derived rows", () => {
 
   const PRICE = "Sale price, GST included";
 
-  it("strips only commas, spaces and the rupee sign, so the field shows what was typed", () => {
+  it("strips only the rupee sign and leading blanks: the field shows what was typed, commas and inner spaces included", () => {
     const m = mount();
     m.type("₹1,00,000");
-    expect(m.control(PRICE).value).toBe("100000");
-    m.type(" 1 2 ");
-    expect(m.control(PRICE).value).toBe("12");
+    expect(m.control(PRICE).value).toBe("1,00,000");
+    m.type("₹ 1,000");
+    expect(m.control(PRICE).value).toBe("1,000");
+    m.type("\u00a01000");
+    expect(m.control(PRICE).value).toBe("1000");
+    m.type("1 2");
+    expect(m.control(PRICE).value).toBe("1 2");
   });
 
   it.each([
-    ["1,000", "1000", "₹880"],
-    ["1,00,000", "100000", "₹88,000"],
-    ["₹ 10,00,000", "1000000", "₹8,80,000"],
-  ])("%j is read as the number it looks like (%s) and is accepted", (typed, field, net) => {
+    ["1000", "₹880"],
+    ["1,000", "₹880"],
+    ["1,00,000", "₹88,000"],
+    ["100,000", "₹88,000"],
+    ["₹ 10,00,000", "₹8,80,000"],
+    ["₹1,000,000", "₹8,80,000"],
+    ["  750 ", "₹660"],
+    ["\u00a0750\u202f", "₹660"],
+  ])("%j is read as the number it looks like and is accepted", (typed, net) => {
     const m = mount();
     m.type(typed);
-    expect(m.control(PRICE).value).toBe(field);
     expect(m.net()).toBe(net);
     expect(m.text()).not.toContain("Showing");
     expect(m.control(PRICE)["aria-invalid"]).toBeUndefined();
   });
 
-  it.each([["29.99"], ["12.5"], ["2999.00"], ["12ab3"], ["₹1,00,00,00,000"], ["1,00,00,001"]])(
+  it.each([
+    ["29.99"], ["12.5"], ["2999.00"], ["12ab3"], ["₹1,00,00,00,000"], ["1,00,00,001"],
+    // a comma that is not Indian or Western grouping is not removed to make a number
+    ["29,99"], ["2,99"], ["1,0,0"], ["1,00,0"], ["1,0000"], [",100"], ["100,"], ["1,,000"], ["0,500"],
+    // spaces are not a grouping separator: " 1 2 " must not become 12, and "1 000" is refused rather than guessed
+    [" 1 2 "], ["1 000"], ["1\u00a0000"],
+  ])(
     "%j is not rewritten into another price: the field keeps it, the ledger falls back and says so",
     (typed) => {
       const m = mount();
       m.type("5000");
       m.type(typed);
-      expect(m.control(PRICE).value).toBe(typed.replace(/[,\s₹]/g, ""));
+      expect(m.control(PRICE).value).toBe(typed.replace(/₹/g, "").trimStart());
       expect(m.net()).toBe("₹2,639.12");
       expect(m.text()).toContain("Showing ₹2,999 until then");
       expect(m.control(PRICE)["aria-invalid"]).toBe(true);
     },
   );
 
-  it("29.99 is never read as Rs 2,999", () => {
+  it("29.99 is never read as Rs 2,999, and 29,99 is never read as 2,999 either", () => {
     const m = mount();
     m.type("29.99");
     expect(m.control(PRICE).value).toBe("29.99");
+    expect(m.text()).toContain("Enter whole rupees");
+    m.type("29,99");
+    expect(m.control(PRICE).value).toBe("29,99");
+    expect(m.net()).toBe("₹2,639.12");
     expect(m.text()).toContain("Enter whole rupees");
   });
 
@@ -310,5 +329,23 @@ describe("HeroLedger: announcements", () => {
     const html = mount().html();
     expect(html).toMatch(/<output[^>]*for="ledger-price ledger-gst ledger-plan"/);
     for (const id of ["ledger-price", "ledger-gst", "ledger-plan"]) expect(html).toContain(`id="${id}"`);
+  });
+
+  it("the live region says when it is showing the sample instead of the typed price", () => {
+    const m = mount();
+    const sr = () => /<output[^>]*><span class="sr-only">([^<]*)<\/span>/.exec(m.html())![1];
+    expect(sr()).toBe("Net after fees ");
+    m.type("abc");
+    // the sample price comes from the model, not a literal in the component
+    expect(sr()).toBe(`Price not read, showing the ${formatINR(DEFAULT_PRICE_RUPEES * 100)} sample. Net after fees `);
+    expect(sr()).toContain("₹2,999 sample");
+    expect(m.net()).toBe("₹2,639.12");
+    for (const bad of ["", "0", "29.", "29,99"]) {
+      m.type(bad);
+      expect(sr(), bad).toMatch(/^Price not read, showing the/);
+    }
+    m.type("750");
+    expect(sr()).toBe("Net after fees ");
+    expect(sr()).not.toContain("Price not read");
   });
 });

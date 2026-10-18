@@ -166,9 +166,10 @@ export default function Home() {
           <p className="mt-4 max-w-xl text-base leading-relaxed text-muted">
             Every creator is on Basic today with no monthly fee. The other plans are draft pricing and billing is not live.
           </p>
+          {/* Plain rows (marketing rows are not clickable, so no Tr hover fill) that still carry the role="row" the Table pins for WebKit's stack mode. */}
           <Table caption={`Fees by plan for one ${SALE_TEXT} sale`} stack labelCase="sentence" className="mt-10">
             <thead>
-              <tr>
+              <tr role="row">
                 <Th className={HEAD}>Plan</Th>
                 <Th align="right" className={HEAD}>Monthly</Th>
                 <Th align="right" className={HEAD}>Platform fee</Th>
@@ -178,7 +179,7 @@ export default function Home() {
             </thead>
             <tbody>
               {PLANS.map((p) => (
-                <tr key={p.key} className={p.live ? "bg-surface" : "text-muted"}>
+                <tr key={p.key} role="row" className={p.live ? "bg-surface" : "text-muted"}>
                   <Td label="Plan">
                     {/* One flex item, so the stacked mobile row keeps the name and its status together. */}
                     <span>

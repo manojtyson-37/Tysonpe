@@ -7,10 +7,9 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: () => {}, replace: () => {}, refresh: () => {} }),
 }));
 
-async function renderHome(handle: string | undefined) {
+async function renderHome(handle: string) {
   vi.resetModules();
-  if (handle === undefined) vi.unstubAllEnvs();
-  else vi.stubEnv("NEXT_PUBLIC_DEMO_HANDLE", handle);
+  vi.stubEnv("NEXT_PUBLIC_DEMO_HANDLE", handle);
   const { default: Home } = await import("./(site)/page");
   return renderToStaticMarkup(<Home />);
 }
@@ -37,8 +36,11 @@ describe("landing: the sample storefront link in the status band", () => {
     expect(count(band, "btn-primary")).toBe(0);
     expect(count(band, /class="[^"]*\bbtn\b/g)).toBe(0);
     expect(count(html, "btn-primary")).toBe(count(without, "btn-primary"));
-    // it sits under the band's heading, in the left column, with the band's only other links being none
+    // it sits under the band's heading, in the same (left, sticky) block as the h2, with the band's only link being this one
     expect(band.indexOf("What works today")).toBeLessThan(band.indexOf("Open the sample storefront"));
+    const between = band.slice(band.indexOf("What works today"), band.indexOf("Open the sample storefront"));
+    expect(between).not.toMatch(/<\/?div/);
+    expect(band).toMatch(/<div class="lg:sticky[^"]*"><h2[^>]*>What works today[^<]*<\/h2><a /);
     expect(count(band, "<a ")).toBe(1);
   });
 

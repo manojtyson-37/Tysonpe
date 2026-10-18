@@ -366,7 +366,10 @@ describe("landing: status and fees", () => {
     expect(fees).toContain('<caption class="sr-only">Fees by plan for one ₹2,999 sale</caption>');
     // marketing rows are not clickable, so they get no hover fill
     expect(fees).not.toContain("hover:bg-surface-2");
-    expect(fees).not.toContain('role="row"');
+    // ...but every row keeps role="row": the Table primitive pins explicit ARIA roles so WebKit's stack mode (display:block rows)
+    // does not strip the table semantics, and a cell with role="cell" and no row parent is meaningless to VoiceOver.
+    expect(count(fees, "<tr")).toBe(PLAN_OPTIONS.length + 1);
+    expect(count(fees, /<tr role="row"/g)).toBe(PLAN_OPTIONS.length + 1);
     // the page's own mask-image hack is gone (the Table primitive supplies the scroll fade; the sources test covers the page)
     expect(PAGE_SOURCE).not.toMatch(/mask-image/);
   });
@@ -409,12 +412,17 @@ describe("landing: at most two outlined boxes, two uppercase labels, 15px body o
   });
 
   it("keeps uppercase tracked micro-labels out of the marketing bands (the spec caps them at two; there are none)", () => {
-    const labels = classTokens(outside).filter(
-      (t) => (t.includes("t-label") && !t.includes("normal-case")) || t.includes("uppercase") || t.includes("tracking-wider"),
-    );
-    expect(labels).toHaveLength(0);
-    // positive control: an un-overridden t-label counts, an overridden one does not
-    expect(classTokens('<th class="t-label px-3"></th><th class="t-label normal-case tracking-normal"></th>').filter((t) => t.includes("t-label") && !t.includes("normal-case"))).toHaveLength(1);
+    // Variant-prefixed tokens count too: the Table's stack mode prints its cell labels through `max-sm:...before:uppercase`.
+    const isLabel = (t: string[]) =>
+      (t.includes("t-label") && !t.includes("normal-case")) ||
+      t.some((c) => /(^|:)uppercase$/.test(c) || /(^|:)tracking-(wider|\[)/.test(c));
+    expect(classTokens(outside).filter(isLabel)).toHaveLength(0);
+    // positive controls: an un-overridden t-label counts, an overridden one does not, and a variant-prefixed uppercase counts
+    expect(classTokens('<th class="t-label px-3"></th><th class="t-label normal-case tracking-normal"></th>').filter(isLabel)).toHaveLength(1);
+    expect(classTokens('<table class="max-sm:[&_td:not([colspan])]:before:uppercase"></table>').filter(isLabel)).toHaveLength(1);
+    expect(classTokens('<table class="max-sm:[&_td:not([colspan])]:before:tracking-[0.06em]"></table>').filter(isLabel)).toHaveLength(1);
+    expect(classTokens('<table class="sm:tracking-wider"></table>').filter(isLabel)).toHaveLength(1);
+    expect(classTokens('<table class="max-sm:[&_td]:before:text-sm normal-case"></table>').filter(isLabel)).toHaveLength(0);
   });
 
   it("sets table heads and stat labels in sentence case", () => {
@@ -465,9 +473,14 @@ describe("landing: copy lint", () => {
   it("has no exclamation mark in the rendered text or in a quoted string of the landing sources", () => {
     expect(visible).not.toContain("!");
     // A "!" inside a quoted string (not `!==`, `!x` or a JSX non-null) is copy that a conditional branch could still render.
-    const inString = /(["'`])(?:(?!\1)[^\n\\])*!(?!=)(?:(?!\1)[^\n\\])*\1/;
+    // Escapes (`\\"`, `\\n`) are consumed as a pair, so a string with a backslash in it is still scanned.
+    const inString = /(["'`])(?:\\.|(?!\1)[^\n\\])*?!(?!=)(?:\\.|(?!\1)[^\n\\])*\1/;
     for (const [file, src] of SOURCES) expect(src, file).not.toMatch(inString);
     expect(inString.test('const a = "Welcome!";')).toBe(true); // positive control
+    expect(inString.test('const a = "Say \\"hi\\" now!";')).toBe(true); // an escaped quote before the "!"
+    expect(inString.test("const a = 'it\\'s done!';")).toBe(true);
+    expect(inString.test('const a = "Line\\n!";')).toBe(true);
+    expect(inString.test('const a = "no bang \\" here"; if (x !== y) {}')).toBe(false); // `!==` outside a string is not copy
   });
 
   it("lints the demo band's own heading and intro, which the page (not the demo components) writes", () => {

@@ -149,7 +149,11 @@ describe("landing ledger: price input", () => {
     expect(parsePriceRupees(text)).toBe(rupees);
   });
 
-  it.each([[""], ["   "], ["0"], ["00"], ["-5"], ["12.5"], ["1e3"], ["abc"], ["₹500"], ["1,000"], ["NaN"], ["Infinity"], [String(MAX_PRICE_RUPEES + 1)]])(
+  it.each([
+    [""], ["   "], ["0"], ["00"], ["-5"], ["12.5"], ["1e3"], ["abc"], ["₹500"], ["NaN"], ["Infinity"], [String(MAX_PRICE_RUPEES + 1)],
+    ["29,99"], ["2,99"], ["1,0,0"], ["1,00,0"], ["1,0000"], [",100"], ["100,"], ["1,,000"], ["0,500"], ["1, 000"], ["1 2"], ["1 000"], ["1\u00a0000"],
+    ["1,000,00"], ["12,3456"], ["10,00,00,00,000"],
+  ])(
     "%j is not a usable price",
     (text) => {
       expect(parsePriceRupees(text)).toBeNull();
@@ -181,7 +185,19 @@ describe("landing ledger: price input", () => {
     expect(ledgerFromInput("29.99", 18, "basic").gstPaise).toBe(45747);
   });
 
-  it("decimals and separators are not prices here: the field strips separators before this point", () => {
-    for (const text of ["29.99", "2999.00", "1,000", "₹500", "1 000"]) expect(parsePriceRupees(text), text).toBeNull();
+  it.each([
+    ["1,000", 1000], ["12,345", 12345], ["1,00,000", 100000], ["10,00,000", 1000000], ["1,000,000", 1000000], ["100,000", 100000],
+    ["1,23,456", 123456], ["123,456", 123456], ["999", 999], ["007", 7], [" 1,000 ", 1000], ["\u00a01,000\u202f", 1000],
+  ])("%j is a price when its commas are well-formed Indian or Western grouping", (text, rupees) => {
+    expect(parsePriceRupees(text)).toBe(rupees);
+  });
+
+  it("decimals are not prices, and the rupee sign is the field's job to strip, not the parser's", () => {
+    for (const text of ["29.99", "2999.00", "₹500", "₹1,000"]) expect(parsePriceRupees(text), text).toBeNull();
+  });
+
+  it("a comma grouped price over the maximum is refused, not wrapped", () => {
+    expect(parsePriceRupees("10,00,001")).toBeNull();
+    expect(parsePriceRupees("1,000,001")).toBeNull();
   });
 });

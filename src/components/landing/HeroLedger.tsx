@@ -29,9 +29,10 @@ export function HeroLedger({ gstRates }: { gstRates: readonly number[] }) {
   const [planKey, setPlanKey] = useState(DEFAULT_PLAN);
   const l = ledgerFromInput(priceText, gstRate, planKey);
 
-  // Only the separators people paste with (commas, spaces, the rupee sign) are dropped. Anything else, a "." included, is
-  // kept so parsePriceRupees can refuse it and the hint says so: rewriting "29.99" into 2999 would price it 100x too high.
-  const onPrice = (e: ChangeEvent<HTMLInputElement>) => setPriceText(e.target.value.replace(/[,\s₹]/g, ""));
+  // Only the rupee sign and leading blanks are dropped. Everything else is kept as typed, so parsePriceRupees can refuse it and
+  // the hint says so: rewriting "29.99" or "29,99" into 2999 would price it 100x too high, and " 1 2 " is not 12. Commas are
+  // read by the parser (well-formed grouping only), not stripped here.
+  const onPrice = (e: ChangeEvent<HTMLInputElement>) => setPriceText(e.target.value.replace(/₹/g, "").trimStart());
   const onGst = (e: ChangeEvent<HTMLSelectElement>) => {
     const next = Number(e.target.value);
     if (gstRates.includes(next)) setGstRate(next);
@@ -39,6 +40,9 @@ export function HeroLedger({ gstRates }: { gstRates: readonly number[] }) {
   const onPlan = (e: ChangeEvent<HTMLSelectElement>) => {
     if (PLAN_OPTIONS.some((p) => p.key === e.target.value)) setPlanKey(e.target.value);
   };
+
+  // The live region is announced on its own, so it says when the figure belongs to the sample price and not the typed one.
+  const netLabel = `${l.usedDefault ? `Price not read, showing the ${formatINR(DEFAULT_PRICE_RUPEES * 100)} sample. ` : ""}Net after fees `;
 
   const planNote = l.planLive
     ? "Monthly plan fees are not netted."
@@ -101,7 +105,7 @@ export function HeroLedger({ gstRates }: { gstRates: readonly number[] }) {
             label="Net after fees"
             value={
               <output htmlFor={`${PRICE_ID} ${GST_ID} ${PLAN_ID}`} aria-live="polite">
-                <span className="sr-only">Net after fees </span>
+                <span className="sr-only">{netLabel}</span>
                 <Money paise={l.netPaise} tone="good" size="lg" mono />
               </output>
             }
@@ -109,7 +113,7 @@ export function HeroLedger({ gstRates }: { gstRates: readonly number[] }) {
         </MetricList>
       </Surface>
       <figcaption className="mt-4 max-w-md text-sm leading-relaxed text-muted">
-        {l.gstPaise === 0
+        {l.gstRate === 0
           ? `No GST is included at ${l.gstRate}%, so there is none to remit. `
           : `The ${formatINR(l.gstPaise)} of GST sits inside the price and is yours to remit; the ledger does not deduct it. `}
         {planNote} Real settlement starts after launch.
