@@ -201,6 +201,124 @@ export async function createLeadAction(input: {
   return { ok: true, lead };
 }
 
+export interface BulkLeadRow {
+  phone: string;
+  name?: string;
+  email?: string;
+  intent?: string;
+  notes?: string;
+  quoteAmount?: number;
+}
+
+export async function importBulkLeadsAction(input: {
+  leads: BulkLeadRow[];
+  status?: string;
+  sendTemplateName?: string;
+  templateParameters?: string[];
+}) {
+  const { creator } = await requireCreator();
+
+  if (!input.leads || input.leads.length === 0) {
+    return { ok: false, error: "No leads provided to import" };
+  }
+
+  const validLeads: BulkLeadRow[] = [];
+  const seenPhones = new Set<string>();
+
+  for (const row of input.leads) {
+    const cleaned = sanitizePhone(row.phone);
+    if (cleaned && cleaned.length >= 8 && !seenPhones.has(cleaned)) {
+      seenPhones.add(cleaned);
+      validLeads.push({
+        ...row,
+        phone: cleaned,
+      });
+    }
+  }
+
+  if (validLeads.length === 0) {
+    return { ok: false, error: "No valid phone numbers found in the uploaded list" };
+  }
+
+  const importedLeads = [];
+  let sentCount = 0;
+
+  for (const item of validLeads) {
+    const lead = await db.lead.upsert({
+      where: {
+        creatorId_phone: {
+          creatorId: creator.id,
+          phone: item.phone,
+        },
+      },
+      update: {
+        name: item.name || undefined,
+        email: item.email || undefined,
+        intent: item.intent || undefined,
+        notes: item.notes || undefined,
+        status: input.status || undefined,
+        quoteAmount: item.quoteAmount !== undefined ? item.quoteAmount : undefined,
+      },
+      create: {
+        creatorId: creator.id,
+        phone: item.phone,
+        name: item.name || null,
+        email: item.email || null,
+        intent: item.intent || null,
+        notes: item.notes || null,
+        status: input.status || "NEW",
+        quoteAmount: item.quoteAmount || null,
+      },
+      include: {
+        messages: {
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+
+    // If an approved template was specified for instant outreach
+    if (input.sendTemplateName) {
+      const params = (input.templateParameters || []).map((p) =>
+        p.replace(/{{name}}/gi, lead.name || "there")
+      );
+
+      const sendResult = await sendWhatsAppTemplate(
+        lead.phone,
+        input.sendTemplateName,
+        "en_US",
+        params
+      );
+
+      if (sendResult.success) {
+        sentCount++;
+        const msg = await db.whatsAppMessage.create({
+          data: {
+            leadId: lead.id,
+            creatorId: creator.id,
+            direction: "OUTBOUND",
+            sender: "CREATOR",
+            body: `[Template: ${input.sendTemplateName}]`,
+            msgType: "template",
+            templateName: input.sendTemplateName,
+            waMessageId: sendResult.messageId || null,
+            status: "SENT",
+          },
+        });
+        lead.messages.push(msg);
+      }
+    }
+
+    importedLeads.push(lead);
+  }
+
+  return {
+    ok: true,
+    importedCount: importedLeads.length,
+    sentCount,
+    leads: importedLeads,
+  };
+}
+
 export async function submitTemplateAction(input: CreateTemplateInput) {
   await requireCreator();
 

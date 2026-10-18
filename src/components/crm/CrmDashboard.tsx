@@ -10,6 +10,8 @@ import {
   getTemplatesAction,
   deleteTemplateAction,
   testSendTemplateAction,
+  importBulkLeadsAction,
+  type BulkLeadRow,
 } from "@/app/actions/crm";
 import type { WhatsAppTemplateItem, WhatsAppAccountInfo } from "@/lib/whatsapp/types";
 
@@ -98,6 +100,20 @@ export function CrmDashboard({
   const [newLeadName, setNewLeadName] = useState("");
   const [newLeadNotes, setNewLeadNotes] = useState("");
   const [newLeadAmount, setNewLeadAmount] = useState("");
+
+  // Bulk Lead Upload & Outreach Campaign State
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadMode, setUploadMode] = useState<"csv" | "paste">("csv");
+  const [pastedText, setPastedText] = useState("");
+  const [parsedLeads, setParsedLeads] = useState<BulkLeadRow[]>([]);
+  const [uploadStage, setUploadStage] = useState<string>("NEW");
+  const [sendOutreachNow, setSendOutreachNow] = useState(false);
+  const [selectedOutreachTemplate, setSelectedOutreachTemplate] = useState<string>("");
+  const [outreachParam1, setOutreachParam1] = useState("{{name}}");
+  const [outreachParam2, setOutreachParam2] = useState("Masterclass");
+  const [outreachParam3, setOutreachParam3] = useState("₹1");
+  const [outreachParam4, setOutreachParam4] = useState("https://tysonpe.com");
+  const [isUploadingLeads, setIsUploadingLeads] = useState(false);
 
   const showToast = (text: string, ok = true) => {
     setToastMsg({ text, ok });
@@ -275,6 +291,112 @@ export function CrmDashboard({
     });
   };
 
+  const parseRawContacts = (rawText: string): BulkLeadRow[] => {
+    const lines = rawText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const results: BulkLeadRow[] = [];
+    const startIndex = lines.length > 0 && /phone|mobile|number|contact/i.test(lines[0]) ? 1 : 0;
+
+    for (let i = startIndex; i < lines.length; i++) {
+      const line = lines[i];
+      const parts = line.includes("\t")
+        ? line.split("\t")
+        : line.includes(";")
+        ? line.split(";")
+        : line.split(",");
+
+      const rawPhone = (parts[0] || "").trim();
+      const rawName = (parts[1] || "").trim();
+      const rawIntent = (parts[2] || "").trim();
+      const rawAmount = (parts[3] || "").trim();
+
+      const digits = rawPhone.replace(/\D/g, "");
+      if (digits.length >= 8) {
+        results.push({
+          phone: digits,
+          name: rawName || undefined,
+          intent: rawIntent || undefined,
+          quoteAmount: rawAmount && !isNaN(Number(rawAmount)) ? Number(rawAmount) : undefined,
+        });
+      }
+    }
+    return results;
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      const parsed = parseRawContacts(content);
+      setParsedLeads(parsed);
+      if (parsed.length === 0) {
+        showToast("No valid phone numbers found in file. Please ensure column 1 contains phone numbers.", false);
+      } else {
+        showToast(`Parsed ${parsed.length} contacts from CSV!`);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleDownloadSampleCsv = () => {
+    const sampleContent =
+      "phone,name,intent,quote_amount\n" +
+      "+919876543210,Rahul Sharma,Inquired about 30-Day Masterclass,4999\n" +
+      "+919812345678,Pooja Verma,Abandoned checkout on Storefront,1999\n" +
+      "917619671728,Aakash Singh,Requested 1:1 Consultation,999\n";
+    const blob = new Blob([sampleContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "tysonpe_leads_sample.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleBulkImport = () => {
+    const leadsToImport = uploadMode === "paste" ? parseRawContacts(pastedText) : parsedLeads;
+    if (leadsToImport.length === 0) {
+      showToast("Please provide at least one contact with a valid phone number", false);
+      return;
+    }
+
+    setIsUploadingLeads(true);
+    startTransition(async () => {
+      const params = [outreachParam1, outreachParam2, outreachParam3, outreachParam4].filter(Boolean);
+      const res = await importBulkLeadsAction({
+        leads: leadsToImport,
+        status: uploadStage,
+        sendTemplateName: sendOutreachNow ? selectedOutreachTemplate : undefined,
+        templateParameters: sendOutreachNow ? params : undefined,
+      });
+
+      setIsUploadingLeads(false);
+      if (res.ok && res.leads) {
+        const newLeadsMap = new Map<string, LeadItem>(leads.map((l) => [l.phone, l]));
+        for (const imported of res.leads as unknown as LeadItem[]) {
+          newLeadsMap.set(imported.phone, imported);
+        }
+        const updatedList = Array.from(newLeadsMap.values()).sort(
+          (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
+        );
+        setLeads(updatedList);
+        if (res.leads[0]) setSelectedLeadId(res.leads[0].id);
+        setShowUploadModal(false);
+        setPastedText("");
+        setParsedLeads([]);
+        if (res.sentCount && res.sentCount > 0) {
+          showToast(`Imported ${res.importedCount} leads & sent ${res.sentCount} WhatsApp template messages!`);
+        } else {
+          showToast(`Imported ${res.importedCount} leads into ${uploadStage} pipeline!`);
+        }
+      } else {
+        showToast(res.error || "Failed to import leads", false);
+      }
+    });
+  };
+
   const handleSubmitTemplate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!tplName || !tplBody) return;
@@ -385,6 +507,26 @@ export function CrmDashboard({
               </p>
             </div>
           </div>
+
+          <button
+            onClick={() => {
+              const approvedTpl = templates.find((t) => t.status === "APPROVED")?.name || "";
+              setSelectedOutreachTemplate(approvedTpl);
+              setShowUploadModal(true);
+            }}
+            className="flex items-center gap-1.5 rounded-xl border border-line bg-surface px-3.5 py-2 text-xs font-semibold text-ink shadow-2xs transition-all duration-150 active:scale-[0.98] hover:bg-surface-2"
+          >
+            <svg
+              className="h-3.5 w-3.5 text-brand"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            <span>Upload Leads (CSV)</span>
+          </button>
 
           <button
             onClick={() => setShowNewLeadModal(true)}
@@ -1455,6 +1597,314 @@ export function CrmDashboard({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Lead Upload & Outreach Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-2xl border border-line bg-surface p-6 shadow-2xl space-y-5 my-8">
+            <div className="flex items-center justify-between border-b border-line pb-3">
+              <div>
+                <h3 className="text-base font-bold text-ink font-display">
+                  Upload Leads for Outreach
+                </h3>
+                <p className="text-xs text-muted mt-0.5">
+                  Import prospective contacts into your pipeline and optionally launch automated WhatsApp template campaigns.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowUploadModal(false)}
+                className="text-muted hover:text-ink text-sm px-2 py-1 rounded-lg hover:bg-surface-2 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Mode Selector Tabs */}
+            <div className="flex items-center justify-between">
+              <div className="flex rounded-lg border border-line bg-surface-2 p-0.5 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setUploadMode("csv")}
+                  className={`rounded-md px-3 py-1.5 transition-all ${
+                    uploadMode === "csv"
+                      ? "bg-surface text-ink shadow-2xs"
+                      : "text-muted hover:text-ink"
+                  }`}
+                >
+                  Upload CSV File
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUploadMode("paste")}
+                  className={`rounded-md px-3 py-1.5 transition-all ${
+                    uploadMode === "paste"
+                      ? "bg-surface text-ink shadow-2xs"
+                      : "text-muted hover:text-ink"
+                  }`}
+                >
+                  Quick Paste Text
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleDownloadSampleCsv}
+                className="text-[11px] font-semibold text-brand hover:underline inline-flex items-center gap-1"
+              >
+                <span>↓ Download sample .csv</span>
+              </button>
+            </div>
+
+            {/* Input Form Section */}
+            {uploadMode === "csv" ? (
+              <div className="rounded-xl border-2 border-dashed border-line p-6 text-center hover:border-brand/50 transition-colors">
+                <svg
+                  className="mx-auto h-8 w-8 text-muted"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                <label className="mt-3 block cursor-pointer">
+                  <span className="text-xs font-bold text-brand hover:underline">Click to browse file</span>
+                  <span className="text-xs text-muted"> or drag and drop (.csv, .tsv, .txt)</span>
+                  <input
+                    type="file"
+                    accept=".csv,.tsv,.txt"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </label>
+                <p className="mt-1 text-[10px] text-muted">
+                  Columns: phone, name, intent/notes, amount (Header row optional)
+                </p>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1">
+                  Paste Phone Numbers & Names (One per line)
+                </label>
+                <textarea
+                  rows={4}
+                  value={pastedText}
+                  onChange={(e) => setPastedText(e.target.value)}
+                  placeholder={
+                    "9876543210, Rahul Sharma, Interested in Masterclass, 4999\n" +
+                    "+91 98123 45678, Pooja Verma, Inquired about consultation\n" +
+                    "917619671728, Aakash Singh"
+                  }
+                  className="w-full rounded-xl border border-line bg-bg p-3 font-mono text-xs text-ink placeholder:text-muted/60"
+                />
+                <p className="mt-1 text-[10px] text-muted">
+                  Accepts formats: `Phone, Name, Intent` or just phone numbers. Indian 10-digit numbers automatically get prefixed with +91.
+                </p>
+              </div>
+            )}
+
+            {/* Preview of Parsed Contacts */}
+            {((uploadMode === "csv" && parsedLeads.length > 0) ||
+              (uploadMode === "paste" && parseRawContacts(pastedText).length > 0)) && (
+              <div className="rounded-xl border border-line bg-surface-2/40 p-3 space-y-2">
+                <div className="flex items-center justify-between text-xs font-semibold">
+                  <span className="text-ink">
+                    Detected Contacts:{" "}
+                    <strong className="text-brand">
+                      {uploadMode === "csv" ? parsedLeads.length : parseRawContacts(pastedText).length}
+                    </strong>
+                  </span>
+                  <span className="badge badge-good text-[10px]">Valid Numbers Ready</span>
+                </div>
+
+                <div className="max-h-36 overflow-y-auto divide-y divide-line/40 text-[11px]">
+                  {(uploadMode === "csv" ? parsedLeads : parseRawContacts(pastedText))
+                    .slice(0, 5)
+                    .map((item, idx) => (
+                      <div key={idx} className="py-1.5 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-ink">+{item.phone}</span>
+                          {item.name && <span className="text-muted">({item.name})</span>}
+                        </div>
+                        {item.intent && (
+                          <span className="truncate max-w-[180px] text-muted italic">
+                            {item.intent}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  {(uploadMode === "csv" ? parsedLeads.length : parseRawContacts(pastedText).length) > 5 && (
+                    <p className="pt-1.5 text-center text-[10px] text-muted italic">
+                      +{(uploadMode === "csv" ? parsedLeads.length : parseRawContacts(pastedText).length) - 5} more contacts
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Campaign & Pipeline Settings */}
+            <div className="rounded-xl border border-line p-4 space-y-3 bg-surface">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1">
+                    Pipeline Target Stage
+                  </label>
+                  <select
+                    value={uploadStage}
+                    onChange={(e) => setUploadStage(e.target.value)}
+                    className="w-full rounded-xl border border-line bg-bg px-3 py-2 text-xs text-ink"
+                  >
+                    <option value="NEW">New (Uncontacted)</option>
+                    <option value="INQUIRY">Inquiry / Consultation</option>
+                    <option value="INTERESTED">Interested / Warm Lead</option>
+                    <option value="QUOTE_SENT">Quote / Offer Sent</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1">
+                    Instant Outreach Broadcast
+                  </label>
+                  <div className="flex items-center h-9">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-ink">
+                      <input
+                        type="checkbox"
+                        checked={sendOutreachNow}
+                        onChange={(e) => setSendOutreachNow(e.target.checked)}
+                        className="h-4 w-4 rounded border-line text-brand focus:ring-brand"
+                      />
+                      <span>Send WhatsApp Template Now</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Outreach Template Options if checked */}
+              {sendOutreachNow && (
+                <div className="pt-3 border-t border-line space-y-3 bg-brand-soft/20 p-3 rounded-lg">
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-brand mb-1">
+                      Select Approved Meta Template
+                    </label>
+                    <select
+                      value={selectedOutreachTemplate}
+                      onChange={(e) => setSelectedOutreachTemplate(e.target.value)}
+                      className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-xs text-ink font-semibold"
+                    >
+                      {templates.filter((t) => t.status === "APPROVED").length === 0 ? (
+                        <option value="">No approved templates found</option>
+                      ) : (
+                        templates
+                          .filter((t) => t.status === "APPROVED")
+                          .map((t) => (
+                            <option key={t.name} value={t.name}>
+                              {t.name} ({t.category})
+                            </option>
+                          ))
+                      )}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-semibold uppercase tracking-wider text-muted">
+                        Param 1 (e.g. Name)
+                      </label>
+                      <input
+                        type="text"
+                        value={outreachParam1}
+                        onChange={(e) => setOutreachParam1(e.target.value)}
+                        placeholder="{{name}}"
+                        className="w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs"
+                      />
+                      <span className="text-[9px] text-muted">Use {"{{name}}"} for recipient name</span>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold uppercase tracking-wider text-muted">
+                        Param 2 (e.g. Product)
+                      </label>
+                      <input
+                        type="text"
+                        value={outreachParam2}
+                        onChange={(e) => setOutreachParam2(e.target.value)}
+                        placeholder="Masterclass"
+                        className="w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold uppercase tracking-wider text-muted">
+                        Param 3 (e.g. Price/Offer)
+                      </label>
+                      <input
+                        type="text"
+                        value={outreachParam3}
+                        onChange={(e) => setOutreachParam3(e.target.value)}
+                        placeholder="₹1"
+                        className="w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold uppercase tracking-wider text-muted">
+                        Param 4 (e.g. Link)
+                      </label>
+                      <input
+                        type="text"
+                        value={outreachParam4}
+                        onChange={(e) => setOutreachParam4(e.target.value)}
+                        placeholder="https://tysonpe.com"
+                        className="w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-xs text-muted">
+                {uploadMode === "csv"
+                  ? `${parsedLeads.length} leads ready`
+                  : `${parseRawContacts(pastedText).length} leads ready`}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowUploadModal(false)}
+                  className="rounded-xl border border-line px-4 py-2 text-xs font-semibold text-muted hover:text-ink transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBulkImport}
+                  disabled={
+                    isUploadingLeads ||
+                    (uploadMode === "csv" && parsedLeads.length === 0) ||
+                    (uploadMode === "paste" && parseRawContacts(pastedText).length === 0)
+                  }
+                  className="rounded-xl bg-brand px-5 py-2 text-xs font-semibold text-brand-ink disabled:opacity-50 transition-all duration-150 active:scale-[0.98] shadow-xs hover:bg-brand/90 flex items-center gap-1.5"
+                >
+                  {isUploadingLeads ? (
+                    <>
+                      <span className="h-3 w-3 rounded-full border-2 border-brand-ink border-t-transparent animate-spin" />
+                      <span>Importing...</span>
+                    </>
+                  ) : sendOutreachNow ? (
+                    <span>Import & Launch WhatsApp Campaign</span>
+                  ) : (
+                    <span>Import Leads to Pipeline</span>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
