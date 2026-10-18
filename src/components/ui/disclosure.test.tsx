@@ -50,4 +50,21 @@ describe("Disclosure", () => {
   it("is re-exported from @/components/ui", () => {
     expect(DisclosureFromUi).toBe(Disclosure);
   });
+
+  // A collapsed panel is only squashed to zero height by CSS: its fields stay in the tab order and the accessibility
+  // tree, so a keyboard user tabs through invisible inputs. `inert` takes it out of both until it opens.
+  const panel = (html: string) => /<div id="[^"]*-panel"[^>]*>/.exec(html)![0];
+
+  it("makes the closed panel inert, so nothing inside it can be tabbed to or read", () => {
+    expect(panel(render(<Disclosure label="Filter"><input name="q" /></Disclosure>))).toMatch(/\sinert=""/);
+  });
+
+  it("leaves an open panel interactive", () => {
+    expect(panel(render(<Disclosure label="Filter" defaultOpen><input name="q" /></Disclosure>))).not.toContain("inert");
+  });
+
+  it("lets a long label shrink and wrap instead of pushing the chevron out of the row", () => {
+    const html = render(<Disclosure label="x"><p>p</p></Disclosure>);
+    expect(html).toMatch(/<span class="[^"]*\bmin-w-0\b[^"]*\bflex-1\b[^"]*">x<\/span>/);
+  });
 });

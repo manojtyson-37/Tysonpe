@@ -59,7 +59,7 @@ export function Disclosure({
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center justify-between gap-2 py-3 text-left text-sm font-medium text-ink"
       >
-        <span>{label}</span>
+        <span className="min-w-0 flex-1">{label}</span>
         <ChevronIcon
           className={[
             "h-4 w-4 shrink-0 text-muted",
@@ -75,6 +75,8 @@ export function Disclosure({
         id={panelId}
         role="region"
         aria-labelledby={id}
+        // Collapsing is only a height change, so without this the closed fields stay tabbable and readable.
+        inert={!open}
         className={[
           "grid overflow-hidden",
           "transition-[grid-template-rows] duration-[var(--dur-base)] ease-[var(--ease-standard)]",

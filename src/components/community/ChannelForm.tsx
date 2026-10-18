@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { FormState } from "@/app/actions/auth";
-import { ActionForm, Field, FormError, SavedNote, SubmitButton, useFormValues } from "@/components/form";
+import { ActionForm, Checkbox, Field, FormError, SavedNote, SubmitButton, useFormValues } from "@/components/form";
 
 type Channel = { name: string; description: string; kind: string; access: string; productIds: string[] };
 type ProductOption = { id: string; title: string };
@@ -35,7 +35,7 @@ function Fields({ channel, products }: { channel?: Channel; products: ProductOpt
         </Field>
       </div>
       {access === "product_gated" && (
-        <fieldset className="rounded-xl border border-line px-4 py-3">
+        <fieldset className="min-w-0 rounded-card border border-line px-4 py-3">
           <legend className="px-1 text-sm font-semibold">Products that unlock this channel</legend>
           {products.length === 0 ? (
             <p className="text-sm text-muted">Create a product first.</p>
@@ -43,10 +43,13 @@ function Fields({ channel, products }: { channel?: Channel; products: ProductOpt
             <ul>
               {products.map((p) => (
                 <li key={p.id}>
-                  <label className="flex min-h-10 items-center gap-2 py-2 text-sm">
-                    <input type="checkbox" name="productIds" value={p.id} defaultChecked={channel?.productIds.includes(p.id)} className="size-4 accent-[color:var(--brand-text,#16130f)]" />
-                    {p.title}
-                  </label>
+                  <Checkbox
+                    name="productIds"
+                    value={p.id}
+                    label={p.title}
+                    defaultChecked={channel?.productIds.includes(p.id)}
+                    className="[&_label>span]:min-w-0 [&_label>span]:wrap-anywhere"
+                  />
                 </li>
               ))}
             </ul>
@@ -69,7 +72,7 @@ export function ChannelForm({ action, channel, products, submitLabel }: {
       <Fields channel={channel} products={products} />
       <FormError />
       <div className="flex items-center gap-3">
-        <SubmitButton className="btn btn-primary btn-sm min-h-10" pendingText="Saving…">{submitLabel}</SubmitButton>
+        <SubmitButton variant="primary" size="sm" className="pointer-coarse:min-h-11" pendingText="Saving…">{submitLabel}</SubmitButton>
         <SavedNote />
       </div>
     </ActionForm>
