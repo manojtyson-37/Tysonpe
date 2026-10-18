@@ -22,11 +22,14 @@ const TOKEN = new RegExp(
   "g",
 );
 
+/** Every script and style extension, minus only real test files: `x.test.helper.tsx` ships in the app and is scanned. */
+const scanned = (name: string) => /\.(m?[jt]sx?|css)$/.test(name) && !/\.test\.[jt]sx?$/.test(name);
+
 function files(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
     const full = path.join(dir, name);
     if (statSync(full).isDirectory()) files(full, out);
-    else if (/\.(tsx?|css)$/.test(name) && !/\.test\./.test(name)) out.push(full);
+    else if (scanned(name)) out.push(full);
   }
   return out;
 }
@@ -67,6 +70,18 @@ describe("scroll margins against the global scroll padding", () => {
       [`.x { ${SCROLL}${MARGIN}: 0 }`, `${SCROLL}${MARGIN}`],
     ];
     for (const [sample, token] of spellings) expect(tokensIn(sample), sample).toContain(token);
+  });
+
+  it("glued after an interpolation, and next to other classes, is still found", () => {
+    const m = SCROLL + "m";
+    for (const sample of ["`${x}" + m + "t-4`", "`a ${x} ${m}t-4`".replace("${m}", m), 'cn("p-2", "' + m + 'b-4")']) {
+      expect(tokensIn(sample), sample).not.toEqual([]);
+    }
+  });
+
+  it("scans .js .jsx .mjs .mts .ts .tsx and .css, and skips only real tests (a *.test.helper.tsx is app code)", () => {
+    for (const name of ["a.ts", "a.tsx", "a.js", "a.jsx", "a.mjs", "a.mts", "a.css", "x.test.helper.tsx", "x.test.helper.ts"]) expect(scanned(name), name).toBe(true);
+    for (const name of ["a.test.ts", "a.test.tsx", "a.test.js", "a.test.jsx", "a.json", "a.md", "a.png"]) expect(scanned(name), name).toBe(false);
   });
 
   it("and ignores neighbours that are not margins", () => {

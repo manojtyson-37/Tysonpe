@@ -28,7 +28,9 @@ function code(src: string): string {
 }
 
 const importsMark = (src: string, name: string) =>
-  new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*"[^"]*gateway-icons"`).test(code(src));
+  [...code(src).matchAll(/^import\s*\{([^}]*)\}\s*from\s*"[^"]*\/gateway-icons"/gm)].some((m) =>
+    m[1].split(",").some((spec) => spec.trim().split(/\s+as\s+/)[0] === name),
+  );
 
 describe("gateway-icons", () => {
   it("every export renders one decorative svg that takes a className", () => {
@@ -74,6 +76,14 @@ describe("gateway-icons", () => {
     expect(importsMark('/* import { UpiIcon } from "./gateway-icons"; */\nexport const a = 1;', "UpiIcon")).toBe(false);
     expect(importsMark('const s = `import { UpiIcon } from "./gateway-icons"`;', "UpiIcon")).toBe(false);
     expect(importsMark('import {\n  VisaIcon,\n  UpiIcon,\n} from "./gateway-icons";', "UpiIcon")).toBe(true);
+    // a mention inside a string literal, after code on the same line, from another module, or under an alias is not an import of that mark
+    expect(importsMark(`const s = 'import { UpiIcon } from "./gateway-icons"';`, "UpiIcon")).toBe(false);
+    expect(importsMark('export const a = 1; // import { UpiIcon } from "./gateway-icons";', "UpiIcon")).toBe(false);
+    expect(importsMark('export const a = 1;// import { UpiIcon } from "./gateway-icons";', "UpiIcon")).toBe(false);
+    expect(importsMark('import { UpiIcon } from "./other-gateway-icons";', "UpiIcon")).toBe(false);
+    expect(importsMark('import { VisaIcon as UpiIcon } from "./gateway-icons";', "UpiIcon")).toBe(false);
+    expect(importsMark('import { UpiIcon as Upi } from "./gateway-icons";', "UpiIcon")).toBe(true);
+    expect(importsMark('import { VisaIcon } from "./gateway-icons";\nimport { UpiIcon } from "@/components/gateway-icons";', "UpiIcon")).toBe(true);
   });
 
   it("keeps the brand hex on purpose and says so, and ends with exactly one newline", () => {

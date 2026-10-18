@@ -37,6 +37,9 @@ describe("ConsoleTopBar", () => {
     // 33px tall without this: a 44px target under a coarse pointer
     expect(logo.class).toContain("pointer-coarse:min-h-11");
     expect(logo.class).toContain("inline-flex");
+    // items-center keeps the wordmark centred in that 44px box; shrink-0 keeps it from being squeezed by the name beside it
+    expect(logo.class).toContain("items-center");
+    expect(logo.class).toContain("shrink-0");
   });
 
   it("shows the creator's display name and links to their own storefront", () => {

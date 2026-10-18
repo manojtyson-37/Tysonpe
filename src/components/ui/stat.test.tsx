@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MetricList, MetricRow, Stat, StatStrip, stripColumns } from "./stat";
+import { MetricList, MetricRow, Stat, StatStrip, stripColumns, stripLayout } from "./stat";
 import { Stat as StatFromUi, StatStrip as StripFromIndex, MetricRow as RowFromUi } from "@/components/ui";
 import { Money } from "./money";
 
@@ -130,6 +130,26 @@ describe("StatStrip layout answers to its own width (it overflowed the console c
     const cells = [...render(<StatStrip items={six} />).matchAll(/<div class="(@(?!container")[^"]*)"/g)].map((m) => m[1]);
     expect(cells).toHaveLength(6);
     expect(cells.map((c) => !c.includes("border-l"))).toEqual([true, false, false, false, true, false]);
+  });
+
+  it("every cell class list is exactly its own divider tokens, for every strip size (nothing extra, nothing missing)", () => {
+    const spec: Record<number, [string, string]> = {
+      2: ["@2xl:pr-6", "@2xl:border-l @2xl:border-line @2xl:px-6"],
+      3: ["@5xl:pr-6", "@5xl:border-l @5xl:border-line @5xl:px-6"],
+      4: ["@min-[84rem]:pr-6", "@min-[84rem]:border-l @min-[84rem]:border-line @min-[84rem]:px-6"],
+    };
+    // One item: no divider tokens at all, so the cell carries no class attribute.
+    expect(render(<StatStrip items={four.slice(0, 1)} />)).not.toMatch(/<div class="@(?!container")/);
+    expect(cellsOf(1)).toEqual([]);
+    for (const n of [2, 3, 4]) {
+      const [first, rest] = spec[n];
+      expect(cellsOf(n), `${n} items`).toEqual(Array.from({ length: n }, (_, i) => (i === 0 ? first : rest)));
+    }
+    // and the shape of a cell is the same class list the helper hands the skeleton
+    for (const n of [1, 2, 3, 4]) {
+      const classes = Array.from({ length: n }, (_, i) => stripLayout(n).cell(i)).filter(Boolean);
+      expect(classes, `${n} items`).toEqual(cellsOf(n));
+    }
   });
 
   it("has no card box", () => {
