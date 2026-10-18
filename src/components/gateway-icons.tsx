@@ -214,9 +214,32 @@ export function ClockIcon({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
+export function CredIcon({ className = "w-6 h-6" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect width="36" height="36" rx="8" fill="#121212" />
+      <path
+        d="M11 11h14v14H11V11zm2.5 2.5v9h9v-9h-9zm2.5 2.5h4v4h-4v-4z"
+        fill="#FFFFFF"
+      />
+    </svg>
+  );
+}
+
+export function BhimIcon({ className = "w-6 h-6" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect width="36" height="36" rx="8" fill="#005B94" />
+      <path d="M12 9l8 9-8 9h5l8-9-8-9h-5z" fill="#00AEEF" />
+      <path d="M18 9l8 9-8 9h5l8-9-8-9h-5z" fill="#F37023" />
+    </svg>
+  );
+}
+
 // Aliases for intuitive semantic naming
 export const GooglePayIcon = GPayIcon;
-export const BhimUpiIcon = UpiIcon;
+export const BhimUpiIcon = BhimIcon;
 export const ShieldCheckBadge = ShieldCheckIcon;
 export const LockBadge = LockIcon;
+
 

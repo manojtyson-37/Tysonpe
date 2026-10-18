@@ -53,6 +53,12 @@ export function useFormValues() {
   return useContext(Ctx)?.values;
 }
 
+/** Error string for a specific field or the top-level form error. */
+export function useFormError(fieldName?: string) {
+  const s = useContext(Ctx);
+  return fieldName ? s?.fields?.[fieldName] : s?.error;
+}
+
 export function FormError() {
   const s = useContext(Ctx);
   if (!s?.error) return null;
