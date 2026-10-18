@@ -88,6 +88,14 @@ describe("the auth pages render through AuthShell", () => {
     expect(await title({ role: "admin" })).toBe("Create your account");
   });
 
+  it("sign up: the log in footer link carries a safe next and drops an unsafe one", async () => {
+    const link = (out: string) => /Already have an account\? <a [^>]*href="([^"]*)"/.exec(out)?.[1];
+    expect(link(html(await SignupPage(params())))).toBe("/login");
+    expect(link(html(await SignupPage(params({ next: "/library/p1" }))))).toBe("/login?next=%2Flibrary%2Fp1");
+    expect(link(html(await SignupPage(params({ next: "https://evil.example" }))))).toBe("/login");
+    expect(link(html(await SignupPage(params({ next: "//evil.example" }))))).toBe("/login");
+  });
+
   it("sign up: role=creator opens a store, and the footer links to log in", async () => {
     const tree = await SignupPage(params({ role: "creator" }));
     expect(elementsOfType(tree, AuthShell)).toHaveLength(1);

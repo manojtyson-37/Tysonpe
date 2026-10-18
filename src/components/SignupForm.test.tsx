@@ -273,7 +273,7 @@ describe("SignupForm follows the design rules", () => {
   it("imports only the allowed marks from gateway-icons", () => {
     const m = /import\s*\{([^}]*)\}\s*from "\.\/gateway-icons"/.exec(source);
     const names = (m?.[1] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-    const allowed = ["GPayIcon", "GooglePayIcon", "PhonePeIcon", "PaytmIcon", "UpiIcon", "VisaIcon", "MastercardIcon", "RupayIcon", "HdfcBankIcon", "SbiBankIcon", "IciciBankIcon", "AxisBankIcon", "KotakBankIcon"];
+    const allowed = ["GPayIcon", "GooglePayIcon", "PhonePeIcon", "PaytmIcon", "UpiIcon", "VisaIcon", "MastercardIcon", "RupayIcon", "HdfcBankIcon", "SbiBankIcon", "IciciBankIcon", "AxisBankIcon"];
     expect(names.length).toBeGreaterThan(0);
     for (const n of names) expect(allowed).toContain(n);
   });

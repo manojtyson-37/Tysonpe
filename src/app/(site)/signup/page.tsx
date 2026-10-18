@@ -22,7 +22,7 @@ export default async function SignupPage({ searchParams }: PageProps<"/signup">)
       subtitle="Free to start. No card needed."
       footer={
         <>
-          Already have an account? <Link className="font-semibold text-brand hover:underline" href="/login">Log in</Link>
+          Already have an account? <Link className="font-semibold text-brand hover:underline" href={`/login${next ? `?next=${encodeURIComponent(next)}` : ""}`}>Log in</Link>
         </>
       }
     >

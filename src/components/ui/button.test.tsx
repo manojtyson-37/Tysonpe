@@ -22,6 +22,16 @@ describe("touch size", () => {
   it("default and large buttons are 44px on touch; the compact one keeps its drawn size and the hit-area extension", () => {
     expect(coarse).toContain(".btn:not(.btn-sm) { min-height: 44px; }");
     expect(coarse).toContain(".btn::after");
+    expect(coarse).toContain("inset-block: min(0px, calc((100% - 44px) / 2));");
+  });
+});
+
+describe("scroll padding under the sticky header", () => {
+  const css = readFileSync(path.resolve(import.meta.dirname, "../../app/globals.css"), "utf8");
+
+  it("html keeps 5rem of scroll padding (header is 3.5rem), next to the smooth-scroll rule that reduced motion overrides", () => {
+    expect(css).toMatch(/html \{ scroll-behavior: smooth; scroll-padding-top: 5rem; \}/);
+    expect(css).toMatch(/prefers-reduced-motion: reduce[\s\S]*scroll-behavior: auto !important/);
   });
 });
 

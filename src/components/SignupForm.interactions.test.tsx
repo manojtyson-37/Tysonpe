@@ -39,6 +39,7 @@ vi.mock("./form", async (importOriginal) => {
 vi.mock("@/app/actions/auth", () => ({ signup: async () => ({}) }));
 
 import { InputGroup } from "./form";
+import { IconEye, IconEyeOff } from "./icons";
 import { SignupFields } from "./SignupForm";
 
 type P = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -184,6 +185,12 @@ describe("SignupFields: the handle (audit B3, B6)", () => {
     expect(m.handle()!.value).toBe("a-b");
   });
 
+  it("strips leading hyphens BEFORE the 30-character cap, so a stripped hyphen does not cost a character", () => {
+    const m = mount("creator");
+    m.type("handle", "-" + "a".repeat(30));
+    expect(m.handle()!.value).toBe("a".repeat(30));
+  });
+
   it("caps what is typed at 30 characters", () => {
     const m = mount("creator");
     m.type("handle", "a".repeat(45));
@@ -265,7 +272,9 @@ describe("SignupFields: show/hide password", () => {
     expect(pw().type).toBe("password");
     expect(m.toggle().props["aria-pressed"]).toBe(false);
     expect(m.toggle().props["aria-label"]).toBe("Show password");
+    expect((m.toggle().props.children as { type: unknown }).type).toBe(IconEye);
     m.click(m.toggle());
+    expect((m.toggle().props.children as { type: unknown }).type).toBe(IconEyeOff);
     expect(pw().type).toBe("text");
     expect(m.toggle().props["aria-pressed"]).toBe(true);
     expect(m.toggle().props["aria-label"]).toBe("Show password");

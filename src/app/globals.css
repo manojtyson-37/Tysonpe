@@ -136,7 +136,8 @@
   padding-block: var(--section-app);
 }
 
-html { scroll-behavior: smooth; }
+/* The sticky header (h-14) must not cover a field that .focus() scrolls into view. */
+html { scroll-behavior: smooth; scroll-padding-top: 5rem; }
 body {
   background: var(--bg);
   color: var(--ink);

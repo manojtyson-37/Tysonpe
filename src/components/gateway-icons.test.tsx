@@ -37,15 +37,18 @@ describe("gateway-icons", () => {
     }
   });
 
-  it("every alias export has an importer in src, and GooglePayIcon is the very same component as GPayIcon", () => {
+  it("the only alias is GooglePayIcon, and it is the very same component as GPayIcon", () => {
     const aliases = [...SOURCE.matchAll(/^export const (\w+) = \w+;$/gm)].map((m) => m[1]);
     expect(aliases).toEqual(["GooglePayIcon"]);
-    const files = sources(SRC);
-    for (const alias of aliases) {
-      const users = files.filter(([, src]) => new RegExp(`import\\s*\\{[^}]*\\b${alias}\\b[^}]*\\}\\s*from\\s*"[^"]*gateway-icons"`).test(src));
-      expect(users.length, alias).toBeGreaterThan(0);
-    }
     expect(marks.GooglePayIcon).toBe(marks.GPayIcon);
+  });
+
+  it("every exported mark is imported by a non-test file in src (nothing unused)", () => {
+    const files = sources(SRC);
+    for (const name of Object.keys(marks)) {
+      const used = files.some(([, src]) => new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*"[^"]*gateway-icons"`).test(src));
+      expect(used, name).toBe(true);
+    }
   });
 
   it("keeps the brand hex on purpose and says so, and ends with exactly one newline", () => {

@@ -11,14 +11,17 @@ const H = vi.hoisted(() => ({
   state: undefined as unknown,
   effects: [] as Array<{ fn: () => void; deps: unknown[] | undefined }>,
   form: {} as { querySelector: (selector: string) => { focus: () => void } | null },
+  /** The one ref object useRef hands out; `current` is whatever `form` is now (the test plays the DOM). */
+  formRef: {} as { current: unknown },
 }));
+Object.defineProperty(H.formRef, "current", { get: () => H.form });
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const useActionState = (fn: Reducer) => {
     H.reducer = fn;
     return [H.state, () => {}];
   };
-  const useRef = () => ({ current: H.form });
+  const useRef = () => H.formRef;
   const useEffect = (fn: () => void, deps?: unknown[]) => {
     H.effects.push({ fn, deps });
   };
@@ -98,8 +101,25 @@ describe("ActionForm: focus after a failed submit", () => {
   it("does not throw when no control is invalid (a 'Saved' result carries fields.saved)", () => {
     H.state = { fields: { saved: "1" } };
     H.effects = [];
-    H.form = { querySelector: () => null };
+    const selectors: string[] = [];
+    H.form = {
+      querySelector: (selector: string) => {
+        selectors.push(selector);
+        return null;
+      },
+    };
     renderToStaticMarkup(<ActionForm action={(async () => undefined) as never}>x</ActionForm>);
     expect(() => H.effects[0].fn()).not.toThrow();
+    // exactly the invalid-control lookup: no fallback to the first input or the form that could steal focus
+    expect(selectors).toEqual(['[aria-invalid="true"]']);
+  });
+
+  it("hands the ref to the <form> element (without it the effect has nothing to search and focus never moves)", () => {
+    H.state = undefined;
+    H.effects = [];
+    const provider = ActionForm({ action: (async () => undefined) as never, children: "x" });
+    const form = (provider.props as { children: { type: unknown; props: { ref?: unknown } } }).children;
+    expect(form.type).toBe("form");
+    expect(form.props.ref).toBe(H.formRef);
   });
 });
