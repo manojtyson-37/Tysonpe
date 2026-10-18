@@ -45,7 +45,9 @@ vi.mock("react", async (importOriginal) => {
   return { ...actual, default: { ...actual, ...stubs }, ...stubs };
 });
 
+import { DEMO_INVOICE_NO } from "@/lib/demo-model";
 import { createSessionClock } from "@/lib/session-clock";
+import { Stage } from "./parts";
 import { HostedTab } from "./HostedTab";
 import { QrTab } from "./QrTab";
 
@@ -65,6 +67,8 @@ function expand(node: ReactNode): Array<Node | string> {
 }
 // svg is skipped: the brand marks are aria-hidden and the Paytm mark draws its name as <text>.
 const textOf = (n: Node | string): string => (typeof n === "string" ? n : n.tag === "svg" ? "" : n.kids.map(textOf).join(""));
+// Every text run of a subtree with a space between element boundaries, so "Learner (sample)" and its value read apart.
+const spaced = (n: Node | string): string => (typeof n === "string" ? n : n.tag === "svg" ? "" : n.kids.map(spaced).join(" "));
 function all(nodes: Array<Node | string>, out: Node[] = []): Node[] {
   for (const n of nodes) {
     if (typeof n === "string") continue;
@@ -145,6 +149,9 @@ function mount(component: (props: { clock: ReturnType<typeof createSessionClock>
     status: () => textOf(tree.find((n) => n.props.role === "status")!),
     statusCount: () => tree.filter((n) => n.props.role === "status").length,
     text: () => tree.filter((n) => n.tag === "p").map((n) => textOf(n)).join(" "),
+    full: () => spaced(tree[0]).replace(/\s+/g, " ").trim(),
+    headingRef: () => tree.find((n) => n.tag === "h3")?.props.ref as { current: unknown } | undefined,
+    statusProps: () => tree.find((n) => n.props.role === "status")!.props,
     stageClass: () => tree.find((n) => n.tag === "div" && (n.props.className === "enter" || n.props.className === undefined) && n.kids.length > 0 && all(n.kids).some((k) => k.tag === "h3"))?.props.className,
     link: () => tree.find((n) => n.tag === "Link"),
     nodes: () => tree,
@@ -420,5 +427,183 @@ describe("HostedTab: pay or cancel straight from the hosted page", () => {
     expect(t.text()).toContain("cancelled on the hosted page");
     t.click("Try again");
     expect(t.heading()).toBe("Choose a sample bank");
+  });
+});
+
+describe("every screen of both tabs: nothing a visitor could mistake for real", () => {
+  type T = ReturnType<typeof mount>;
+  const SAMPLE_EMAILS = new Set(["learner@demo.tysonpe.test", "creator@sample"]);
+  const BANNED = ["HDFC", "SBI", "ICICI", "Axis", "Kotak", "50+", "RRN", "UTR", "ORD-", "EB_", "testimonial", "customers", "trusted", "guarantee", "100%", "T+", "instant settlement", "rated"];
+
+  const QR_STEPS: Array<[string, (t: T) => void]> = [
+    ["checkout", () => {}],
+    ["phone prompt (app)", (t) => t.click("Pay with PhonePe")],
+    ["phone prompt (scan)", (t) => t.click("Simulate scanning the QR")],
+    ["processing (approve)", (t) => (t.click("Pay with Google Pay"), t.click("Approve payment"))],
+    ["processing (decline)", (t) => (t.click("Pay with Google Pay"), t.click("Decline"))],
+    ["success", (t) => (t.click("Pay with Google Pay"), t.click("Approve payment"), vi.advanceTimersByTime(1200), t.render())],
+    ["failed", (t) => (t.click("Pay with Google Pay"), t.click("Decline"), vi.advanceTimersByTime(600), t.render())],
+  ];
+  const HOSTED_STEPS: Array<[string, (t: T) => void]> = [
+    ["checkout", () => {}],
+    ["processing (pay)", (t) => t.click("Pay ₹1,180 with Sample Bank A")],
+    ["processing (cancel)", (t) => t.click("Cancel payment")],
+    ["success", (t) => (t.click("Pay ₹1,180 with Sample Bank A"), vi.advanceTimersByTime(1200), t.render())],
+    ["failed", (t) => (t.click("Cancel payment"), vi.advanceTimersByTime(600), t.render())],
+  ];
+  const cases = [
+    ...QR_STEPS.map(([name, go]) => ["QrTab", name, QrTab, go] as const),
+    ...HOSTED_STEPS.map(([name, go]) => ["HostedTab", name, HostedTab, go] as const),
+  ];
+
+  it.each(cases)("%s, %s: only the sample identities, amounts and invoice number; no banned claim; no exclamation mark", (_tab, _name, Tab, go) => {
+    const t = mount(Tab);
+    go(t);
+    const text = t.full();
+    const everything = `${text} ${t.status()}`;
+    for (const email of everything.match(/[\w.+-]+@[\w.-]+/g) ?? []) expect(SAMPLE_EMAILS.has(email), email).toBe(true);
+    for (const no of everything.match(/TP\/\d{4}-\d{2}\/\d+/g) ?? []) expect(no).toBe(DEMO_INVOICE_NO);
+    for (const amount of everything.match(/₹\d[\d,]*(?:\.\d+)?/g) ?? []) expect(["₹1,180", "₹180"], amount).toContain(amount);
+    for (const claim of BANNED) expect(everything, claim).not.toContain(claim);
+    expect(everything).not.toContain("!");
+    expect(everything.toLowerCase()).toMatch(/simulat|sample/);
+  });
+
+  it("the success screen shows the sample learner, the sample VPA stays on the prompt, and the invoice number is the model's", () => {
+    const ok = mount(QrTab);
+    QR_STEPS[5][1](ok);
+    expect(ok.full()).toContain("Learner (sample)");
+    expect(ok.full()).toContain("learner@demo.tysonpe.test");
+    expect(ok.full()).toContain(`Tax invoice (sample) ${DEMO_INVOICE_NO}`);
+    expect(ok.full()).toContain("Course access Added to the sample library");
+    expect(DEMO_INVOICE_NO).toBe("TP/2026-27/00001");
+    unmount();
+    const prompt = mount(QrTab);
+    QR_STEPS[1][1](prompt);
+    expect(prompt.full()).toContain("Sample VPA: creator@sample");
+    expect(prompt.full()).toContain("Test mode: no real money");
+    expect(prompt.full()).toContain("Simulated phone");
+  });
+
+  it("success and failed say no money moved, on both surfaces, in the visible copy and the announcement", () => {
+    for (const [Tab, steps] of [[QrTab, QR_STEPS], [HostedTab, HOSTED_STEPS]] as const) {
+      for (const name of ["success", "failed"]) {
+        unmount();
+        const t = mount(Tab);
+        steps.find(([n]) => n === name)![1](t);
+        expect(t.status(), `${Tab.name} ${name} announcement`).toContain("No money moved.");
+        if (name === "failed" || Tab === QrTab) expect(t.full().toLowerCase(), `${Tab.name} ${name} body`).toContain("no money moved");
+      }
+    }
+  });
+
+  it("the processing screen states the check is simulated, calls no gateway, and the delay matches the outcome", () => {
+    for (const [Tab, approve, decline] of [
+      [QrTab, QR_STEPS[3][1], QR_STEPS[4][1]],
+      [HostedTab, HOSTED_STEPS[1][1], HOSTED_STEPS[2][1]],
+    ] as const) {
+      unmount();
+      const ok = mount(Tab);
+      approve(ok);
+      expect(ok.full()).toContain("Simulated, about 1.2 seconds. No gateway is called.");
+      unmount();
+      const no = mount(Tab);
+      decline(no);
+      expect(no.full()).toContain("Simulated, about 0.6 seconds. No gateway is called.");
+    }
+  });
+
+  it("the success footer link says it opens the full sandbox and goes to /demo; reset buttons say what they do", () => {
+    const t = mount(QrTab);
+    QR_STEPS[5][1](t);
+    expect(t.link()?.props.href).toBe("/demo");
+    expect(textOf(t.link()!)).toBe("Open the full sandbox");
+    expect(t.has("Run it again")).toBe(true);
+    unmount();
+    const f = mount(QrTab);
+    QR_STEPS[6][1](f);
+    expect(f.link()).toBeUndefined(); // no sandbox upsell on the failed screen
+    expect(f.has("Try again")).toBe(true);
+  });
+});
+
+describe("step plumbing: status region, entering step, heading ref", () => {
+  it("each tab has one status region: polite (role=status, no aria-live override), visually hidden, outside the animated step", () => {
+    for (const Tab of [QrTab, HostedTab]) {
+      unmount();
+      const t = mount(Tab);
+      const props = t.statusProps();
+      expect(props.role).toBe("status");
+      expect(props["aria-live"]).toBeUndefined();
+      expect(props.className).toBe("sr-only"); // present for assistive tech, never drawn twice
+      expect(t.statusCount()).toBe(1);
+      // it is a direct child of the tab root, not inside the Stage that re-creates its children each step
+      const root = t.nodes()[0];
+      expect(root.kids.some((k) => typeof k !== "string" && k.props.role === "status")).toBe(true);
+    }
+  });
+
+  it("the status region is one element that survives every step (same element, text changes)", () => {
+    const t = mount(QrTab);
+    const first = t.statusProps();
+    t.click("Pay with Google Pay");
+    expect(t.statusCount()).toBe(1);
+    expect(t.statusProps().role).toBe(first.role);
+    expect(t.status()).not.toBe("Simulated checkout: scan the sample QR or pick a UPI app.");
+  });
+
+  it("Stage keys its wrapper by step, so each step re-creates it and the enter animation restarts", () => {
+    const a = Stage({ step: "checkout", touched: true, children: null }) as { key: string | null; props: P };
+    const b = Stage({ step: "processing", touched: true, children: null }) as { key: string | null; props: P };
+    expect(a.key).toBe("checkout");
+    expect(b.key).toBe("processing");
+    expect(a.props.className).toBe("enter");
+    expect(Stage({ step: "checkout", touched: false, children: null }).props.className).toBeUndefined();
+  });
+
+  it("the heading carries the ref the step machine focuses, on every step of both tabs (not a stale ref from the last render)", () => {
+    for (const Tab of [QrTab, HostedTab]) {
+      unmount();
+      const t = mount(Tab);
+      const seen: unknown[] = [];
+      const check = () => {
+        const ref = t.headingRef();
+        expect(ref, `${Tab.name}: ${t.heading()}`).toBeDefined();
+        seen.push(ref);
+      };
+      check();
+      if (Tab === QrTab) {
+        t.click("Pay with Google Pay");
+        check();
+        t.click("Approve payment");
+      } else {
+        t.click("Pay ₹1,180 with Sample Bank A");
+      }
+      check();
+      vi.advanceTimersByTime(1200);
+      t.render();
+      check();
+      t.click("Run it again");
+      check();
+      expect(new Set(seen).size, "one ref object, handed to whichever heading is showing").toBe(1);
+    }
+  });
+
+  it("the heading of every step is focusable by script only (tabIndex -1) and an h3", () => {
+    const t = mount(QrTab);
+    const h = () => t.nodes().find((n) => n.tag === "h3")!;
+    expect(h().props.tabIndex).toBe(-1);
+    t.click("Pay with Google Pay");
+    expect(h().props.tabIndex).toBe(-1);
+    t.click("Approve payment");
+    expect(h().props.tabIndex).toBe(-1);
+  });
+
+  it("HostedTab opened on a clock at 0 prints 00:00, not a constant", () => {
+    const t = mount(HostedTab, 0);
+    expect(t.text()).toContain("Page expires in 00:00");
+    unmount();
+    const full = mount(HostedTab, 900);
+    expect(full.text()).toContain("Page expires in 15:00");
   });
 });

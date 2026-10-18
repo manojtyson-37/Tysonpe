@@ -118,6 +118,29 @@ describe("demo model: the step machine", () => {
     expect(flowReducer(success, { type: "approve" })).toBe(success);
   });
 
+  it("choose-app only works from checkout: from the prompt, a result or a failure it returns the same object", () => {
+    const prompt = run([{ type: "choose-app", app: "gpay" }]);
+    const success = run([{ type: "approve" }, { type: "settle" }]);
+    const failed = run([{ type: "decline" }, { type: "settle" }]);
+    for (const state of [prompt, success, failed]) {
+      expect(flowReducer(state, { type: "choose-app", app: "paytm" }), state.step).toBe(state);
+    }
+    // and from the prompt it must not swap the app mid-request
+    expect(flowReducer(prompt, { type: "choose-app", app: "paytm" }).app).toBe("gpay");
+  });
+
+  it("approve and decline only work from checkout or the prompt; a result screen ignores them", () => {
+    const failed = run([{ type: "decline" }, { type: "settle" }]);
+    expect(flowReducer(failed, { type: "approve" })).toBe(failed);
+    expect(flowReducer(failed, { type: "decline" })).toBe(failed);
+  });
+
+  it("reset returns to an untouched-looking checkout that still counts as touched (so focus and enter still run)", () => {
+    for (const from of [run([{ type: "choose-app", app: "gpay" }]), run([{ type: "approve" }]), run([{ type: "approve" }, { type: "settle" }]), run([{ type: "decline" }, { type: "settle" }])]) {
+      expect(flowReducer(from, { type: "reset" }), from.step).toEqual({ step: "checkout", app: "upi", outcome: null, touched: true });
+    }
+  });
+
   it("a settle after a reset cannot resurrect a result", () => {
     const processing = run([{ type: "approve" }]);
     const reset = run([{ type: "reset" }], processing);

@@ -19,6 +19,7 @@ import { FailedView, ProcessingView, Stage, StatusRegion, StepHeading, SuccessVi
 import { SampleQr } from "./qr";
 import { SessionClock } from "./SessionClock";
 import { useDemoFlow } from "./use-flow";
+import { useInViewOnce } from "./use-in-view";
 
 function AppIcon({ app, className }: { app: DemoApp; className: string }) {
   if (app === "gpay") return <GooglePayIcon className={className} />;
@@ -34,6 +35,8 @@ const APP_BUTTON =
 /** The simulated UPI checkout: a sample QR, four app buttons, a phone prompt, then processing and a result. */
 export function QrTab({ clock }: { clock: Clock }) {
   const { flow, send, headingRef, rootRef } = useDemoFlow();
+  // The scan plays once, when the tab first scrolls into view: at mount it would run below the fold, unseen.
+  const scanning = useInViewOnce(rootRef);
   const total = formatINR(DEMO_TOTAL_PAISE);
   const reset = () => send({ type: "reset" });
 
@@ -64,8 +67,8 @@ export function QrTab({ clock }: { clock: Clock }) {
           <div className="grid gap-6 px-5 py-5 sm:grid-cols-[auto_1fr]">
             <div className="flex flex-col items-center">
               <div className="relative overflow-hidden rounded-card border border-line bg-surface p-3">
-                {/* One pass over the code when it mounts, then it rests invisible. Reduced motion: hidden outright. */}
-                <div aria-hidden="true" className="qr-scan-once pointer-events-none absolute inset-0 border-t-2 border-ink" />
+                {/* Invisible until the tab is first in view, then one pass over the code, then it rests invisible. Reduced motion: hidden outright. */}
+                <div aria-hidden="true" className={`${scanning ? "qr-scan-once " : ""}pointer-events-none absolute inset-0 border-t-2 border-ink opacity-0`} />
                 <SampleQr className="size-32" />
               </div>
               <p className="mt-2 text-sm text-muted">Sample QR, not scannable</p>

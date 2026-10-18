@@ -158,6 +158,28 @@ describe("demo sources: tokens only, no loops", () => {
     const reduced = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
     expect(reduced).toMatch(/\.qr-scan-once\s*\{[^}]*animation:\s*none/);
   });
+
+  it("reduced motion hides the scan outright (display: none, not just no animation) and drops the success pop", () => {
+    const css = read(new URL("../../app/globals.css", import.meta.url));
+    const reduced = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reduced).toMatch(/\.qr-scan-once\s*\{[^}]*display:\s*none/);
+    expect(reduced).toMatch(/\.reveal-pop\s*\{[^}]*animation:\s*none/);
+    // the block is not nested in another condition and closes: the rules above sit inside it
+    expect(reduced.indexOf(".qr-scan-once")).toBeLessThan(reduced.indexOf("\n}"));
+    // every animation is held to one iteration there
+    expect(reduced).toMatch(/animation-iteration-count:\s*1\s*!important/);
+  });
+
+  it("the step entrance and the success pop run once, never in a loop", () => {
+    const css = read(new URL("../../app/globals.css", import.meta.url));
+    const rule = (name: string) => new RegExp(`^\\s*\\.${name}\\s*\\{[^}]*\\}`, "m").exec(css)?.[0] ?? "";
+    expect(rule("enter")).toMatch(/animation:\s*enter\b/);
+    expect(rule("enter")).not.toMatch(/infinite/);
+    expect(rule("reveal-pop")).toMatch(/animation:\s*reveal-pop\b[^;]*\b1 both/);
+    expect(rule("reveal-pop")).not.toMatch(/infinite/);
+    // the scan is hidden until the demo is in view: nothing in the stylesheet starts it by itself
+    expect(rule("qr-scan-once")).toMatch(/animation:\s*qr-scan-once\b/);
+  });
 });
 
 describe("qr.tsx: the only place raw hexes live", () => {
@@ -250,8 +272,9 @@ describe("QrTab: the checkout step", () => {
     expect(text(qr)).toContain("Simulated checkout: scan the sample QR or pick a UPI app.");
   });
 
-  it("mounts the one-shot scan overlay as decorative, not as a looping class", () => {
-    expect(qr).toMatch(/<div aria-hidden="true" class="qr-scan-once [^"]*"><\/div>/);
+  it("mounts the scan overlay as decorative and invisible: it is not playing in the server render (scan.interactions.test.tsx covers the trigger)", () => {
+    expect(qr).toMatch(/<div aria-hidden="true" class="pointer-events-none [^"]*\bopacity-0\b[^"]*"><\/div>/);
+    expect(qr).not.toContain("qr-scan-once");
     expect(qr).not.toContain("animate-");
   });
 
