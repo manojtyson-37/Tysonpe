@@ -14,8 +14,9 @@ import { ColorField } from "./form";
  * yet. The native picker always yields a valid colour, so an event from it (or a valid emit) clears the flag.
  *
  * Assistive tech: while the flag is up the field gets an `error`, which ColorField turns into `aria-invalid` on the hex
- * text input plus a described-by message, and BrandPreview lists its findings in a polite live region. A screen-reader
- * user typing "#12" is told the box is not a colour yet instead of hearing nothing change.
+ * text input plus a described-by message in a `role="alert"` paragraph. That alert is the announcement: a screen-reader
+ * user typing "#12" is told the box is not a colour yet instead of hearing nothing change. BrandPreview's list of
+ * findings is deliberately NOT a live region, so one keystroke is never announced twice.
  */
 export function BrandColorField({ defaultColor, storeName }: { defaultColor: string; storeName: string }) {
   const [color, setColor] = useState(defaultColor);

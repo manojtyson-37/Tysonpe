@@ -267,6 +267,7 @@ describe("leaderboard: heading and column alignment", () => {
   it("right-aligns only the Points column, in the header and in every row (numbers line up on their right edge)", async () => {
     const html = await render();
     const ths = [...html.matchAll(/<th\b([^>]*)>(.*?)<\/th>/g)].map((m) => [text(m[2]).trim(), /class="([^"]*)"/.exec(m[1])![1].split(/\s+/)] as const);
+    expect(ths.map(([label]) => label)).toEqual(["Rank", "Member", "Level", "Points"]);
     for (const [label, cls] of ths) {
       if (label === "Points") expect(cls).toContain("text-right");
       else expect(cls, label).toContain("text-left");

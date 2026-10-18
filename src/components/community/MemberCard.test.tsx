@@ -193,7 +193,9 @@ describe("MemberCard: clamp, streak boundary, badge tone", () => {
     expect(earnedDesc).toContain("text-ink");
     expect(earnedDesc).not.toContain("text-muted");
     expect(rows.find((r) => r.includes("First lesson"))).toMatch(/<svg [^>]*class="[^"]*\btext-good\b/);
-    for (const row of rows.filter((r) => !r.includes("First lesson"))) {
+    const unearned = rows.filter((r) => !r.includes("First lesson"));
+    expect(unearned.length).toBeGreaterThan(0); // the loop below would pass on none
+    for (const row of unearned) {
       const [name, desc] = classesOf(row);
       expect(name).toContain("text-muted");
       expect(name).not.toContain("text-ink");

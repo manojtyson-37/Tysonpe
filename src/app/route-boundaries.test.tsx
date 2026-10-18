@@ -167,6 +167,13 @@ describe("community error boundary", () => {
     expect(html).not.toMatch(/oops|!/i);
   });
 
+  it("shows the digest as an error reference (the only thing that matches a server log line), and nothing when there is none", () => {
+    const html = render(CommunityError({ error, retry: () => {} }));
+    expect(html).toContain('Error reference: <span class="font-mono">d4f9a1</span>');
+    expect(render(CommunityError({ error: new Error("x"), retry: () => {} }))).not.toContain("Error reference");
+    expect(render(CommunityError({ retry: () => {} }))).not.toContain("Error reference");
+  });
+
   it("is a client component with no legacy .card / .btn classes and no reset", () => {
     const src = readFileSync(PATH, "utf8");
     expect(src.trimStart()).toMatch(/^"use client";/);

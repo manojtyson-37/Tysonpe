@@ -11,14 +11,15 @@ import ts from "typescript";
  *
  * It reads the TypeScript syntax tree, not the text, so comments and string contents (`from "..."`, `/*`, `//`) can
  * never be mistaken for code. The module graph it follows: `export { A as B } from`, `export * from` (recursively),
- * an import re-exported under `export { X }` / `export default X` / `export const Y = X`, and `import * as C`.
+ * an import re-exported under `export { X }` / `export default X` / `export const Y = X`, and `import * as C` (also
+ * re-exported as `export { C }` or `export default C`).
  *
  * What counts as "reading into" a client reference X (or a namespace member `C.X`): `X.p`, `X?.p`, `X[k]`, `X()`,
  * `new X()`, a tagged template on X, destructuring X, `...X`, `Object.entries/keys/values/assign/...(X)`,
  * `"k" in X`, and `for (k in X)` / `for (v of X)`. Rendering `<X />`, `<C.X />` and passing X on as a value are fine.
  * A namespace itself (`C`) is a module proxy whose members are references, so `C.X` alone is fine; `C.X.p` is not.
  * Wrappers do not hide a read: `(X).p`, `X!.p`, `(X as T)[k]`, `(X satisfies T).p` and `(<T>X).p` are climbed out of
- * before the use is judged. A namespace member may be named by a string literal (`C["X"].p`), and a namespace can reach a
+ * before the use is judged, and so are wrappers round the namespace itself: `(C).X.p`, `(C as any).X.p`, `C!.X.p`. A namespace member may be named by a string literal (`C["X"].p`), and a namespace can reach a
  * file through `export * as ns from` or `import * as C; export { C }` (also under another name, and through `export *`).
  * A spread of a reference onto a JSX element (`<Comp {...X} />`) enumerates it, so it counts as reading into it.
  *
@@ -152,14 +153,19 @@ export interface ClientExports {
  */
 export function clientExportsOf(srcDir: string, file: string, stack: ReadonlySet<string> = new Set()): ClientExports {
   if (stack.size > 0) return computeClientExports(srcDir, file, stack);
-  // A top-level answer is complete (not cut short by a cycle), so it can be kept for the life of the module: the live scan
-  // asks for the same barrels once per importing page. Vitest loads this module afresh per test file.
+  // A top-level answer is complete (not cut short by a cycle), so it can be kept: the live scan asks for the same barrels
+  // once per importing page. The answer is read from disk once, so a test that rewrites files calls resetClientExportsCache.
   const key = `${srcDir}\0${file}`;
   let hit = exportsCache.get(key);
   if (!hit) exportsCache.set(key, (hit = computeClientExports(srcDir, file, stack)));
   return hit;
 }
 const exportsCache = new Map<string, ClientExports>();
+
+/** Forgets every kept answer of `clientExportsOf`, so the next call reads the files again. */
+export function resetClientExportsCache(): void {
+  exportsCache.clear();
+}
 
 function computeClientExports(srcDir: string, file: string, stack: ReadonlySet<string>): ClientExports {
   const none: ClientExports = { all: false, names: new Set(), namespaces: new Map() };
@@ -214,6 +220,8 @@ function computeClientExports(srcDir: string, file: string, stack: ReadonlySet<s
       }
     } else if (ts.isExportAssignment(statement) && !statement.isExportEquals && ts.isIdentifier(statement.expression) && clientLocals.has(statement.expression.text)) {
       names.add("default");
+    } else if (ts.isExportAssignment(statement) && !statement.isExportEquals && ts.isIdentifier(statement.expression) && namespaceLocals.has(statement.expression.text)) {
+      namespaces.set("default", namespaceLocals.get(statement.expression.text)!); // import * as C; export default C
     } else if (ts.isVariableStatement(statement) && hasModifier(statement, ts.SyntaxKind.ExportKeyword)) {
       for (const decl of statement.declarationList.declarations) {
         if (ts.isIdentifier(decl.name) && decl.initializer && ts.isIdentifier(decl.initializer) && clientLocals.has(decl.initializer.text)) names.add(decl.name.text);
@@ -233,10 +241,20 @@ export function importsClientExport(srcDir: string, file: string, imp: NamedImpo
 
 const ENUMERATING_OBJECT_METHODS = new Set(["entries", "keys", "values", "assign", "fromEntries", "getOwnPropertyNames", "getOwnPropertyDescriptors", "getOwnPropertySymbols"]);
 
+type Wrapper = ts.ParenthesizedExpression | ts.AsExpression | ts.NonNullExpression | ts.SatisfiesExpression | ts.TypeAssertion;
+const isWrapper = (n: ts.Node): n is Wrapper => ts.isParenthesizedExpression(n) || ts.isAsExpression(n) || ts.isNonNullExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n);
+
 /** Climbs out of the wrappers that change nothing at runtime: `(X)`, `X as T`, `X!`, `X satisfies T`, `<T>X`. */
 function outermost(node: ts.Node): ts.Node {
   let n = node;
-  while (n.parent && (ts.isParenthesizedExpression(n.parent) || ts.isAsExpression(n.parent) || ts.isNonNullExpression(n.parent) || ts.isSatisfiesExpression(n.parent) || ts.isTypeAssertionExpression(n.parent)) && n.parent.expression === n) n = n.parent;
+  while (n.parent && isWrapper(n.parent) && n.parent.expression === n) n = n.parent;
+  return n;
+}
+
+/** The reverse of `outermost`: what a wrapped expression is, with the same wrappers stripped from the inside. */
+function unwrap(node: ts.Expression): ts.Expression {
+  let n = node;
+  while (isWrapper(n)) n = n.expression;
   return n;
 }
 
@@ -284,18 +302,24 @@ export function clientReferenceMisuse(srcDir: string, file: string, source = rea
     const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
     findings.push(`${rel}:${line}: ${label} is a client reference; ${kind === "calling" ? "calling it" : "reading into it"} throws on the server`);
   };
+  const namespaceOf = (expression: ts.Expression) => {
+    const base = unwrap(expression);
+    return ts.isIdentifier(base) && namespaces.has(base.text);
+  };
   const visit = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node) || ts.isJsxClosingElement(node)) return; // an import binds; a closing tag repeats its opening tag
     if (ts.isIdentifier(node) && refs.has(node.text)) {
       const kind = misuseKind(node);
       if (kind) report(node, node.text, kind);
-    } else if ((ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) && ts.isIdentifier(node.expression) && namespaces.has(node.expression.text)) {
-      // `C.X`, or `C["X"]` with a literal key; a computed key (`C[k]`) names no member we can resolve.
+    } else if ((ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) && namespaceOf(node.expression)) {
+      // `C.X`, or `C["X"]` with a literal key, also when the namespace is wrapped (`(C).X`, `(C as any).X`, `C!.X`);
+      // a computed key (`C[k]`) names no member we can resolve.
+      const base = unwrap(node.expression) as ts.Identifier;
       const member = ts.isPropertyAccessExpression(node) ? node.name.text : ts.isStringLiteralLike(node.argumentExpression) ? node.argumentExpression.text : null;
-      const ns = namespaces.get(node.expression.text)!;
+      const ns = namespaces.get(base.text)!;
       if (member !== null && (ns.all || ns.names.has(member))) {
         const kind = misuseKind(node);
-        if (kind) report(node, `${node.expression.text}.${member}`, kind);
+        if (kind) report(node, `${base.text}.${member}`, kind);
       }
     } else if (ts.isIdentifier(node) && namespaces.has(node.text)) {
       // The namespace object itself enumerated or tested with `in`; plain member reads are handled above.

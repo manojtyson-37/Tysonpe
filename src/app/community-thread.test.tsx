@@ -353,11 +353,14 @@ describe("thread: heading count and the comment ban button", () => {
     expect(bans).toHaveLength(2);
     for (const b of bans) expect(b.props.children).toBe("Remove from community");
     const items = commentItems(await render());
+    expect(items).toHaveLength(2); // the loop below would pass on none
     for (const item of items) expect(text(item)).toContain("Remove from community");
   });
 
   it("a member sees no remove button on any comment", async () => {
-    for (const item of commentItems(await render())) expect(item).not.toContain("Remove from community");
+    const items = commentItems(await render());
+    expect(items).toHaveLength(2);
+    for (const item of items) expect(item).not.toContain("Remove from community");
   });
 });
 

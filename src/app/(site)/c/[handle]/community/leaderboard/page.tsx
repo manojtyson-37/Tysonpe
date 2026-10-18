@@ -29,6 +29,7 @@ export default async function LeaderboardPage({
     { period: "week", label: "This week", empty: "No points this week yet" },
     { period: "all", label: "All time", empty: "No points yet" },
   ] as const;
+  const current = periods.find((p) => p.period === period) ?? periods[0];
 
   return (
     <div className="space-y-5">
@@ -43,7 +44,7 @@ export default async function LeaderboardPage({
         ariaLabel="Leaderboard period"
         // Brand ring colour; the global outside offset stays (a horizontal row in the page flow, nothing clips it).
         className="[&>a:focus-visible]:outline-[color:var(--brand-ring)]"
-        items={periods.map((p) => ({ href: `${base}?period=${p.period}`, label: p.label, current: period === p.period }))}
+        items={periods.map((p) => ({ href: `${base}?period=${p.period}`, label: p.label, current: current.period === p.period }))}
       />
 
       <Table aria-label="Leaderboard" stack>
@@ -57,7 +58,7 @@ export default async function LeaderboardPage({
         </thead>
         <tbody>
           {lb.top.length === 0 ? (
-            <EmptyRow colSpan={4} title={(period === "all" ? periods[1] : periods[0]).empty} body="Complete a lesson or start a conversation to get on the board." />
+            <EmptyRow colSpan={4} title={current.empty} body="Complete a lesson or start a conversation to get on the board." />
           ) : (
             lb.top.map((r, i) => (
               // `isMe` is marked in words ("you") and in aria-current, with the tint only as reinforcement.

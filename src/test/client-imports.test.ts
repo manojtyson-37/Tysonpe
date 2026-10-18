@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { clientExportsOf, clientReferenceMisuse, declaresUseClient, importsClientExport, namedImports, resolveFirstParty, sourceFiles } from "./client-imports";
+import { clientExportsOf, clientReferenceMisuse, declaresUseClient, importsClientExport, namedImports, resetClientExportsCache, resolveFirstParty, sourceFiles } from "./client-imports";
 
 const SRC = path.resolve(import.meta.dirname, "..");
 
@@ -26,6 +26,8 @@ beforeAll(() => {
   writeFileSync(at("components/nsbarrel.ts"), 'export * as ns from "./Client";\n');
   writeFileSync(at("components/nsreexport.ts"), 'import * as C from "./Client";\nexport { C };\nexport { C as D };\n');
   writeFileSync(at("components/nsstar.ts"), 'export * from "./nsbarrel";\nexport * from "./plain";\n');
+  // a namespace exported as the default.
+  writeFileSync(at("components/nsdefault.ts"), 'import * as C from "./Client";\nexport default C;\n');
 });
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
@@ -176,6 +178,12 @@ describe("clientReferenceMisuse (the checker itself)", () => {
         ["a wrapped namespace member", NS, "const a = (C.KIND as object).video;"],
         ["a parenthesised namespace member", NS, "const a = (C.KIND).video;"],
         ["a spread on a JSX element of a namespace member", NS, "const a = <X {...C.KIND} />;"],
+        ["a parenthesised namespace", NS, "const a = (C).KIND.video;"],
+        ["a namespace cast with `as`", NS, "const a = (C as any).KIND.video;"],
+        ["a namespace with a non-null assertion", NS, "const a = C!.KIND.video;"],
+        ["a namespace under `satisfies`", NS, "const a = (C satisfies object).helper();"],
+        ["a wrapped namespace read by string key", NS, 'const a = ((C as any))["KIND"].video;'],
+        ["a namespace that a module exports as its default", 'import C from "@/components/nsdefault";', "const a = C.KIND.video;"],
       ])("flags %s", (_label, prelude, source) => {
         expect(misuseWith(prelude, source).length).toBeGreaterThan(0);
       });
@@ -187,6 +195,9 @@ describe("clientReferenceMisuse (the checker itself)", () => {
         ["a plain export next to a namespace in a star barrel", NSS, "const a = plain.video;"],
         ["a string-literal member passed on", NS, 'const a = <List table={C["KIND"]} />;'],
         ["a string-literal member that is a plain export", NS_STAR, 'const a = B["plain"].video;'],
+        ["a wrapped namespace whose member is a plain export", NS_STAR, "const a = (B as any).plain.video;"],
+        ["a wrapped namespace member passed on", NS, "const a = <List table={(C as any).KIND} icon={(C).Comp} />;"],
+        ["a default-exported namespace's member rendered", 'import C from "@/components/nsdefault";', "const a = <C.Comp x={1} />;"],
       ])("does not flag %s", (_label, prelude, source) => {
         expect(misuseWith(prelude, source)).toEqual([]);
       });
@@ -195,6 +206,7 @@ describe("clientReferenceMisuse (the checker itself)", () => {
         expect([...clientExportsOf(root, at("components/nsbarrel.ts")).namespaces.keys()]).toEqual(["ns"]);
         expect([...clientExportsOf(root, at("components/nsreexport.ts")).namespaces.keys()].sort()).toEqual(["C", "D"]);
         expect([...clientExportsOf(root, at("components/nsstar.ts")).namespaces.keys()]).toEqual(["ns"]);
+        expect([...clientExportsOf(root, at("components/nsdefault.ts")).namespaces.keys()]).toEqual(["default"]);
       });
     });
 
@@ -244,6 +256,8 @@ describe("clientReferenceMisuse (the checker itself)", () => {
 });
 
 describe("static scan: server modules never read into a client module's export", () => {
+  // The scan answers from the real tree: start with no kept answer, so nothing an earlier test in this file cached can colour it.
+  beforeAll(() => resetClientExportsCache());
   const files = [...sourceFiles(path.join(SRC, "app")), ...sourceFiles(path.join(SRC, "components"))];
   const server = files.filter((file) => !declaresUseClient(readFileSync(file, "utf8"), file));
   const importsClient = (file: string) => namedImports(readFileSync(file, "utf8"), file).some((imp) => importsClientExport(SRC, file, imp));
@@ -275,5 +289,21 @@ describe("static scan: server modules never read into a client module's export",
 
   it("finds no server module that dots into, indexes or calls a client export", () => {
     expect(server.flatMap((file) => clientReferenceMisuse(SRC, file))).toEqual([]);
+  });
+});
+
+describe("resetClientExportsCache", () => {
+  it("makes clientExportsOf read the files again", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "client-imports-reset-"));
+    try {
+      writeFileSync(path.join(dir, "mod.ts"), "export const a = 1;\n");
+      expect(clientExportsOf(dir, path.join(dir, "mod.ts")).all).toBe(false);
+      writeFileSync(path.join(dir, "mod.ts"), '"use client";\nexport const a = 1;\n');
+      expect(clientExportsOf(dir, path.join(dir, "mod.ts")).all).toBe(false); // kept answer
+      resetClientExportsCache();
+      expect(clientExportsOf(dir, path.join(dir, "mod.ts")).all).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
