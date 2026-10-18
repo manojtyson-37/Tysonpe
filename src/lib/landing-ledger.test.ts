@@ -63,6 +63,13 @@ describe("landing ledger: GST rate and plan variations", () => {
 
   it("0% GST is zero", () => {
     expect(ledgerFor(2999, 0, "basic").gstPaise).toBe(0);
+    expect(ledgerFor(2999, 0, "basic").gstRate).toBe(0);
+  });
+
+  it("a rate below 100 is kept and a rate of 100 or more is not (it would make the GST the whole price)", () => {
+    expect(ledgerFor(2999, 99, "basic").gstRate).toBe(99);
+    expect(ledgerFor(2999, 100, "basic").gstRate).toBe(18);
+    expect(ledgerFor(2999, 100, "basic").gstPaise).toBe(45747);
   });
 
   it.each([
@@ -74,6 +81,15 @@ describe("landing ledger: GST rate and plan variations", () => {
     const l = ledgerFor(2999, 18, plan);
     expect([l.platformFeePaise, l.gatewayFeePaise, l.netPaise]).toEqual([platform, gateway, net]);
     expect(l.planLive).toBe(live);
+  });
+
+  it("names and prices the four plans as published", () => {
+    expect(PLAN_OPTIONS.map((p) => [p.key, p.name, p.monthlyPaise])).toEqual([
+      ["basic", "Basic", 0],
+      ["pro", "Pro", 500000],
+      ["advanced", "Advanced", 1500000],
+      ["ultimate", "Ultimate", 3000000],
+    ]);
   });
 
   it("only Basic is live; the others are flagged draft, as the pricing table does", () => {
@@ -159,8 +175,13 @@ describe("landing ledger: price input", () => {
     expect(l.netPaise).toBe(DEFAULT_LEDGER.netPaise);
   });
 
-  it("the fallback keeps the chosen GST rate and plan", () => {
+  it("the fallback keeps the chosen GST rate and plan, and the GST of the default sale at that rate", () => {
     const l = ledgerFromInput("", 5, "pro");
-    expect(l).toMatchObject({ usedDefault: true, rupees: 2999, gstRate: 5, planKey: "pro" });
+    expect(l).toMatchObject({ usedDefault: true, rupees: 2999, gstRate: 5, planKey: "pro", gstPaise: 14281 }); // 299900 * 5 / 105
+    expect(ledgerFromInput("29.99", 18, "basic").gstPaise).toBe(45747);
+  });
+
+  it("decimals and separators are not prices here: the field strips separators before this point", () => {
+    for (const text of ["29.99", "2999.00", "1,000", "₹500", "1 000"]) expect(parsePriceRupees(text), text).toBeNull();
   });
 });

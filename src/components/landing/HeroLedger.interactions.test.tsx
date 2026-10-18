@@ -71,11 +71,18 @@ function mount(gstRates: readonly number[] = GST_RATES) {
     render();
   };
   const html = () => renderToStaticMarkup(tree as never);
+  // A metric row's value on its own (the caption repeats some of these figures, so reading the page text would mask a wrong row).
+  const row = (label: string) => {
+    const m = new RegExp(`<dt[^>]*>${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</dt><dd[^>]*>([\\s\\S]*?)</dd>`).exec(html());
+    expect(m, label).not.toBeNull();
+    return m![1].replace(/<[^>]+>/g, "");
+  };
+  const caption = () => /<figcaption[^>]*>([\s\S]*?)<\/figcaption>/.exec(html())![1].replace(/<!-- -->/g, "");
   const text = () => html().replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
   // The figure alone: the output also carries a visually hidden "Net after fees " prefix for screen readers.
   const net = () =>
     /<output[^>]*>(.*?)<\/output>/.exec(html())?.[1].replace(/<span class="sr-only">[^<]*<\/span>/, "").replace(/<[^>]+>/g, "") ?? null;
-  return { type, choose, control, html, text, net, effects: () => H.effects.length };
+  return { type, choose, control, html, text, net, row, caption, effects: () => H.effects.length };
 }
 
 describe("HeroLedger: the default state is the static ledger", () => {
@@ -212,6 +219,77 @@ describe("HeroLedger: input -> derived rows", () => {
     expect(m.net()).toBe("₹2,639.12");
     m.choose("GST rate", "not-a-number");
     expect(m.text()).toContain("of which GST at 18%");
+  });
+});
+
+describe("HeroLedger: pinned details", () => {
+  it("the selects are controlled: after a choice they hold the chosen value, not the initial one", () => {
+    const m = mount();
+    expect(m.control("GST rate").value).toBe(18);
+    expect(m.control("Plan").value).toBe("basic");
+    m.choose("GST rate", "5");
+    m.choose("Plan", "pro");
+    expect(m.control("GST rate").value).toBe(5);
+    expect(m.control("Plan").value).toBe("pro");
+    expect(m.html()).toContain('<option value="5" selected="">5%</option>');
+    expect(m.html()).toContain('<option value="pro" selected="">Pro (draft)</option>');
+  });
+
+  it("the GST row follows the price and the rate on its own, and the caption agrees with it", () => {
+    const m = mount();
+    expect(m.row("of which GST at 18%")).toBe("₹457.47");
+    m.type("5000");
+    expect(m.row("of which GST at 18%")).toBe("₹762.71");
+    expect(m.caption()).toContain("The ₹762.71 of GST sits inside");
+    m.choose("GST rate", "5");
+    expect(m.row("of which GST at 5%")).toBe("₹238.10"); // 500000 * 5 / 105 = 23809.52 paise
+    expect(m.caption()).toContain("The ₹238.10 of GST sits inside");
+  });
+
+  it("the fallback sale carries its GST: the default price's GST at the chosen rate", () => {
+    const m = mount();
+    m.type("abc");
+    expect(m.row("of which GST at 18%")).toBe("₹457.47");
+    m.choose("GST rate", "5");
+    m.type("29.99");
+    expect(m.row("of which GST at 5%")).toBe("₹142.81");
+    expect(m.net()).toBe("₹2,639.12");
+  });
+
+  it("each row prints its own figure: sale, fees and net, apart from the caption", () => {
+    const m = mount();
+    m.type("5000");
+    expect(m.row("Learner pays, GST included")).toBe("₹5,000");
+    expect(m.row("Platform fee, Basic 10%")).toBe("−₹500");
+    expect(m.row("Gateway fee 2%")).toBe("−₹100");
+  });
+
+  it("ignores a numeric GST rate the form does not offer, and a rate of 100", () => {
+    const m = mount();
+    m.choose("GST rate", "7");
+    expect(m.control("GST rate").value).toBe(18);
+    m.choose("GST rate", "100");
+    expect(m.control("GST rate").value).toBe(18);
+    expect(m.row("of which GST at 18%")).toBe("₹457.47");
+    m.choose("GST rate", "28");
+    expect(m.control("GST rate").value).toBe(28);
+  });
+
+  it("words its title, hint and option labels exactly", () => {
+    const m = mount();
+    expect(m.html()).toContain(">Order ledger</p>");
+    expect(m.html()).toContain(">Sample sale</p>");
+    expect(m.control("Sale price, GST included").hint).toBe("Whole rupees. GST is already inside this price.");
+    m.type("0");
+    expect(m.control("Sale price, GST included").hint).toBe("Enter whole rupees from ₹1 to ₹10,00,000. Showing ₹2,999 until then.");
+    for (const g of GST_RATES) expect(m.html()).toContain(`>${g}%</option>`);
+    for (const label of ["Basic", "Pro (draft)", "Advanced (draft)", "Ultimate (draft)"]) expect(m.html()).toContain(`>${label}</option>`);
+  });
+
+  it("the plan note names the plan and its monthly fee", () => {
+    const m = mount();
+    m.choose("Plan", "ultimate");
+    expect(m.caption()).toContain("Ultimate is draft pricing and billing is not live; its ₹30,000 monthly fee is not netted.");
   });
 });
 

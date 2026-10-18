@@ -15,6 +15,7 @@ import { HeroLedger } from "@/components/landing/HeroLedger";
 import { SAMPLE_INVOICE_NO } from "@/components/landing/Fragments";
 import { Table } from "@/components/ui";
 import { DEFAULT_LEDGER, PLAN_OPTIONS } from "@/lib/landing-ledger";
+import { GST_RATES } from "@/lib/validation";
 import { feeBreakdown, formatINR, gstComponent, planRates } from "@/lib/money";
 import { functionProps } from "@/test/rsc-safe";
 import { legacyStyleFindings } from "@/test/style-scan";
@@ -119,6 +120,13 @@ describe("landing: one ink call to action per band", () => {
     expect(count(closing, "btn-primary")).toBe(1);
   });
 
+  it("sends both primary actions to creator signup", () => {
+    for (const [name, band] of [["hero", hero], ["closing", closing]] as const) {
+      expect(band, name).toMatch(/<a [^>]*href="\/signup\?role=creator"[^>]*>Open a storefront<\/a>/);
+      expect(count(band, 'href="/signup?role=creator"'), name).toBe(1);
+    }
+  });
+
   it("keeps the hero's second action quiet: a text link, not a second button", () => {
     expect(count(hero, /class="[^"]*\bbtn\b/g)).toBe(1);
     expect(hero).toMatch(/<a href="#sandbox-demo"[^>]*>Run a test checkout<\/a>/);
@@ -200,6 +208,33 @@ describe("landing: the hero is one live ledger from true numbers", () => {
     expect(t).toContain("Real settlement starts after launch");
   });
 
+  it("prints the GST row on its own, apart from the caption's GST amount", () => {
+    const row = /<dt class="text-muted">of which GST at 18%<\/dt><dd[^>]*>([\s\S]*?)<\/dd>/.exec(hero);
+    expect(row).not.toBeNull();
+    expect(text(row![1])).toBe("₹457.47");
+    const caption = /<figcaption[^>]*>([\s\S]*?)<\/figcaption>/.exec(hero)![1];
+    expect(text(caption)).toContain("The ₹457.47 of GST sits inside the price and is yours to remit");
+  });
+
+  it("offers every GST rate the product form offers, as N%, taken from GST_RATES and not retyped", () => {
+    expect([...GST_RATES]).toEqual([0, 5, 12, 18, 28]);
+    for (const g of GST_RATES) expect(hero).toContain(`<option value="${g}"${g === 18 ? ' selected=""' : ""}>${g}%</option>`);
+    expect(count(hero, "<option value=\"")).toBe(GST_RATES.length + PLAN_OPTIONS.length);
+  });
+
+  it("names the plans Basic, Pro, Advanced and Ultimate, and flags the three that are drafts", () => {
+    expect(PLAN_OPTIONS.map((p) => p.name)).toEqual(["Basic", "Pro", "Advanced", "Ultimate"]);
+    expect(PLAN_OPTIONS.map((p) => p.monthlyPaise)).toEqual([0, 500000, 1500000, 3000000]);
+    expect(hero).toContain('<option value="basic" selected="">Basic</option>');
+    for (const label of ["Pro (draft)", "Advanced (draft)", "Ultimate (draft)"]) expect(hero).toContain(`>${label}</option>`);
+  });
+
+  it("titles the ledger and words the price hint", () => {
+    expect(hero).toContain(">Order ledger</p>");
+    expect(hero).toContain(">Sample sale</p>");
+    expect(text(hero)).toContain("Whole rupees. GST is already inside this price.");
+  });
+
   it("derives its numbers from money.ts", () => {
     expect(DEFAULT_LEDGER.gstPaise).toBe(gstComponent(SALE_PAISE, 18));
     expect(DEFAULT_LEDGER.netPaise).toBe(NET_PAISE);
@@ -260,6 +295,10 @@ describe("landing: real UI fragments, each labelled as a sample", () => {
     expect(f).toContain("Total paid ₹2,999");
     expect(f).toContain("Sample creator");
     expect(f).toContain("Sample learner");
+    // the line item (before the split), not just the total
+    expect(f).toContain("Sample course ₹2,999 Taxable value");
+    // a fixed date: it must not move with the clock
+    expect(f).toContain("Date 15 Oct 2026");
   });
 
   it("the payouts strip carries the page's own fees and net, with the Payouts page's labels", () => {
@@ -269,6 +308,7 @@ describe("landing: real UI fragments, each labelled as a sample", () => {
     expect(f).toContain("Gateway fees −₹59.98");
     expect(f).toContain("Net earnings ₹2,639.12");
     expect(f).toMatch(/not a customer/);
+    expect(f).toContain("for one ₹2,999 sale on Basic");
   });
 
   it("invents no customers, counts, ratings or testimonials", () => {
@@ -317,6 +357,13 @@ describe("landing: status and fees", () => {
     }
     expect(rows.map((r) => r.match(/(₹[\d,.]+)$/)![1])).toEqual(["₹2,639.12", "₹2,774.07", "₹2,834.05", "₹2,954.01"]);
     expect(text(fees)).toContain("Plan monthly fees are not netted here.");
+    // the Monthly column, pinned to literals (PLAN_MONTHLY_PAISE is the source, these are the published figures)
+    const monthly = [...fees.matchAll(/<td[^>]*data-label="Monthly"[^>]*>([\s\S]*?)<\/td>/g)].map((m) => text(m[1]));
+    expect(monthly).toEqual(["₹0", "₹5,000", "₹15,000", "₹30,000"]);
+    const names = [...fees.matchAll(/<span class="font-semibold">([^<]*)<\/span>/g)].map((m) => m[1]);
+    expect(names).toEqual(["Basic", "Pro", "Advanced", "Ultimate"]);
+    expect([...fees.matchAll(/<th\b[^>]*>([^<]*)<\/th>/g)].map((m) => m[1])).toEqual(["Plan", "Monthly", "Platform fee", "Gateway fee", "Net after fees"]);
+    expect(fees).toContain('<caption class="sr-only">Fees by plan for one ₹2,999 sale</caption>');
     // marketing rows are not clickable, so they get no hover fill
     expect(fees).not.toContain("hover:bg-surface-2");
     expect(fees).not.toContain('role="row"');
@@ -423,6 +470,18 @@ describe("landing: copy lint", () => {
     expect(inString.test('const a = "Welcome!";')).toBe(true); // positive control
   });
 
+  it("lints the demo band's own heading and intro, which the page (not the demo components) writes", () => {
+    const header = /<h2 id="demo-h"[^>]*>[\s\S]*?<\/p>/.exec(demo)![0];
+    const t = text(header);
+    expect(t).toMatch(/^Pay the way your learners will\. Scan the QR or tap a UPI app/);
+    expect(t).toContain("Easebuzz tab");
+    expect(t).not.toContain("!");
+    for (const banned of ["seamless", "unlock", "all-in-one", "elevate", "supercharge", "get started", "learn more", "powerful", "effortless"]) {
+      expect(t.toLowerCase(), banned).not.toContain(banned);
+    }
+    for (const claim of ["testimonial", "rated", "customers", "trusted by", "uptime", "% of"]) expect(t.toLowerCase(), claim).not.toContain(claim);
+  });
+
   it("keeps headings in sentence case", () => {
     const headings = [...myHtml.matchAll(/<h[1-3]\b[^>]*>([\s\S]*?)<\/h[1-3]>/g)].map((m) => text(m[1]));
     expect(headings.length).toBeGreaterThanOrEqual(8);
@@ -486,5 +545,6 @@ describe("landing: RSC boundary", () => {
     const ledger = walk(tree).find((e) => e.type === HeroLedger)!;
     expect(Object.keys(ledger.props)).toEqual(["gstRates"]);
     expect(Array.isArray(ledger.props.gstRates)).toBe(true);
+    expect(ledger.props.gstRates).toBe(GST_RATES); // the product's own list, not a copy that could drift
   });
 });
