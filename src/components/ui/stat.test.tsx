@@ -51,7 +51,7 @@ describe("StatStrip", () => {
   it("renders one hairline-separated Stat per item inside a bordered row", () => {
     const html = render(<StatStrip items={items} />);
     expect(html).toContain("border-y border-line");
-    expect(html).toContain("@3xl:border-l @3xl:border-line");
+    expect(html).toContain("@5xl:border-l @5xl:border-line");
     expect((html.match(/class="t-label"/g) ?? []).length).toBe(3);
     expect(html).toContain(">+8%<");
     expect(html).toContain(">After GST<");
@@ -73,6 +73,9 @@ describe("StatStrip", () => {
   });
 });
 
+// WHAT THIS CANNOT PROVE (needs a browser): real overflow. jsdom has no layout, so the fit below is an ESTIMATE from a
+// per-character width model, and the class strings are pinned so a change is noticed. The controller's browser pass
+// (375/768/1024/1280/1440 on /dashboard and /dashboard/payouts, with long figures injected) is the real check.
 describe("StatStrip layout answers to its own width (it overflowed the console column at 768 and 1024)", () => {
   const four = [
     { label: "Gross", value: "₹1,29,999.99" },
@@ -84,47 +87,49 @@ describe("StatStrip layout answers to its own width (it overflowed the console c
     const html = render(<StatStrip items={four.slice(0, n)} className={cls || undefined} />);
     return { html, wrapper: /^<div class="([^"]*)"/.exec(html)![1], grid: /^<div class="[^"]*"><div class="([^"]*)"/.exec(html)![1] };
   };
+  const cellsOf = (n: number) => [...outer(n).html.matchAll(/<div class="(@(?!container")[^"]*)"/g)].map((m) => m[1]);
+  const BASE = "grid grid-cols-1 gap-x-6 gap-y-5 border-y border-line py-4 @2xl:grid-cols-2";
 
   it("is a container: the root carries @container and the caller's className, the grid sits inside it", () => {
-    const { wrapper } = outer(4, "mb-6");
-    expect(wrapper).toBe("@container mb-6");
+    expect(outer(4, "mb-6").wrapper).toBe("@container mb-6");
   });
 
-  it("uses no viewport breakpoint and no non-wrapping flex row at any size", () => {
+  it("uses no viewport breakpoint, no flex and no nowrap in the layout classes", () => {
     // The figure's own font size may follow the viewport (Stat); the layout classes may not.
     const { html, wrapper, grid } = outer(4);
-    const cells = [...html.matchAll(/<div class="(min-w-0[^"]*)"/g)].map((m) => m[1]);
-    const layout = [wrapper, grid, ...cells].join(" ");
+    const layout = [wrapper, grid, ...cellsOf(4)].join(" ");
     expect(layout).not.toMatch(/(?:^|\s)(?:sm|md|lg|xl|2xl):/);
     expect(layout).not.toMatch(/(?:^|\s)(?:\S+:)?flex(?:\s|$)/);
+    expect(layout).not.toMatch(/min-w-0|overflow-wrap/); // nothing here pretends a nowrap figure can shrink or break
     expect(html).not.toContain("whitespace-nowrap");
   });
 
-  it("starts as two columns and only goes wide at a container width that fits its cells", () => {
-    expect(outer(4).grid).toBe("grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-4 @5xl:grid-cols-4");
-    expect(outer(3).grid).toBe("grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-4 @3xl:grid-cols-3");
-    expect(outer(2).grid).toBe("grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-4");
-    expect(outer(1).grid).toBe("grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-4");
+  it("is one column on a narrow container, two from @2xl, and only goes wider where the cells fit", () => {
+    expect(outer(4).grid).toBe(`${BASE} @min-[84rem]:grid-cols-4 @min-[84rem]:gap-x-0`);
+    expect(outer(3).grid).toBe(`${BASE} @5xl:grid-cols-3 @5xl:gap-x-0`);
+    expect(outer(2).grid).toBe(`${BASE} @2xl:gap-x-0`);
+    expect(outer(1).grid).toBe(BASE);
   });
 
-  it("cells can shrink and break a figure that would still overflow", () => {
-    expect(render(<StatStrip items={four} />)).toContain("min-w-0 [overflow-wrap:anywhere]");
+  it("the space either side of a hairline is the same: no column gap where the rules are drawn", () => {
+    for (const [n, bp] of [[2, "@2xl"], [3, "@5xl"], [4, "@min-[84rem]"]] as const) {
+      expect(outer(n).grid).toContain(`${bp}:gap-x-0`);
+      expect(cellsOf(n)[1]).toContain(`${bp}:border-l ${bp}:border-line ${bp}:px-6`);
+    }
   });
 
   it("hairlines sit between cells, not before the first cell of a row", () => {
-    const cells = [...render(<StatStrip items={four} />).matchAll(/<div class="(min-w-0[^"]*)"/g)].map((m) => m[1]);
+    const cells = cellsOf(4);
     expect(cells).toHaveLength(4);
-    expect(cells[0]).toContain("@5xl:pr-6");
-    expect(cells[0]).not.toContain("border-l");
-    for (const c of cells.slice(1)) expect(c).toContain("@5xl:border-l @5xl:border-line @5xl:px-6");
+    expect(cells[0]).toBe("@min-[84rem]:pr-6");
+    for (const c of cells.slice(1)) expect(c).toBe("@min-[84rem]:border-l @min-[84rem]:border-line @min-[84rem]:px-6");
   });
 
   it("a long list wraps into rows of four, each row starting without a rule", () => {
     const six = [...four, { label: "A", value: "1" }, { label: "B", value: "2" }];
-    const cells = [...render(<StatStrip items={six} />).matchAll(/<div class="(min-w-0[^"]*)"/g)].map((m) => m[1]);
+    const cells = [...render(<StatStrip items={six} />).matchAll(/<div class="(@(?!container")[^"]*)"/g)].map((m) => m[1]);
     expect(cells).toHaveLength(6);
-    const starts = cells.map((c) => !c.includes("border-l"));
-    expect(starts).toEqual([true, false, false, false, true, false]);
+    expect(cells.map((c) => !c.includes("border-l"))).toEqual([true, false, false, false, true, false]);
   });
 
   it("has no card box", () => {
@@ -133,6 +138,51 @@ describe("StatStrip layout answers to its own width (it overflowed the console c
 
   it("stripColumns is one per item, between one and four", () => {
     expect([0, 1, 2, 3, 4, 5, 9].map(stripColumns)).toEqual([1, 1, 2, 3, 4, 4, 4]);
+  });
+
+  describe("the widest plausible figure fits every layout the classes can produce (estimate, see the header note)", () => {
+    // Tailwind v4 default container steps in px (rem x 16).
+    const STEP: Record<string, number> = { xl: 576, "2xl": 672, "3xl": 768, "4xl": 896, "5xl": 1024, "6xl": 1152, "7xl": 1280 };
+    const widthOf = (bp: string) => (bp.startsWith("min-[") ? parseFloat(bp.slice(5)) * 16 : STEP[bp]);
+    // Tabular figures in the body face run about 0.6em per digit; the model is deliberately a little wider than that.
+    // Digit 0.65em, rupee sign and minus 0.7em, comma and full stop 0.35em.
+    const EM = { digit: 0.65, symbol: 0.7, sep: 0.35 };
+    const figureEm = (text: string) =>
+      [...text].reduce((w, ch) => w + (/\d/.test(ch) ? EM.digit : /[,.]/.test(ch) ? EM.sep : EM.symbol), 0);
+    const FIGURE_PX = 30; // sm:text-3xl, the largest figure size
+    const WORST = "−₹1,29,99,999.99"; // a negative crore amount
+    const need = Math.ceil(figureEm(WORST) * FIGURE_PX - 1e-6);
+    const PAD = 24; // padding on one side of a rule (px-6)
+    const GAP = 24; // gap-x-6, only where no rule is drawn
+
+    it("the model: the worst figure is about 9.3em, about 279px at 30px", () => {
+      expect(figureEm(WORST)).toBeCloseTo(9.3, 5);
+      expect(need).toBe(279);
+    });
+
+    it("below @2xl a single column holds it, down to the narrowest container the layout supports (280px)", () => {
+      expect(outer(4).grid).toContain("grid-cols-1");
+      expect(280).toBeGreaterThanOrEqual(need);
+    });
+
+    it("every container step the classes switch on gives each cell at least that width", () => {
+      for (const n of [2, 3, 4, 5, 8]) {
+        const { grid } = outer(n);
+        const cells = [...render(<StatStrip items={Array.from({ length: n }, (_, i) => ({ label: `L${i}`, value: "x" }))} />).matchAll(/<div class="(@(?!container")[^"]*)"/g)].map((m) => m[1]);
+        const colsAt: Array<[number, number]> = [[widthOf("2xl"), 2]]; // [container px, columns]
+        const wide = /@(\S+?):grid-cols-(\d)/.exec(grid);
+        if (wide) colsAt.push([widthOf(wide[1]), Number(wide[2])]);
+        for (const [px, cols] of colsAt) {
+          // A rule is drawn only where the wide layout is on and gap-x-0 is applied; otherwise the gap separates cells.
+          const ruled = new RegExp(`@(\\S+?):gap-x-0`).exec(grid);
+          const ruledHere = ruled !== null && widthOf(ruled[1]) <= px;
+          const sideSpace = ruledHere ? 2 * PAD : GAP;
+          const cell = ruledHere ? px / cols - sideSpace : (px - GAP * (cols - 1)) / cols;
+          expect(cell, `${n} items, ${cols} columns from ${px}px`).toBeGreaterThanOrEqual(need);
+        }
+        expect(cells.length).toBe(n);
+      }
+    });
   });
 });
 

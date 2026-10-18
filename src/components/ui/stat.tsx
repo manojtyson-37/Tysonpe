@@ -51,30 +51,38 @@ export type StatStripItem = {
 };
 
 /*
- * StatStrip answers to ITS OWN width, not the viewport's: the console sidebar and gutters make the content column
- * much narrower than the window, so a viewport breakpoint (`sm:`) put four wide figures in one row that did not fit.
- * The wrapper is a container; two columns until the container is wide enough for `k` cells of about 16rem each, then
- * one row of `k` cells (at most four) with hairline dividers. A longer list wraps into further rows of `k`. Class
- * names are written out whole because Tailwind only emits classes it can find in the source.
+ * StatStrip answers to ITS OWN width, not the viewport's: the console sidebar and gutters make the content column much
+ * narrower than the window. Figures are `Money`, which is `whitespace-nowrap` on purpose, so a figure never breaks:
+ * the layout has to give every cell enough room instead. The widest plausible figure is a negative crore amount
+ * ("−₹1,29,99,999.99", about 9.3em with tabular digits) at the largest figure size (`sm:text-3xl`, 30px), so about
+ * 280px of cell content. From that:
+ *   - below @2xl (672px): one column, whatever the viewport (2 columns need 24 + 2 x 280 = 584px and the next
+ *     container step above that is @2xl);
+ *   - @2xl: two columns (cells 324px); with only two items the hairline appears here too (content 288px);
+ *   - @5xl (1024px): three columns with hairlines (content 293px after 48px of padding);
+ *   - four columns need 4 x (280 + 48) = 1312px, so they start at 84rem (1344px), which no console page reaches:
+ *     four items stay two by two in the app. stat.test.tsx recomputes every one of these thresholds from the classes.
+ * Class names are written out whole because Tailwind only emits classes it can find in the source. The dividers use
+ * `gap-x-0` plus padding on both sides of the rule so the space either side of a hairline is the same.
  */
 const WIDE_GRID: Record<number, string> = {
   1: "",
-  2: "",
-  3: "@3xl:grid-cols-3",
-  4: "@5xl:grid-cols-4",
+  2: "@2xl:gap-x-0",
+  3: "@5xl:grid-cols-3 @5xl:gap-x-0",
+  4: "@min-[84rem]:grid-cols-4 @min-[84rem]:gap-x-0",
 };
 /** First cell of a row: no rule on its left, no left padding. Others: a hairline on the left and padding either side. */
 const WIDE_FIRST: Record<number, string> = {
   1: "",
-  2: "@xl:pr-6",
-  3: "@3xl:pr-6",
-  4: "@5xl:pr-6",
+  2: "@2xl:pr-6",
+  3: "@5xl:pr-6",
+  4: "@min-[84rem]:pr-6",
 };
 const WIDE_REST: Record<number, string> = {
   1: "",
-  2: "@xl:border-l @xl:border-line @xl:px-6",
-  3: "@3xl:border-l @3xl:border-line @3xl:px-6",
-  4: "@5xl:border-l @5xl:border-line @5xl:px-6",
+  2: "@2xl:border-l @2xl:border-line @2xl:px-6",
+  3: "@5xl:border-l @5xl:border-line @5xl:px-6",
+  4: "@min-[84rem]:border-l @min-[84rem]:border-line @min-[84rem]:px-6",
 };
 
 /** Columns of the wide layout for a strip of `count` items: one per item, at most four. */
@@ -82,7 +90,24 @@ export function stripColumns(count: number): number {
   return Math.min(Math.max(count, 1), 4);
 }
 
-/** A hairline-separated strip of stats: two columns until its own width fits one row, never wider than its container. */
+/**
+ * The classes of a strip of `count` items: the bordered grid and, per index, the cell. Shared with loading skeletons
+ * so a placeholder strip has exactly the shape (and the same overflow behaviour) as the real one.
+ */
+export function stripLayout(count: number): { grid: string; cell: (index: number) => string | undefined } {
+  const k = stripColumns(count);
+  return {
+    grid: ["grid grid-cols-1 gap-x-6 gap-y-5 border-y border-line py-4 @2xl:grid-cols-2", WIDE_GRID[k]].filter(Boolean).join(" "),
+    cell: (index) => (index % k === 0 ? WIDE_FIRST[k] : WIDE_REST[k]) || undefined,
+  };
+}
+
+/**
+ * A hairline-separated strip of stats: one column, then two, then a row of up to four, as its own width allows.
+ * `className` lands on the OUTER wrapper (the `@container`), not on the bordered grid, so a caller passing
+ * border, padding or background changes what it styles. `container-type: inline-size` collapses a width that comes from
+ * its content, so the strip needs a block-level parent (all four consumers are block children, not flex-row items).
+ */
 export function StatStrip({
   items,
   labelCase = "upper",
@@ -92,19 +117,17 @@ export function StatStrip({
   labelCase?: StatLabelCase;
   className?: string;
 }) {
-  const k = stripColumns(items.length);
-  const cls = ["@container", className].filter(Boolean).join(" ");
-  const grid = ["grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-4", WIDE_GRID[k]].filter(Boolean).join(" ");
+  const layout = stripLayout(items.length);
   return (
-    <div className={cls}>
-      <div className={grid}>
+    <div className={["@container", className].filter(Boolean).join(" ")}>
+      <div className={layout.grid}>
         {/* Index key: a strip may legitimately repeat a label (two "Net" columns for two periods). */}
         {items.map((item, i) => (
           <Stat
             key={i}
             {...item}
             labelCase={labelCase}
-            className={["min-w-0 [overflow-wrap:anywhere]", i % k === 0 ? WIDE_FIRST[k] : WIDE_REST[k]].filter(Boolean).join(" ")}
+            className={layout.cell(i)}
           />
         ))}
       </div>

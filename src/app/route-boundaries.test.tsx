@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Button } from "@/components/ui/button";
 import NotFound from "./not-found";
 import ErrorPage from "./error";
+import { StatStrip, stripLayout } from "@/components/ui/stat";
 import ConsoleLoading from "./dashboard/(console)/(overview)/loading";
 import LibraryLoading from "./(site)/library/(list)/loading";
 import CommunityError from "./(site)/c/[handle]/community/error";
@@ -105,7 +106,10 @@ describe("console loading", () => {
   const html = render(<ConsoleLoading />);
 
   it("mirrors the Overview rhythm: header, store link, ruled four-stat strip, chart, checklist, then six order rows, one column, no cards", () => {
-    expect(html).toContain("grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-4 sm:flex"); // the StatStrip rule
+    // The skeleton strip is the real strip's container and grid (it overflowed 3px at 768 with the old sm:flex markup).
+    expect(html).toContain(`<div class="@container"><div class="${stripLayout(4).grid}">`);
+    expect(render(<StatStrip items={[1, 2, 3, 4].map((n) => ({ label: `L${n}`, value: "1" }))} />)).toContain(stripLayout(4).grid);
+    expect(html).not.toMatch(/sm:flex|sm:divide-x|sm:gap-0/);
     expect(html).not.toContain("lg:grid-cols"); // one column: the checklist band sits above the orders, as on the page
     expect(count(html, '<div class="mt-10">')).toBe(2); // checklist band, then orders
     expect(html.indexOf("h-5 w-24")).toBeLessThan(html.indexOf("h-5 w-28")); // checklist heading before orders heading

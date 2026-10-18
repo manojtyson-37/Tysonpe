@@ -1,4 +1,7 @@
 import { Skeleton, SkeletonAvatar } from "@/components/ui";
+import { stripLayout } from "@/components/ui/stat";
+
+const STRIP = stripLayout(4);
 
 // Replaces only the console <main> content: the layout keeps the bar, sidebar and drawer. The shape mirrors the
 // Overview (header with one action, store link row, a ruled four-stat strip, the 14-day chart, the setup checklist,
@@ -56,12 +59,14 @@ export default function ConsoleLoading() {
           <Skeleton className="mt-2 h-9 w-full" />
         </div>
 
-        <div className="grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-4 sm:flex sm:gap-0 sm:divide-x sm:divide-line">
-          {Array.from({ length: 4 }, (_, i) => (
-            <div key={i} className="sm:px-6 sm:first:pl-0">
-              <StatBlock />
-            </div>
-          ))}
+        <div className="@container">
+          <div className={STRIP.grid}>
+            {Array.from({ length: 4 }, (_, i) => (
+              <div key={i} className={STRIP.cell(i)}>
+                <StatBlock />
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="mt-8">
