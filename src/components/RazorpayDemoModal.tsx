@@ -1,8 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { settleDemoAction } from "@/app/actions/checkout";
+import { canDismissRazorpay } from "@/lib/gateway-demo";
+import { Dialog } from "@/components/ui/dialog";
 import {
   AxisBankIcon,
   BankIcon,
@@ -10,18 +12,17 @@ import {
   GPayIcon,
   HdfcBankIcon,
   IciciBankIcon,
-  LockIcon,
   MastercardIcon,
   PaytmIcon,
   PhonePeIcon,
   QrCodeIcon,
   RupayIcon,
   SbiBankIcon,
-  ShieldCheckIcon,
   UpiIcon,
   VisaIcon,
   WalletIcon,
 } from "./gateway-icons";
+import { IconCheck, IconInfo, IconLock, IconX } from "./icons";
 
 export interface RazorpayDemoModalProps {
   isOpen: boolean;
@@ -32,8 +33,32 @@ export interface RazorpayDemoModalProps {
   buyer: { name: string; email: string };
 }
 
-type Tab = "upi" | "card" | "netbanking" | "wallet";
+type Tab = "upi" | "cards" | "netbanking" | "wallet";
 type Status = "idle" | "processing" | "success" | "failed";
+type Outcome = "success" | "failure";
+
+// The look is the gateway's own, kept on purpose, and lives in the [data-skin="razorpay"] block of globals.css.
+// Nothing below names a colour: everything reads a --skin-* variable.
+const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--skin-accent)";
+// Inset ring for controls that sit flush against the panel edge, where an offset ring would be clipped.
+const FOCUS_INSET = "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--skin-accent)";
+const PRESS = "transition-[background-color,border-color,color,transform] duration-150 ease-(--ease-standard) active:scale-[0.98]";
+const TOUCH = "pointer-coarse:min-h-11";
+const LABEL = "t-label mb-1 block text-(--skin-muted)";
+const INPUT = `w-full rounded-control border border-(--skin-line-strong) bg-(--skin-surface) px-3 py-2 text-sm text-(--skin-ink) placeholder:text-(--skin-muted) focus:border-(--skin-accent) ${TOUCH} ${FOCUS}`;
+const PRIMARY = `flex w-full items-center justify-center gap-2 rounded-control bg-(--skin-accent) px-4 py-3 text-sm font-semibold text-(--skin-accent-ink) hover:bg-(--skin-accent-hover) ${PRESS} ${TOUCH} ${FOCUS}`;
+const SECONDARY = `w-full rounded-control border border-(--skin-line-strong) bg-(--skin-surface) px-4 py-2.5 text-sm font-semibold text-(--skin-ink) hover:bg-(--skin-surface-2) ${PRESS} ${TOUCH} ${FOCUS}`;
+
+/** A pick-one tile (UPI app, bank) or segment: a native button that reports its state with aria-pressed. */
+function choiceClass(selected: boolean) {
+  return `${PRESS} ${TOUCH} ${FOCUS} border ${
+    selected
+      ? "border-(--skin-accent) bg-(--skin-accent-soft) text-(--skin-ink) ring-1 ring-(--skin-accent)"
+      : "border-(--skin-line) bg-(--skin-surface) text-(--skin-ink) hover:bg-(--skin-surface-2)"
+  }`;
+}
+
+const NOOP = () => {};
 
 export function RazorpayDemoModal({
   isOpen,
@@ -45,45 +70,40 @@ export function RazorpayDemoModal({
 }: RazorpayDemoModalProps) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("upi");
-  const [outcome, setOutcome] = useState<"success" | "failure">("success");
+  const [outcome, setOutcome] = useState<Outcome>("success");
   const [status, setStatus] = useState<Status>("idle");
-  const [processingStep, setProcessingStep] = useState("Connecting to bank authorization gateway…");
+  const [processingStep, setProcessingStep] = useState("Connecting to the simulated bank…");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Simulated visual states (purely presentational: never sent to server)
   const [upiMode, setUpiMode] = useState<"apps" | "qr" | "id">("apps");
   const [selectedUpiApp, setSelectedUpiApp] = useState("gpay");
   const [upiId, setUpiId] = useState("");
-  const [cardNumber, setCardNumber] = useState("4111 •••• •••• 4444");
+  // Standard test values, not real card data. They only fill the preview card; nothing here is sent anywhere.
+  const [cardNumber, setCardNumber] = useState("4111 1111 1111 1111");
   const [cardExpiry, setCardExpiry] = useState("12/28");
-  const [cardCvv, setCardCvv] = useState("•••");
+  const [cardCvv, setCardCvv] = useState("123");
   const [cardName, setCardName] = useState(buyer.name || "Customer");
   const [selectedBank, setSelectedBank] = useState("hdfc");
+
+  // The body below is swapped for a status view while settling; focus follows it so a screen reader reads the new state.
+  const stateRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (status !== "idle") stateRef.current?.focus({ preventScroll: true });
+  }, [status]);
 
   const formattedAmount = (amountPaise / 100).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && isOpen && status !== "processing") {
-        onClose();
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, status, onClose]);
-
-  if (!isOpen) return null;
-
   async function handlePay() {
     setStatus("processing");
     setErrorMsg(null);
-    setProcessingStep("Connecting to payment network…");
+    setProcessingStep("Connecting to the simulated payment network…");
 
     await new Promise((r) => setTimeout(r, 650));
-    setProcessingStep("Authorizing simulated transaction with bank…");
+    setProcessingStep("Authorizing the simulated transaction with the bank…");
 
     await new Promise((r) => setTimeout(r, 650));
 
@@ -91,7 +111,7 @@ export function RazorpayDemoModal({
       const res = await settleDemoAction(orderId, outcome);
       if (res.ok) {
         setStatus("success");
-        setProcessingStep("Payment Approved! Enrolling you now…");
+        setProcessingStep("Payment approved. Enrolling you now…");
         await new Promise((r) => setTimeout(r, 800));
         router.push(res.to);
       } else {
@@ -104,26 +124,30 @@ export function RazorpayDemoModal({
     }
   }
 
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="rzp-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200"
-    >
-      <div className="relative w-full max-w-[490px] overflow-hidden rounded-[24px] bg-white shadow-[0_25px_60px_-15px_rgba(0,0,0,0.35)] border border-slate-200/80 text-slate-800 text-left">
-        {/* Header Bar */}
-        <div className="bg-[#0b1c33] text-white p-5 relative overflow-hidden">
-          {/* Subtle background glow */}
-          <div className="absolute -top-12 -right-12 w-48 h-48 bg-blue-600/20 rounded-full blur-2xl pointer-events-none" />
+  const methods: { id: Tab; name: string; icon: ReactNode }[] = [
+    { id: "upi", name: "UPI / QR", icon: <UpiIcon className="h-5 w-5" /> },
+    { id: "cards", name: "Card", icon: <CreditCardIcon className="h-5 w-5" /> },
+    { id: "netbanking", name: "Netbanking", icon: <BankIcon className="h-5 w-5" /> },
+    { id: "wallet", name: "Wallet", icon: <WalletIcon className="h-5 w-5" /> },
+  ];
 
-          <div className="relative z-10 flex items-center justify-between">
+  return (
+    // Escape and a click outside go through Dialog's onClose; while the payment is being settled they do nothing.
+    <Dialog
+      open={isOpen}
+      onClose={canDismissRazorpay(status) ? onClose : NOOP}
+      title={`Razorpay simulated checkout for ${productTitle}`}
+      bare
+      className="sm:max-w-lg"
+    >
+      <div data-skin="razorpay" className="bg-(--skin-surface) text-left text-(--skin-ink)">
+        {/* Header band */}
+        <div className="bg-(--skin-head-bg) px-5 pb-4 pt-5 text-(--skin-head-ink)">
+          <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
-              <span className="text-xl font-black tracking-tight text-white font-sans flex items-center">
-                Razorpay
-              </span>
-              <span className="rounded-full bg-amber-400/15 border border-amber-400/35 px-2.5 py-0.5 text-[10px] font-bold text-amber-300 uppercase tracking-widest">
-                SANDBOX
+              <span className="text-xl font-extrabold tracking-tight">Razorpay</span>
+              <span className="rounded-full border border-(--skin-head-line) px-2.5 py-0.5 text-xs font-semibold text-(--skin-head-warn)">
+                Simulated
               </span>
             </div>
 
@@ -132,299 +156,256 @@ export function RazorpayDemoModal({
                 type="button"
                 onClick={onClose}
                 aria-label="Close payment modal"
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition flex items-center justify-center text-sm"
+                className={`flex h-8 w-8 items-center justify-center rounded-full border border-(--skin-head-line) text-(--skin-head-muted) hover:text-(--skin-head-ink) pointer-coarse:h-11 pointer-coarse:w-11 ${PRESS} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--skin-head-ink)`}
               >
-                ✕
+                <IconX size={16} />
               </button>
             )}
           </div>
 
-          <div className="relative z-10 mt-4 flex items-baseline justify-between border-t border-white/10 pt-3.5">
-            <div>
-              <p className="text-[11px] font-medium text-slate-400 tracking-wide uppercase">Merchant</p>
-              <h2 id="rzp-modal-title" className="text-sm font-semibold text-white truncate max-w-[240px]">
-                {productTitle}
-              </h2>
+          <div className="mt-4 flex items-end justify-between gap-4 border-t border-(--skin-head-line) pt-3.5">
+            <div className="min-w-0">
+              <p className="t-label text-(--skin-head-muted)">Merchant</p>
+              <p className="max-w-60 truncate text-sm font-semibold">{productTitle}</p>
             </div>
             <div className="text-right">
-              <p className="text-[11px] font-medium text-slate-400 tracking-wide uppercase">Amount to pay</p>
-              <p className="text-xl font-extrabold text-emerald-400 tracking-tight">₹{formattedAmount}</p>
+              <p className="t-label text-(--skin-head-muted)">Amount to pay</p>
+              <p className="text-xl font-semibold tabular-nums text-(--skin-head-money)">₹{formattedAmount}</p>
             </div>
           </div>
         </div>
 
-        {/* Modal Body */}
+        {/* Body */}
         {status === "processing" ? (
-          <div className="p-10 text-center space-y-5">
-            <div className="relative mx-auto w-16 h-16">
-              <div className="w-16 h-16 rounded-full border-4 border-blue-100" />
-              <div className="absolute inset-0 w-16 h-16 rounded-full border-4 border-blue-600 border-t-transparent animate-spin" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <LockIcon className="w-5 h-5 text-blue-600" />
-              </div>
+          <div ref={stateRef} tabIndex={-1} role="status" className="space-y-4 px-8 py-10 text-center outline-none">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-(--skin-line) bg-(--skin-surface-2) text-(--skin-accent)">
+              <IconLock size={22} />
             </div>
             <div className="space-y-1.5">
-              <h3 className="text-base font-bold text-slate-900">{processingStep}</h3>
-              <p className="text-xs text-slate-500">Secure end-to-end simulated transaction. Please wait.</p>
+              <p className="text-base font-semibold">{processingStep}</p>
+              <p className="t-meta text-(--skin-muted)">Simulated transaction. Nothing real is charged. Please wait.</p>
             </div>
           </div>
         ) : status === "success" ? (
-          <div className="p-10 text-center space-y-4">
-            <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500 text-white flex items-center justify-center text-3xl font-black shadow-lg shadow-emerald-500/30 animate-in zoom-in-75 duration-300">
-              ✓
+          <div ref={stateRef} tabIndex={-1} role="status" className="space-y-4 px-8 py-10 text-center outline-none">
+            <div className="reveal-pop mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-(--skin-good) text-(--skin-accent-ink)">
+              <IconCheck size={28} />
             </div>
             <div className="space-y-1">
-              <h3 className="text-lg font-extrabold text-slate-900">Payment Successful!</h3>
-              <p className="text-xs text-slate-500 font-medium">Redirecting to order confirmation and receipt…</p>
+              <p className="text-lg font-semibold">Payment successful</p>
+              <p className="t-meta text-(--skin-muted)">Redirecting to your order confirmation…</p>
             </div>
           </div>
         ) : status === "failed" ? (
-          <div className="p-8 text-center space-y-5">
-            <div className="mx-auto w-16 h-16 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center text-3xl font-bold">
-              ✕
+          <div className="space-y-5 px-6 py-8 text-center">
+            <div ref={stateRef} tabIndex={-1} role="alert" className="space-y-4 outline-none">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-(--skin-bad-soft) text-(--skin-bad)">
+                <IconX size={28} />
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-lg font-semibold">Payment declined</p>
+                <p className="text-sm font-medium text-(--skin-bad)">{errorMsg}</p>
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <h3 className="text-lg font-bold text-slate-900">Payment Declined</h3>
-              <p className="text-xs text-rose-600 font-medium px-4">{errorMsg}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setStatus("idle")}
-                className="w-full py-2.5 rounded-xl bg-blue-600 text-white font-semibold text-xs hover:bg-blue-700 transition"
-              >
-                Try Again
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <button type="button" onClick={() => setStatus("idle")} className={PRIMARY}>
+                Try again
               </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="w-full py-2.5 rounded-xl border border-slate-300 text-slate-700 font-semibold text-xs hover:bg-slate-100 transition"
-              >
+              <button type="button" onClick={onClose} className={SECONDARY}>
                 Cancel
               </button>
             </div>
           </div>
         ) : (
           <div>
-            {/* Payment Method Tabs */}
-            <div className="grid grid-cols-4 border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
-              <button
-                type="button"
-                onClick={() => setTab("upi")}
-                className={`py-3 px-1 flex flex-col items-center gap-1.5 border-b-2 transition ${
-                  tab === "upi"
-                    ? "border-blue-600 text-blue-600 bg-white"
-                    : "border-transparent hover:text-slate-900 hover:bg-slate-100/60"
-                }`}
-              >
-                <UpiIcon className="w-5 h-5" />
-                <span>UPI / QR</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setTab("card")}
-                className={`py-3 px-1 flex flex-col items-center gap-1.5 border-b-2 transition ${
-                  tab === "card"
-                    ? "border-blue-600 text-blue-600 bg-white"
-                    : "border-transparent hover:text-slate-900 hover:bg-slate-100/60"
-                }`}
-              >
-                <CreditCardIcon className="w-5 h-5" />
-                <span>Card</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setTab("netbanking")}
-                className={`py-3 px-1 flex flex-col items-center gap-1.5 border-b-2 transition ${
-                  tab === "netbanking"
-                    ? "border-blue-600 text-blue-600 bg-white"
-                    : "border-transparent hover:text-slate-900 hover:bg-slate-100/60"
-                }`}
-              >
-                <BankIcon className="w-5 h-5" />
-                <span>Netbanking</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setTab("wallet")}
-                className={`py-3 px-1 flex flex-col items-center gap-1.5 border-b-2 transition ${
-                  tab === "wallet"
-                    ? "border-blue-600 text-blue-600 bg-white"
-                    : "border-transparent hover:text-slate-900 hover:bg-slate-100/60"
-                }`}
-              >
-                <WalletIcon className="w-5 h-5" />
-                <span>Wallet</span>
-              </button>
+            {/* Payment method */}
+            <div
+              role="group"
+              aria-label="Payment method"
+              className="grid grid-cols-4 border-b border-(--skin-line) bg-(--skin-surface-2)"
+            >
+              {methods.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  aria-pressed={tab === m.id}
+                  onClick={() => setTab(m.id)}
+                  className={`flex flex-col items-center gap-1.5 border-b-2 px-1 py-3 text-xs font-semibold ${PRESS} ${TOUCH} ${FOCUS_INSET} ${
+                    tab === m.id
+                      ? "border-(--skin-accent) bg-(--skin-surface) text-(--skin-accent)"
+                      : "border-transparent text-(--skin-muted) hover:bg-(--skin-surface) hover:text-(--skin-ink)"
+                  }`}
+                >
+                  {m.icon}
+                  <span>{m.name}</span>
+                </button>
+              ))}
             </div>
 
-            {/* Tab Panel */}
-            <div className="p-5 space-y-4">
+            <div className="space-y-4 p-5">
               {tab === "upi" && (
                 <div className="space-y-4">
-                  {/* UPI Mode Switcher */}
-                  <div className="flex rounded-xl bg-slate-100 p-1 text-xs font-semibold text-slate-600">
-                    <button
-                      type="button"
-                      onClick={() => setUpiMode("apps")}
-                      className={`flex-1 py-1.5 rounded-lg transition ${
-                        upiMode === "apps" ? "bg-white text-slate-900 shadow-xs" : "hover:text-slate-900"
-                      }`}
-                    >
-                      UPI Apps
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setUpiMode("qr")}
-                      className={`flex-1 py-1.5 rounded-lg transition ${
-                        upiMode === "qr" ? "bg-white text-slate-900 shadow-xs" : "hover:text-slate-900"
-                      }`}
-                    >
-                      Scan QR Code
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setUpiMode("id")}
-                      className={`flex-1 py-1.5 rounded-lg transition ${
-                        upiMode === "id" ? "bg-white text-slate-900 shadow-xs" : "hover:text-slate-900"
-                      }`}
-                    >
-                      Enter UPI ID
-                    </button>
+                  <div role="group" aria-label="UPI method" className="flex gap-1 rounded-control bg-(--skin-surface-2) p-1 text-xs font-semibold">
+                    {(
+                      [
+                        ["apps", "UPI apps"],
+                        ["qr", "Scan QR"],
+                        ["id", "UPI ID"],
+                      ] as const
+                    ).map(([id, name]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        aria-pressed={upiMode === id}
+                        onClick={() => setUpiMode(id)}
+                        className={`flex-1 rounded-control px-2 py-1.5 ${PRESS} ${TOUCH} ${FOCUS} ${
+                          upiMode === id
+                            ? "bg-(--skin-surface) text-(--skin-ink) ring-1 ring-(--skin-line)"
+                            : "text-(--skin-muted) hover:text-(--skin-ink)"
+                        }`}
+                      >
+                        {name}
+                      </button>
+                    ))}
                   </div>
 
                   {upiMode === "apps" && (
-                    <div className="grid grid-cols-3 gap-2.5">
+                    <div role="group" aria-label="UPI app" className="grid grid-cols-3 gap-2.5">
                       {[
-                        { id: "gpay", name: "Google Pay", icon: <GPayIcon className="w-6 h-6" /> },
-                        { id: "phonepe", name: "PhonePe", icon: <PhonePeIcon className="w-6 h-6" /> },
-                        { id: "paytm", name: "Paytm", icon: <PaytmIcon className="w-8 h-4" /> },
+                        { id: "gpay", name: "Google Pay", icon: <GPayIcon className="h-6 w-6" /> },
+                        { id: "phonepe", name: "PhonePe", icon: <PhonePeIcon className="h-6 w-6" /> },
+                        { id: "paytm", name: "Paytm", icon: <PaytmIcon className="h-4 w-8" /> },
                       ].map((app) => (
                         <button
                           key={app.id}
                           type="button"
+                          aria-pressed={selectedUpiApp === app.id}
                           onClick={() => setSelectedUpiApp(app.id)}
-                          className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-2 transition ${
-                            selectedUpiApp === app.id
-                              ? "border-blue-600 bg-blue-50/50 text-blue-900 ring-2 ring-blue-600 shadow-xs"
-                              : "border-slate-200 hover:bg-slate-50 text-slate-700"
-                          }`}
+                          className={`flex flex-col items-center justify-center gap-2 rounded-card p-3 text-xs font-semibold ${choiceClass(selectedUpiApp === app.id)}`}
                         >
                           {app.icon}
-                          <span className="text-[11px] truncate w-full text-center">{app.name}</span>
+                          <span className="w-full truncate text-center">{app.name}</span>
                         </button>
                       ))}
                     </div>
                   )}
 
                   {upiMode === "qr" && (
-                    <div className="flex flex-col items-center justify-center p-4 rounded-2xl border border-slate-200 bg-slate-50/60 space-y-3">
-                      <div className="p-3 bg-white rounded-xl shadow-xs border border-slate-200">
-                        <QrCodeIcon className="w-28 h-28 text-slate-800" />
+                    <div className="flex flex-col items-center justify-center space-y-3 rounded-card border border-(--skin-line) bg-(--skin-surface-2) p-4">
+                      <div className="rounded-control border border-(--skin-line) bg-(--skin-surface) p-3">
+                        <QrCodeIcon className="h-28 w-28 text-(--skin-ink)" />
                       </div>
                       <div className="text-center">
-                        <p className="text-xs font-bold text-slate-800">Scan with any UPI App</p>
-                        <p className="text-[11px] text-slate-500">Google Pay, PhonePe, Paytm, or BHIM</p>
+                        <p className="text-sm font-semibold">Scan with any UPI app</p>
+                        <p className="t-meta text-(--skin-muted)">Google Pay, PhonePe, Paytm or BHIM</p>
                       </div>
                     </div>
                   )}
 
                   {upiMode === "id" && (
                     <div className="space-y-1.5">
-                      <label htmlFor="rzp-upi-id" className="text-xs font-semibold text-slate-700 block">
-                        Enter UPI Virtual Payment Address (VPA)
+                      <label htmlFor="rzp-upi-id" className={LABEL}>
+                        UPI ID (VPA)
                       </label>
                       <input
                         id="rzp-upi-id"
                         type="text"
+                        inputMode="email"
+                        autoComplete="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
                         value={upiId}
                         onChange={(e) => setUpiId(e.target.value)}
                         placeholder="yourname@okhdfcbank"
-                        className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-blue-600 focus:outline-hidden"
+                        className={INPUT}
                       />
-                      <p className="text-[11px] text-slate-500">A payment collect request will be simulated.</p>
+                      <p className="t-meta text-(--skin-muted)">A collect request is simulated. Nothing is sent.</p>
                     </div>
                   )}
                 </div>
               )}
 
-              {tab === "card" && (
+              {tab === "cards" && (
                 <div className="space-y-3.5">
-                  {/* Card Visual Preview */}
-                  <div className="rounded-xl p-3.5 bg-gradient-to-r from-slate-900 to-blue-950 text-white shadow-sm flex flex-col justify-between h-28 border border-white/10">
+                  {/* Preview of the simulated card */}
+                  <div className="flex h-28 flex-col justify-between rounded-card bg-(--skin-head-bg) p-3.5 text-(--skin-head-ink)">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] tracking-widest text-slate-300 font-mono">SIMULATED CARD</span>
+                      <span className="t-label text-(--skin-head-muted)">Simulated card</span>
                       <div className="flex gap-1.5">
-                        <VisaIcon className="w-7 h-4" />
-                        <MastercardIcon className="w-6 h-4" />
-                        <RupayIcon className="w-7 h-4" />
+                        <VisaIcon className="h-4 w-7" />
+                        <MastercardIcon className="h-4 w-6" />
+                        <RupayIcon className="h-4 w-7" />
                       </div>
                     </div>
                     <div>
-                      <p className="text-sm font-mono tracking-widest text-white/90">{cardNumber}</p>
-                      <div className="flex items-center justify-between mt-1 text-[10px] text-slate-300">
-                        <span className="truncate max-w-[180px] uppercase font-medium">{cardName}</span>
-                        <span className="font-mono">{cardExpiry}</span>
+                      <p className="t-ledger text-sm tracking-widest">{cardNumber}</p>
+                      <div className="mt-1 flex items-center justify-between text-xs text-(--skin-head-muted)">
+                        <span className="max-w-48 truncate font-medium uppercase">{cardName}</span>
+                        <span className="t-ledger">{cardExpiry}</span>
                       </div>
                     </div>
                   </div>
 
                   <div className="space-y-2.5">
                     <div>
-                      <label htmlFor="rzp-card-num" className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
-                        Card Number
+                      <label htmlFor="rzp-card-num" className={LABEL}>
+                        Card number
                       </label>
                       <input
                         id="rzp-card-num"
                         type="text"
+                        inputMode="numeric"
+                        autoComplete="cc-number"
                         value={cardNumber}
                         onChange={(e) => setCardNumber(e.target.value)}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-mono focus:border-blue-600 focus:outline-hidden"
+                        className={`${INPUT} t-ledger`}
                       />
                     </div>
 
                     <div className="grid grid-cols-2 gap-2.5">
                       <div>
-                        <label htmlFor="rzp-card-exp" className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                        <label htmlFor="rzp-card-exp" className={LABEL}>
                           Expiry
                         </label>
                         <input
                           id="rzp-card-exp"
                           type="text"
+                          inputMode="numeric"
+                          autoComplete="cc-exp"
                           value={cardExpiry}
                           onChange={(e) => setCardExpiry(e.target.value)}
                           placeholder="MM/YY"
-                          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-mono focus:border-blue-600 focus:outline-hidden"
+                          className={`${INPUT} t-ledger`}
                         />
                       </div>
                       <div>
-                        <label htmlFor="rzp-card-cvv" className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                        <label htmlFor="rzp-card-cvv" className={LABEL}>
                           CVV
                         </label>
                         <input
                           id="rzp-card-cvv"
-                          type="text"
+                          type="password"
+                          inputMode="numeric"
+                          autoComplete="cc-csc"
                           value={cardCvv}
                           onChange={(e) => setCardCvv(e.target.value)}
                           placeholder="123"
-                          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-mono focus:border-blue-600 focus:outline-hidden"
+                          className={`${INPUT} t-ledger`}
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label htmlFor="rzp-card-name" className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
-                        Cardholder Name
+                      <label htmlFor="rzp-card-name" className={LABEL}>
+                        Cardholder name
                       </label>
                       <input
                         id="rzp-card-name"
                         type="text"
+                        autoComplete="cc-name"
                         value={cardName}
                         onChange={(e) => setCardName(e.target.value)}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-blue-600 focus:outline-hidden"
+                        className={INPUT}
                       />
                     </div>
                   </div>
@@ -433,23 +414,20 @@ export function RazorpayDemoModal({
 
               {tab === "netbanking" && (
                 <div className="space-y-3">
-                  <p className="text-xs font-bold text-slate-700">Select Bank:</p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <p className="text-sm font-semibold">Select a bank</p>
+                  <div role="group" aria-label="Bank" className="grid grid-cols-2 gap-2">
                     {[
-                      { id: "hdfc", name: "HDFC Bank", icon: <HdfcBankIcon className="w-5 h-5" /> },
-                      { id: "sbi", name: "State Bank of India", icon: <SbiBankIcon className="w-5 h-5" /> },
-                      { id: "icici", name: "ICICI Bank", icon: <IciciBankIcon className="w-5 h-5" /> },
-                      { id: "axis", name: "Axis Bank", icon: <AxisBankIcon className="w-5 h-5" /> },
+                      { id: "hdfc", name: "HDFC Bank", icon: <HdfcBankIcon className="h-5 w-5" /> },
+                      { id: "sbi", name: "State Bank of India", icon: <SbiBankIcon className="h-5 w-5" /> },
+                      { id: "icici", name: "ICICI Bank", icon: <IciciBankIcon className="h-5 w-5" /> },
+                      { id: "axis", name: "Axis Bank", icon: <AxisBankIcon className="h-5 w-5" /> },
                     ].map((bank) => (
                       <button
                         key={bank.id}
                         type="button"
+                        aria-pressed={selectedBank === bank.id}
                         onClick={() => setSelectedBank(bank.id)}
-                        className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2.5 transition ${
-                          selectedBank === bank.id
-                            ? "border-blue-600 bg-blue-50/60 text-blue-900 ring-2 ring-blue-600 shadow-xs"
-                            : "border-slate-200 hover:bg-slate-50 text-slate-700"
-                        }`}
+                        className={`flex items-center gap-2.5 rounded-card p-2.5 text-xs font-semibold ${choiceClass(selectedBank === bank.id)}`}
                       >
                         {bank.icon}
                         <span className="truncate">{bank.name}</span>
@@ -458,13 +436,10 @@ export function RazorpayDemoModal({
                   </div>
 
                   <div className="pt-1">
-                    <label htmlFor="rzp-other-banks" className="text-[11px] font-semibold text-slate-500 block mb-1">
-                      Or Other Popular Banks
+                    <label htmlFor="rzp-other-banks" className={LABEL}>
+                      Other banks
                     </label>
-                    <select
-                      id="rzp-other-banks"
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs focus:border-blue-600 focus:outline-hidden bg-white"
-                    >
+                    <select id="rzp-other-banks" className={INPUT}>
                       <option>Kotak Mahindra Bank</option>
                       <option>Punjab National Bank</option>
                       <option>Bank of Baroda</option>
@@ -476,86 +451,80 @@ export function RazorpayDemoModal({
               )}
 
               {tab === "wallet" && (
-                <div className="space-y-2">
-                  <p className="text-xs font-bold text-slate-700">Supported Digital Wallets:</p>
+                <div role="radiogroup" aria-label="Wallet" className="space-y-2">
+                  <p className="text-sm font-semibold">Wallets</p>
                   {[
-                    { name: "PhonePe Wallet", icon: <PhonePeIcon className="w-5 h-5" /> },
-                    { name: "Paytm Balance", icon: <PaytmIcon className="w-7 h-3.5" /> },
-                    { name: "Mobikwik", icon: <WalletIcon className="w-5 h-5 text-ink" /> },
+                    { name: "PhonePe Wallet", icon: <PhonePeIcon className="h-5 w-5" /> },
+                    { name: "Paytm Balance", icon: <PaytmIcon className="h-3.5 w-7" /> },
+                    { name: "Mobikwik", icon: <WalletIcon className="h-5 w-5 text-(--skin-ink)" /> },
                   ].map((w, idx) => (
                     <label
                       key={w.name}
-                      className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer text-xs font-semibold"
+                      className={`flex cursor-pointer items-center justify-between rounded-card border border-(--skin-line) p-3 text-sm font-semibold hover:bg-(--skin-surface-2) ${TOUCH} ${PRESS} has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-(--skin-accent)`}
                     >
-                      <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-3">
                         {w.icon}
                         <span>{w.name}</span>
-                      </div>
-                      <input type="radio" name="rzp_wallet" defaultChecked={idx === 0} className="text-blue-600" />
+                      </span>
+                      <input type="radio" name="rzp_wallet" defaultChecked={idx === 0} className="h-4 w-4 accent-(--skin-accent)" />
                     </label>
                   ))}
                 </div>
               )}
 
-              {/* Developer Sandbox Simulation Strip */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-2.5">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-600" />
-                    Simulation Sandbox Outcome
-                  </span>
-                  <span className="text-[10px] text-slate-400">Sales Demo Mode</span>
+              {/* Outcome the simulation will settle with */}
+              <fieldset className="rounded-card border border-(--skin-line) bg-(--skin-surface-2) p-2.5">
+                <legend className="t-label px-1 text-(--skin-muted)">Simulated outcome</legend>
+                <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
+                  <label className="relative block">
+                    <input
+                      type="radio"
+                      name="rzp-outcome"
+                      value="success"
+                      checked={outcome === "success"}
+                      onChange={() => setOutcome("success")}
+                      className="peer sr-only"
+                    />
+                    <span
+                      className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-control border border-(--skin-line) bg-(--skin-surface) px-2.5 py-1.5 font-semibold text-(--skin-muted) ${PRESS} ${TOUCH} peer-checked:border-(--skin-good) peer-checked:bg-(--skin-good-soft) peer-checked:text-(--skin-good) peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-(--skin-accent)`}
+                    >
+                      <IconCheck size={14} />
+                      Simulate success
+                    </span>
+                  </label>
+                  <label className="relative block">
+                    <input
+                      type="radio"
+                      name="rzp-outcome"
+                      value="failure"
+                      checked={outcome === "failure"}
+                      onChange={() => setOutcome("failure")}
+                      className="peer sr-only"
+                    />
+                    <span
+                      className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-control border border-(--skin-line) bg-(--skin-surface) px-2.5 py-1.5 font-semibold text-(--skin-muted) ${PRESS} ${TOUCH} peer-checked:border-(--skin-bad) peer-checked:bg-(--skin-bad-soft) peer-checked:text-(--skin-bad) peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-(--skin-accent)`}
+                    >
+                      <IconX size={14} />
+                      Simulate decline
+                    </span>
+                  </label>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setOutcome("success")}
-                    className={`py-1.5 px-2.5 rounded-lg border font-semibold text-xs flex items-center justify-center gap-1.5 transition ${
-                      outcome === "success"
-                        ? "border-emerald-500 bg-emerald-50 text-emerald-800 shadow-xs ring-1 ring-emerald-500"
-                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
-                    }`}
-                  >
-                    <span>✓ Simulate Success</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setOutcome("failure")}
-                    className={`py-1.5 px-2.5 rounded-lg border font-semibold text-xs flex items-center justify-center gap-1.5 transition ${
-                      outcome === "failure"
-                        ? "border-rose-500 bg-rose-50 text-rose-800 shadow-xs ring-1 ring-rose-500"
-                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
-                    }`}
-                  >
-                    <span>✕ Simulate Decline</span>
-                  </button>
-                </div>
-              </div>
+              </fieldset>
 
-              {/* Pay Button */}
-              <button
-                type="button"
-                onClick={handlePay}
-                className="w-full py-3.5 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 active:bg-blue-800 transition shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2"
-              >
-                <LockIcon className="w-4 h-4" />
-                <span>Pay ₹{formattedAmount}</span>
+              <button type="button" onClick={handlePay} className={PRIMARY}>
+                <IconLock size={16} />
+                <span className="tabular-nums">Pay ₹{formattedAmount}</span>
               </button>
             </div>
           </div>
         )}
 
-        {/* Modal Footer */}
-        <div className="bg-slate-50 px-5 py-3 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500 font-medium">
-          <div className="flex items-center gap-1.5">
-            <ShieldCheckIcon className="w-3.5 h-3.5 text-emerald-600" />
-            <span>256-bit SSL Secure</span>
-          </div>
-          <div>
-            <span>Secured by <strong className="text-slate-800 font-bold">RAZORPAY DEMO</strong></span>
-          </div>
+        {/* Footer */}
+        <div className="flex items-center gap-1.5 border-t border-(--skin-line) bg-(--skin-surface-2) px-5 py-3 text-xs font-medium text-(--skin-muted)">
+          <IconInfo size={14} className="shrink-0" />
+          <span>Simulated checkout in test mode. No real card, UPI or bank details are sent.</span>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

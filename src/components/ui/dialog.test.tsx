@@ -263,6 +263,38 @@ describe("DialogView", () => {
   });
 });
 
+describe("DialogView bare (content draws its own chrome)", () => {
+  const html = renderToStaticMarkup(
+    <DialogView bare titleId="b-title" descriptionId="b-desc" title="Gateway checkout" description="ignored" footer={<button>ignored footer</button>}>
+      <section>Own header and body</section>
+    </DialogView>,
+  );
+
+  it("keeps the title as the accessible name but hides it visually", () => {
+    const [attrs] = tagAttrs(html, "div").filter((a) => a.role === "dialog");
+    expect(attrs["aria-labelledby"]).toBe("b-title");
+    expect(html).toMatch(/<h2 id="b-title" class="sr-only">Gateway checkout<\/h2>/);
+  });
+
+  it("renders the children edge to edge, without the padded wrapper, and does not describe the dialog by them", () => {
+    const [attrs] = tagAttrs(html, "div").filter((a) => a.role === "dialog");
+    expect(attrs["aria-describedby"]).toBeUndefined();
+    expect(html).toContain("<section>Own header and body</section>");
+    expect(html).not.toContain("px-6 pt-6");
+    expect(html).not.toContain('id="b-desc"');
+  });
+
+  it("ignores description and footer", () => {
+    expect(html).not.toContain("ignored");
+  });
+
+  it("leaves the default layout alone when bare is off", () => {
+    const normal = renderToStaticMarkup(<DialogView titleId="n-title" descriptionId="n-desc" title="Hi" description="Body" />);
+    expect(normal).toContain("px-6 pt-6");
+    expect(normal).not.toContain("sr-only");
+  });
+});
+
 describe("Dialog", () => {
   it("renders nothing while closed", () => {
     expect(renderToStaticMarkup(<Dialog open={false} onClose={() => {}} title="Hi" />)).toBe("");

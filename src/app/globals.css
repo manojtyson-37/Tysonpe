@@ -385,3 +385,61 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
   .status-ring-once::after { display: none; }
   .qr-scan-once { animation: none; display: none; }
 }
+
+/*
+  Gateway replica skins. The simulated Razorpay modal and Easebuzz hosted page keep their gateways' own look on purpose
+  (navy and blue, light grey and blue), so they are not drawn in the app palette. The look lives here, as variables, on the
+  replica's root element only: the JSX of both screens uses `bg-(--skin-surface)` style utilities and no colour of its own.
+  The variables are defined on `[data-skin]` and nowhere else, so nothing outside a replica can pick them up, and the app
+  palette above is not redefined. `--skin-head-*` is the dark band on a replica (the Razorpay header); a skin that is light
+  throughout sets it to the same light values.
+*/
+[data-skin="razorpay"] {
+  --skin-head-bg: #0b1c33;
+  --skin-head-ink: #ffffff;
+  --skin-head-muted: #a9b6c9;
+  --skin-head-line: #27405f;
+  --skin-head-money: #4ade80;
+  --skin-head-warn: #fcd34d;
+  --skin-bg: #ffffff;
+  --skin-surface: #ffffff;
+  --skin-surface-2: #f4f6fa;
+  --skin-ink: #0f1b2d;
+  --skin-muted: #556176;
+  --skin-line: #d6dce6;
+  --skin-line-strong: #b4bdcc;
+  --skin-accent: #2563eb;
+  --skin-accent-hover: #1d4ed8;
+  --skin-accent-ink: #ffffff;
+  --skin-accent-soft: #e8f0fe;
+  --skin-good: #0f7b4d;
+  --skin-good-soft: #e3f1ea;
+  --skin-bad: #b42318;
+  --skin-bad-soft: #fbeae8;
+  --skin-dot: #2563eb;
+}
+
+[data-skin="easebuzz"] {
+  --skin-head-bg: #ffffff;
+  --skin-head-ink: #12233d;
+  --skin-head-muted: #55637a;
+  --skin-head-line: #d9e0ec;
+  --skin-head-money: #0f7b4d;
+  --skin-head-warn: #8a5300;
+  --skin-bg: #eef2f8;
+  --skin-surface: #ffffff;
+  --skin-surface-2: #f5f7fb;
+  --skin-ink: #12233d;
+  --skin-muted: #55637a;
+  --skin-line: #d9e0ec;
+  --skin-line-strong: #b7c2d4;
+  --skin-accent: #1d4ed8;
+  --skin-accent-hover: #1e40af;
+  --skin-accent-ink: #ffffff;
+  --skin-accent-soft: #e6edfc;
+  --skin-good: #0f7b4d;
+  --skin-good-soft: #e3f1ea;
+  --skin-bad: #b42318;
+  --skin-bad-soft: #fbeae8;
+  --skin-dot: #f59e0b;
+}

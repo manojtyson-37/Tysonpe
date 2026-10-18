@@ -140,6 +140,8 @@ export type DialogViewProps = {
   children?: ReactNode;
   footer?: ReactNode;
   className?: string;
+  /** The content draws its own chrome: see `DialogProps.bare`. */
+  bare?: boolean;
   panelRef?: RefObject<HTMLDivElement | null>;
   onBackdropClick?: () => void;
   motion?: PanelMotion;
@@ -155,12 +157,13 @@ export function DialogView({
   children,
   footer,
   className,
+  bare,
   panelRef,
   onBackdropClick,
   motion,
   origin,
 }: DialogViewProps) {
-  const hasBody = Boolean(description || children);
+  const hasBody = !bare && Boolean(description || children);
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
       <m.div
@@ -186,18 +189,29 @@ export function DialogView({
           .join(" ")}
         {...motion?.panel}
       >
-        <div className="px-6 pt-6">
-          <h2 id={titleId} className="text-lg font-semibold leading-snug text-ink">
-            {title}
-          </h2>
-          {hasBody && (
-            <div id={descriptionId} className="mt-2 text-sm text-muted">
-              {description && <p>{description}</p>}
-              {children}
+        {bare ? (
+          <>
+            <h2 id={titleId} className="sr-only">
+              {title}
+            </h2>
+            {children}
+          </>
+        ) : (
+          <>
+            <div className="px-6 pt-6">
+              <h2 id={titleId} className="text-lg font-semibold leading-snug text-ink">
+                {title}
+              </h2>
+              {hasBody && (
+                <div id={descriptionId} className="mt-2 text-sm text-muted">
+                  {description && <p>{description}</p>}
+                  {children}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-        {footer && <div className="mt-5 flex flex-col-reverse gap-2 px-6 pb-5 sm:flex-row sm:justify-end">{footer}</div>}
+            {footer && <div className="mt-5 flex flex-col-reverse gap-2 px-6 pb-5 sm:flex-row sm:justify-end">{footer}</div>}
+          </>
+        )}
       </m.div>
     </div>
   );
@@ -212,6 +226,12 @@ export type DialogProps = {
   children?: ReactNode;
   footer?: ReactNode;
   className?: string;
+  /**
+   * For content that draws its own header and body (a gateway replica). The title stays as the accessible name but is
+   * visually hidden, `children` fill the panel edge to edge and are not wired as its description (a form is not a
+   * description), and `description` and `footer` are ignored. Focus trap, Escape, scroll lock and focus return are unchanged.
+   */
+  bare?: boolean;
   /** Element to focus on open. Defaults to the first focusable element in the panel. */
   initialFocusRef?: RefObject<HTMLElement | null>;
   /** The opener: focus returns to it on close, and the panel scales out of it. Defaults to the element focused at open. */
@@ -230,7 +250,7 @@ const EXIT_FALLBACK_MS = 400;
  * Nothing is mounted until the first `open`, so a page with many closed dialogs (one per table row) pays no cost.
  * Nested dialogs, and a dialog over a sheet, stack: only the top one reacts to Escape and Tab.
  */
-export function Dialog({ open, onClose, title, description, children, footer, className, initialFocusRef, returnFocusRef }: DialogProps) {
+export function Dialog({ open, onClose, title, description, children, footer, className, bare, initialFocusRef, returnFocusRef }: DialogProps) {
   const uid = useId();
   const titleId = `${uid}-title`;
   const descriptionId = `${uid}-desc`;
@@ -362,6 +382,7 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
             description={description}
             footer={footer}
             className={className}
+            bare={bare}
             panelRef={panelRef}
             onBackdropClick={onClose}
             motion={plan.motion}
