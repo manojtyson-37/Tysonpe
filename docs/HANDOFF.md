@@ -1,7 +1,50 @@
 # Tysonpe — Handoff (start here in a new session)
 
-Last updated: 2026-10-16, after finishing sub-project 3 (community + gamification).
+Last updated: 2026-10-18 (section 0: UI rebuild); sections 1 to 10 last updated 2026-10-16, after finishing sub-project 3 (community + gamification).
 Everything below was verified against the repo at commit `4c8451a` (this handoff is committed on top of it) unless marked **(proposed)**.
+
+## 0. UI rebuild (branch `ui/rebuild`): read this first if you are continuing the redesign
+
+Verified 2026-10-18 at `ui/rebuild` commit `82ac431` (pushed to `origin/ui/rebuild`). Sections 1 to 10 below describe `main` at the end of sub-project 3 and are otherwise unchanged.
+
+**What it is.** A full UI rebuild of Tysonpe on its own branch and worktree (`/Users/manojaaa/Tysonpe- Sandbox/ui-rebuild`, quote the path): design tokens and primitives (`src/components/ui/*`), public shell, console shell, storefront, product page, library and course player, certificate, checkout and pay pages, creator console (products, quiz editor, orders, learners, coupons, payouts, community admin, settings), community, landing page with a live computed ledger, gateway playground (`/demo`), simulated Razorpay and Easebuzz replicas on isolated skins, auth forms, metadata and favicon. Design rules live in `DESIGN.md` and `CLAUDE.md`; research in `docs/design-research/A-E`; spec `docs/superpowers/specs/2026-10-15-tysonpe-ui-rebuild-design.md`; plan `docs/superpowers/plans/2026-10-15-tysonpe-ui-rebuild.md` (32 tasks); step-by-step history in `docs/superpowers/handoff/ui-rebuild-log.md`.
+
+**Status.** Plan Tasks 1 to 31 are done, reviewed (code-reviewer plus an isolated test-engineer mutation pass per task), browser-verified and pushed. Task 32 (audit) ran in part: anti-pattern census, `next build`, `next start` smoke test and an all-routes responsive walk are done; the final whole-branch review and `/design-review` have **not** been run (they should follow the merge decision below, not precede it).
+
+**Numbers (SQLite, this branch).** `npm test`: 149 files, 3237 passed, 1 skipped. `npm run typecheck` and `npm run lint`: clean. `npm run build`: succeeds, 35 route lines. `next start` smoke: public routes 200, gated routes 307, `/favicon.ico` 404 on purpose (the favicon is `src/app/icon.svg`). The sections below that say 541 tests describe `main`, not this branch.
+
+**Not verified (do not assume).** A Postgres run of this branch; the community thread page in a browser (the local `prisma/dev.db` lacks the `comment_edited_at` and `reserve_community_slug` migrations, so the page falls into its error boundary: run `cd "/Users/manojaaa/Tysonpe- Sandbox/ui-rebuild" && npx prisma migrate deploy` yourself, then look at `/c/asha-rao/community/general/p/<postId>`); a screen-reader pass; a real touch device (touch targets were measured with pointer-coarse emulation only); production (https://tysonpe.vercel.app still serves the old build).
+
+### DECISION NEEDED: `origin/main` has moved on without this branch
+
+`origin/main` (`a4fd63f`) is 10 commits and 73 files (+9,945 / -420 lines) ahead of the merge base `c098ca7`, from another worker, and `ui/rebuild` is 108 commits ahead of it. A dry-run merge (`git merge-tree --write-tree origin/main ui/rebuild`) conflicts in 17 files: `(site)/c/[handle]/page.tsx`, `(site)/c/[handle]/[slug]/page.tsx`, `(site)/checkout/pay/[orderId]/page.tsx`, `(site)/checkout/success/[orderId]/page.tsx`, `(site)/signup/page.tsx`, `dashboard/(console)/layout.tsx`, `.../orders/page.tsx`, `.../payouts/page.tsx`, `.../settings/page.tsx`, `src/components/{DashNav,DemoPayPageClient,RazorpayDemoModal,SignupForm,form,gateway-icons,ui}.tsx`, plus a modify/delete conflict on `dashboard/(console)/page.tsx` (this branch moved the overview to `(overview)/page.tsx`).
+
+What `main` gained (from its commit subjects and diffstat, not reviewed by this session): a Storefront Studio editor and storefront sections (`src/components/storefront/*`, `src/lib/storefront.ts`), a console overview redesign, creator UPI settlement settings with dynamic UPI QR checkout, UPI UTR verification, a creator bank-verification flow, a 1-rupee test course, a WhatsApp CRM (`src/components/crm/*`, `src/lib/whatsapp/*`, `src/app/actions/crm.ts`, 3 new migrations in `prisma/migrations` and `prisma/postgres/migrations`), and dashboard performance work. Several of these are payment paths and need their own security review before anything ships. `main`'s `SignupForm.tsx` is the Antigravity rewrite that this branch audited and replaced (six defects: field errors never rendered, controlled radios desynced after a failed submit, handle slugified on every keystroke, duplicate h1, invented trust claims, pre-filled taken handle); it must not win the merge. None of the new `main`-only screens (Storefront Studio, CRM, checkout status page) are in the rebuilt design.
+
+Options: **A (recommended)**: merge `origin/main` into `ui/rebuild` in a task of its own, resolving conflicts toward this branch's design and `main`'s logic, with a review of the payment and migration changes, re-run every gate, then restyle the main-only screens in follow-up tasks; **B**: stop the rebuild and cherry-pick selected pieces onto `main`; **C**: ship `main` unchanged. The merge is the user's call because it combines two designs of the same screens and touches money paths.
+
+### Resume the rebuild
+
+```bash
+cd "/Users/manojaaa/Tysonpe- Sandbox/ui-rebuild"       # worktree; never run git commands that move HEAD in the main checkout
+git branch --show-current                              # ui/rebuild
+git status --short && git log --oneline -5
+npm test                                               # 149 files, 3237 passed, 1 skipped
+npm run typecheck && npm run lint
+# dev server: preview_start {name:"ui-rebuild"} (.claude/launch.json, port 3200); stop it and `rm -rf .next` before `npm run build`
+```
+
+Demo logins on localhost are the one-click buttons on `/login` (Asha creator, Ravi learner). In the local `dev.db` the learner also has a leftover creator profile (`test1`), so his login lands on `/dashboard`. Before every push: `gh auth switch -u manojtyson-37` (the active account resets to `kbdcreditsolutions` and the push 403s).
+
+Work was run as subagent-driven development: brief to a file, one engineer per worktree, then the controller gates (`npm test`, `npm run typecheck`, `npm run lint`) and verifies in a real browser, then a read-only code-reviewer and an isolated test-engineer (`git archive` copy, single-edit mutants), then one fix wave. Local scratch (`.superpowers/sdd/`: briefs, reports, ledger `progress.md`, diffs) is git-excluded and per clone.
+
+### Deploy facts (unchanged)
+
+The Vercel project `tysonpe` (team `kbdcreditsolutions`) has no Git connection and Preview env lacks `SESSION_SECRET`, `DEMO_DEPLOYMENT`, `PAYMENTS_MODE`, `NEXT_PUBLIC_DEMO_HANDLE`; the user runs `vercel env add ... preview` and connects GitHub as `manojtyson-37` in the dashboard. `cd "/Users/manojaaa/Tysonpe- Sandbox/tysonpe" && vercel --prod --yes` deploys `main`, which lacks this rebuild. The tooling refused these commands for the assistant, so they are the user's to run.
+
+### Open design and product items on this branch
+
+Carried from the ledger and not re-verified in this last pass unless marked: `Creator.brandColor` schema default is violet `#6d28d9` (needs `prisma/` and `src/lib/auth.ts`, left alone); `.btn-primary` takes the creator colour with no contrast guard (a `--brand-fill` token is recommended); "Payments run in test mode" is hard-coded copy; the invoice is titled "Tax invoice" without a GSTIN; `RazorpayButton` stays disabled if confirm throws; `money.ts` comment vs the fees table (the table does not net the monthly fee); a server-side `brandColor` rejection shows nothing; `HEX6` is duplicated in `form.tsx`; focus falls to `<body>` after a confirmed delete; the storefront list shows "₹499 / month" with a caveat; the gateway chooser keeps the user's pick if a save fails while "Current" shows the old choice; the sandbox check (`simulatedPaymentsAllowed() && provider is mock`) is duplicated in `/demo` and `actions/checkout.ts` (one `demoSandboxActive()` helper would stop drift); the "Full demo" links stay visible on live deployments where `/demo` says it is demo-only; `.btn-sm` is drawn 32px with a 44px hit area. Decisions made on the way that the owner should know: the Easebuzz replica is now a light page (it was dark); the Razorpay modal also closes on a backdrop click when not processing; "256-bit SSL", "PCI-DSS" and "bank-grade" copy was removed; `favicon.ico` was replaced by `icon.svg`; the Antigravity `SignupForm` edits were kept at the owner's request, audited, and rewritten in Task 29.
 
 ## 1. State in one paragraph
 

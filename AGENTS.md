@@ -17,7 +17,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ## 1. Project Overview & Architecture
 - **Application**: Tysonpe — Creator commerce & fintech infrastructure for India.
 - **Stack**: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Prisma.
-- **Test Command**: `npm test` (Vitest, 541 tests passing, 1 Postgres-only test skipped on SQLite).
+- **Test Command**: `npm test` (Vitest, 3237 tests passing in 149 files on `ui/rebuild`, 1 Postgres-only test skipped on SQLite).
 - **Start here in a new session**: [docs/HANDOFF.md](docs/HANDOFF.md) (current state, how to resume, process, open items, next steps). Sub-project history: [docs/superpowers/handoff/sub-project-3-log.md](docs/superpowers/handoff/sub-project-3-log.md).
 - **Design Spec**: [DESIGN.md](file:///Users/manojaaa/Tysonpe-%20Sandbox/tysonpe/DESIGN.md)
 - **Claude Memory**: [CLAUDE.md](file:///Users/manojaaa/Tysonpe-%20Sandbox/tysonpe/CLAUDE.md)
