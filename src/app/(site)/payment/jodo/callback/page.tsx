@@ -16,6 +16,8 @@ export default async function JodoCallbackPage({
   const sp = await searchParams;
   const rawOrderId = sp.order_id || sp.order || sp.id || "";
   const initialOrderId = Array.isArray(rawOrderId) ? rawOrderId[0] : rawOrderId;
+  const rawTysonpeOrderId = sp.tysonpe_order_id || "";
+  const tysonpeOrderId = Array.isArray(rawTysonpeOrderId) ? rawTysonpeOrderId[0] : rawTysonpeOrderId;
 
   return (
     <div className="min-h-screen bg-bg text-ink py-12 px-4 sm:px-6">
@@ -43,7 +45,7 @@ export default async function JodoCallbackPage({
         </div>
 
         {/* Interactive Verification Client */}
-        <JodoCallbackClient initialOrderId={initialOrderId} />
+        <JodoCallbackClient initialOrderId={initialOrderId} tysonpeOrderId={tysonpeOrderId} />
       </div>
     </div>
   );

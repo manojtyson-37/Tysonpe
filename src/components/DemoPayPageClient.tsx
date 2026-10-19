@@ -7,9 +7,11 @@ import {
   settleDemoAction,
   submitUpiPaymentForVerificationAction,
   verifyUpiPaymentAction,
+  startJodoCheckoutForOrderAction,
 } from "@/app/actions/checkout";
 import { buildUpiUri, generateQrSvg } from "@/lib/payments/qr";
 import type { GatewayId } from "@/lib/payments/gateways";
+import type { CreatorPaymentGatewaysConfig } from "@/lib/integrations/types";
 import {
   BhimIcon,
   ClockIcon,
@@ -20,6 +22,7 @@ import {
   PhonePeIcon,
   ShieldCheckIcon,
   UpiIcon,
+  JodoPayIcon,
 } from "./gateway-icons";
 import { RazorpayDemoModal } from "./RazorpayDemoModal";
 
@@ -31,6 +34,7 @@ interface DemoPayPageClientProps {
   buyer: { name: string; email: string };
   failed?: boolean;
   creatorUpiId?: string;
+  gatewaysConfig?: CreatorPaymentGatewaysConfig;
 }
 
 export function DemoPayPageClient({
@@ -41,9 +45,15 @@ export function DemoPayPageClient({
   buyer,
   failed,
   creatorUpiId,
+  gatewaysConfig,
 }: DemoPayPageClientProps) {
   const router = useRouter();
-  const [method, setMethod] = useState<"upi" | "razorpay" | "easebuzz">("upi");
+  const [method, setMethod] = useState<"upi" | "jodo" | "razorpay" | "easebuzz">(() => {
+    if (_initialGateway === "jodo") return "jodo";
+    if (_initialGateway === "razorpay") return "razorpay";
+    if (_initialGateway === "easebuzz") return "easebuzz";
+    return "jodo";
+  });
   const [isRzpModalOpen, setIsRzpModalOpen] = useState(false);
   const [phone, setPhone] = useState("9876543210");
   const [copiedVpa, setCopiedVpa] = useState(false);
@@ -51,6 +61,13 @@ export function DemoPayPageClient({
   const [verifyStage, setVerifyStage] = useState<string | null>(null);
   const [utr, setUtr] = useState("");
   const [utrError, setUtrError] = useState<string | null>(null);
+
+  // Jodo Checkout State
+  const [jodoName, setJodoName] = useState(buyer.name || "");
+  const [jodoPhone, setJodoPhone] = useState(phone);
+  const [jodoEmail, setJodoEmail] = useState(buyer.email || "");
+  const [isJodoLoading, setIsJodoLoading] = useState(false);
+  const [jodoError, setJodoError] = useState<string | null>(null);
 
   const formattedAmount = (amountPaise / 100).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
@@ -111,6 +128,40 @@ export function DemoPayPageClient({
     }
   }
 
+  async function handlePayWithJodo(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    const cleanPhone = jodoPhone.replace(/\D/g, "").slice(-10);
+    if (cleanPhone.length < 10) {
+      setJodoError("Please enter a valid 10-digit mobile number.");
+      return;
+    }
+    if (!jodoEmail.includes("@")) {
+      setJodoError("Please enter a valid email address.");
+      return;
+    }
+
+    setJodoError(null);
+    setIsJodoLoading(true);
+
+    try {
+      const res = await startJodoCheckoutForOrderAction(orderId, {
+        name: jodoName || "Customer",
+        phone: cleanPhone,
+        email: jodoEmail,
+      });
+
+      if (res.ok && res.redirectUrl) {
+        window.location.href = res.redirectUrl;
+      } else {
+        setJodoError(res.error || "Unable to initiate Jodo payment. Please try again.");
+        setIsJodoLoading(false);
+      }
+    } catch (err) {
+      setJodoError(err instanceof Error ? err.message : "Network error contacting payment gateway.");
+      setIsJodoLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Payment Method Switcher Tabs */}
@@ -131,34 +182,188 @@ export function DemoPayPageClient({
           </span>
         </button>
 
-        <button
-          type="button"
-          onClick={() => setMethod("razorpay")}
-          className={`flex-1 py-2.5 px-3 rounded-xl transition flex items-center justify-center gap-1.5 ${
-            method === "razorpay"
-              ? "bg-surface text-ink shadow-sm ring-1 ring-line"
-              : "hover:text-ink hover:bg-surface/50"
-          }`}
-        >
-          <span className="font-sans font-black text-blue-600">Razorpay</span>
-          <span className="hidden sm:inline text-muted font-normal text-[11px]">Modal</span>
-        </button>
+        {gatewaysConfig?.jodo?.enabled !== false && (
+          <button
+            type="button"
+            onClick={() => setMethod("jodo")}
+            className={`flex-1 py-2.5 px-3 rounded-xl transition flex items-center justify-center gap-1.5 ${
+              method === "jodo"
+                ? "bg-surface text-ink shadow-sm ring-1 ring-line"
+                : "hover:text-ink hover:bg-surface/50"
+            }`}
+          >
+            <div className="w-4 h-4 rounded-[4px] bg-[#0C1B33] flex items-center justify-center shrink-0">
+              <JodoPayIcon className="w-3 h-3" />
+            </div>
+            <span className="font-sans font-bold text-ink">Jodo Pay</span>
+            <span className="rounded-full bg-brand-soft text-brand px-1.5 py-0.2 text-[10px] font-extrabold uppercase">
+              Live
+            </span>
+          </button>
+        )}
 
-        <button
-          type="button"
-          onClick={() => setMethod("easebuzz")}
-          className={`flex-1 py-2.5 px-3 rounded-xl transition flex items-center justify-center gap-1.5 ${
-            method === "easebuzz"
-              ? "bg-surface text-ink shadow-sm ring-1 ring-line"
-              : "hover:text-ink hover:bg-surface/50"
-          }`}
-        >
-          <span className="font-sans font-bold text-amber-600">Easebuzz</span>
-          <span className="hidden sm:inline text-muted font-normal text-[11px]">Page</span>
-        </button>
+        {gatewaysConfig?.razorpay?.enabled !== false && (
+          <button
+            type="button"
+            onClick={() => setMethod("razorpay")}
+            className={`flex-1 py-2.5 px-3 rounded-xl transition flex items-center justify-center gap-1.5 ${
+              method === "razorpay"
+                ? "bg-surface text-ink shadow-sm ring-1 ring-line"
+                : "hover:text-ink hover:bg-surface/50"
+            }`}
+          >
+            <span className="font-sans font-black text-blue-600">Razorpay</span>
+            <span className="hidden sm:inline text-muted font-normal text-[11px]">Modal</span>
+          </button>
+        )}
+
+        {gatewaysConfig?.easebuzz?.enabled !== false && (
+          <button
+            type="button"
+            onClick={() => setMethod("easebuzz")}
+            className={`flex-1 py-2.5 px-3 rounded-xl transition flex items-center justify-center gap-1.5 ${
+              method === "easebuzz"
+                ? "bg-surface text-ink shadow-sm ring-1 ring-line"
+                : "hover:text-ink hover:bg-surface/50"
+            }`}
+          >
+            <span className="font-sans font-bold text-amber-600">Easebuzz</span>
+            <span className="hidden sm:inline text-muted font-normal text-[11px]">Page</span>
+          </button>
+        )}
       </div>
 
-      {/* 1. Direct UPI Mode (Front & Center) */}
+      {/* 1. Jodo Pay Mode (Interactive Hosted Checkout) */}
+      {method === "jodo" && (
+        <div className="rounded-[24px] border border-line bg-surface p-6 sm:p-7 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-line">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="badge badge-brand text-[10px] font-extrabold uppercase tracking-widest">
+                  Jodo Hosted Checkout
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full dark:bg-emerald-950/40 dark:text-emerald-400">
+                  DevTest1 Live
+                </span>
+              </div>
+              <h2 className="text-xl font-bold text-ink font-display mt-1">
+                Pay ₹{formattedAmount} via Jodo Pay
+              </h2>
+              <p className="text-xs text-muted mt-0.5">
+                Instant UPI (PhonePe, GPay, Paytm), Cards &amp; Netbanking. Course unlocks automatically upon payment.
+              </p>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-[#0C1B33] flex items-center justify-center shrink-0 shadow-sm">
+              <JodoPayIcon className="w-7 h-7" />
+            </div>
+          </div>
+
+          {/* Buyer Details Form */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handlePayWithJodo();
+            }}
+            className="space-y-4"
+          >
+            <div>
+              <label htmlFor="jodo-name" className="text-xs font-bold text-ink block mb-1">
+                Full Name
+              </label>
+              <input
+                id="jodo-name"
+                type="text"
+                required
+                value={jodoName}
+                onChange={(e) => setJodoName(e.target.value)}
+                placeholder="e.g. Ron Rivest"
+                className="input text-sm w-full"
+                disabled={isJodoLoading}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="jodo-phone" className="text-xs font-bold text-ink block mb-1">
+                Mobile Number (Required by Gateway)
+              </label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted">
+                  +91
+                </span>
+                <input
+                  id="jodo-phone"
+                  type="tel"
+                  required
+                  value={jodoPhone}
+                  onChange={(e) => setJodoPhone(e.target.value)}
+                  placeholder="9876543210"
+                  className="input pl-11 font-mono text-sm w-full"
+                  disabled={isJodoLoading}
+                />
+              </div>
+              <p className="text-[11px] text-muted mt-1">
+                Payment link &amp; WhatsApp order confirmation receipt will be sent here.
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="jodo-email" className="text-xs font-bold text-ink block mb-1">
+                Email Address
+              </label>
+              <input
+                id="jodo-email"
+                type="email"
+                required
+                value={jodoEmail}
+                onChange={(e) => setJodoEmail(e.target.value)}
+                placeholder="customer@example.com"
+                className="input text-sm w-full"
+                disabled={isJodoLoading}
+              />
+            </div>
+
+            {jodoError && (
+              <div className="p-3.5 rounded-xl bg-bad-soft border border-bad/20 text-xs text-bad font-semibold flex items-center gap-2">
+                <span>⚠</span>
+                <span>{jodoError}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isJodoLoading}
+              className="btn btn-primary btn-lg w-full flex items-center justify-center gap-2 shadow-lg shadow-brand/20 hover:shadow-xl transition active:scale-[0.98] duration-150"
+            >
+              {isJodoLoading ? (
+                <>
+                  <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  <span>Connecting to Jodo Gateway…</span>
+                </>
+              ) : (
+                <>
+                  <LockIcon className="w-4 h-4" />
+                  <span>Proceed to Jodo Pay (₹{formattedAmount}) →</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Security & Partner Assurance */}
+          <div className="p-4 rounded-2xl bg-surface-2 border border-line text-xs space-y-2">
+            <div className="flex items-center gap-2 text-ink font-semibold">
+              <ShieldCheckIcon className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>Jodo Pay Checkout Protection</span>
+            </div>
+            <p className="text-[11px] text-muted leading-relaxed">
+              1. You will be redirected to Jodo&apos;s 256-bit encrypted checkout portal.<br />
+              2. Complete payment via UPI, Credit/Debit Card, or Netbanking.<br />
+              3. After payment, you are redirected back to Tysonpe and course access is instantly unlocked.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Direct UPI Mode (Front & Center) */}
       {method === "upi" && (
         <div className="rounded-[24px] border border-line bg-surface p-6 sm:p-7 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-4 border-b border-line">

@@ -114,6 +114,34 @@ export interface InboundWebhookLog {
   error?: string;
 }
 
+export interface CreatorJodoConfig {
+  enabled: boolean;
+  baseUrl?: string;
+  apiKey?: string;
+  apiSecret?: string;
+  authHeader?: string;
+}
+
+export interface CreatorRazorpayConfig {
+  enabled: boolean;
+  keyId?: string;
+  keySecret?: string;
+  webhookSecret?: string;
+}
+
+export interface CreatorEasebuzzConfig {
+  enabled: boolean;
+  key?: string;
+  salt?: string;
+  env?: "test" | "prod";
+}
+
+export interface CreatorPaymentGatewaysConfig {
+  jodo: CreatorJodoConfig;
+  razorpay: CreatorRazorpayConfig;
+  easebuzz: CreatorEasebuzzConfig;
+}
+
 export interface CreatorIntegrationsConfig {
   webhooks: CreatorWebhookEndpoint[];
   tracking: TrackingPixelsConfig;
@@ -126,4 +154,5 @@ export interface CreatorIntegrationsConfig {
   customDomain: CustomDomainConfig;
   inboundEndpoints?: InboundWebhookEndpoint[];
   inboundLogs?: InboundWebhookLog[];
+  paymentGateways?: CreatorPaymentGatewaysConfig;
 }

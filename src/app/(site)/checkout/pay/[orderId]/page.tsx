@@ -11,6 +11,8 @@ import { isOrderFresh } from "@/lib/orders";
 import { getProvider } from "@/lib/payments";
 import { resolveGateway } from "@/lib/payments/gateways";
 
+import { getCreatorIntegrations } from "@/lib/integrations/service";
+
 export const metadata: Metadata = { title: "Pay" };
 
 export default async function PayPage({ params, searchParams }: PageProps<"/checkout/pay/[orderId]">) {
@@ -29,6 +31,7 @@ export default async function PayPage({ params, searchParams }: PageProps<"/chec
 
   const failed = sp.failed === "1" || order.status === "failed";
   const provider = getProvider();
+  const integrations = await getCreatorIntegrations(order.creatorId);
 
   return (
     <div className="mx-auto max-w-xl px-4 py-12 sm:px-6">
@@ -93,18 +96,17 @@ export default async function PayPage({ params, searchParams }: PageProps<"/chec
                 </p>
               )}
             </ActionForm>
-          ) : order.provider === "mock" && provider.name === "mock" ? (
+          ) : (
             <DemoPayPageClient
               orderId={order.id}
               amountPaise={order.totalPaise}
               productTitle={order.product.title}
-              initialGateway={resolveGateway(sp.gw, user.preferredGateway)}
+              initialGateway={order.provider === "jodo" ? "jodo" : resolveGateway(sp.gw, user.preferredGateway || "jodo")}
               buyer={{ name: user.name, email: user.email }}
               failed={failed}
               creatorUpiId={order.creator?.payoutUpiId ?? undefined}
+              gatewaysConfig={integrations.paymentGateways}
             />
-          ) : (
-            <p className="text-sm text-bad">This order was created with a different payment setup. Please start a new checkout.</p>
           )}
         </div>
       </div>

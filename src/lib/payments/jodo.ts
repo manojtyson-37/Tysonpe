@@ -47,11 +47,33 @@ export interface JodoOrderData {
   notes?: Array<{ key: string; value: string }> | Record<string, string>;
 }
 
+export interface JodoCustomCredentials {
+  baseUrl?: string;
+  apiKey?: string;
+  apiSecret?: string;
+  authHeader?: string;
+}
+
+export function resolveJodoCredentials(custom?: JodoCustomCredentials) {
+  const baseUrl = custom?.baseUrl?.trim() || JODO_CONFIG.baseUrl;
+  let authHeader = custom?.authHeader?.trim();
+  if (!authHeader && custom?.apiKey?.trim() && custom?.apiSecret?.trim()) {
+    authHeader = `Basic ${Buffer.from(`${custom.apiKey.trim()}:${custom.apiSecret.trim()}`).toString("base64")}`;
+  }
+  if (!authHeader) {
+    authHeader = JODO_CONFIG.authHeader;
+  }
+  return { baseUrl, authHeader };
+}
+
 /**
  * Creates a Jodo Pay Order via the DevTest1 / Production API
  * Docs: https://docs.jodo.in/pay/api/create-order/
  */
-export async function createJodoPayOrder(input: CreateJodoOrderInput): Promise<{
+export async function createJodoPayOrder(
+  input: CreateJodoOrderInput,
+  customConfig?: JodoCustomCredentials
+): Promise<{
   ok: boolean;
   orderId?: string;
   redirectUrl?: string;
@@ -85,11 +107,13 @@ export async function createJodoPayOrder(input: CreateJodoOrderInput): Promise<{
     payload.identifier = input.identifier;
   }
 
+  const { baseUrl, authHeader } = resolveJodoCredentials(customConfig);
+
   try {
-    const res = await fetch(`${JODO_CONFIG.baseUrl}/api/v1/integrations/pay/orders`, {
+    const res = await fetch(`${baseUrl}/api/v1/integrations/pay/orders`, {
       method: "POST",
       headers: {
-        Authorization: JODO_CONFIG.authHeader,
+        Authorization: authHeader,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
@@ -118,7 +142,10 @@ export async function createJodoPayOrder(input: CreateJodoOrderInput): Promise<{
  * Retrieves the current status of a Jodo Pay Order
  * Docs: https://docs.jodo.in/pay/api/get-order/
  */
-export async function getJodoPayOrder(orderId: string): Promise<{
+export async function getJodoPayOrder(
+  orderId: string,
+  customConfig?: JodoCustomCredentials
+): Promise<{
   ok: boolean;
   data?: JodoOrderData;
   error?: string;
@@ -127,12 +154,14 @@ export async function getJodoPayOrder(orderId: string): Promise<{
     return { ok: false, error: "Order ID is required" };
   }
 
+  const { baseUrl, authHeader } = resolveJodoCredentials(customConfig);
+
   try {
-    const url = `${JODO_CONFIG.baseUrl}/api/v1/integrations/pay/orders/${encodeURIComponent(orderId)}`;
+    const url = `${baseUrl}/api/v1/integrations/pay/orders/${encodeURIComponent(orderId)}`;
     const res = await fetch(url, {
       method: "GET",
       headers: {
-        Authorization: JODO_CONFIG.authHeader,
+        Authorization: authHeader,
         "Content-Type": "application/json",
       },
       cache: "no-store",
@@ -175,9 +204,10 @@ export interface JodoUnlockResult {
 export async function completeJodoOrderAndUnlock(orderId: string, options?: {
   creatorId?: string;
   productId?: string;
+  tysonpeOrderId?: string;
+  customConfig?: JodoCustomCredentials;
 }): Promise<JodoUnlockResult> {
-  const statusRes = await getJodoPayOrder(orderId);
-
+  const statusRes = await getJodoPayOrder(orderId, options?.customConfig);
 
   if (!statusRes.ok || !statusRes.data) {
     return {
@@ -201,11 +231,32 @@ export async function completeJodoOrderAndUnlock(orderId: string, options?: {
     };
   }
 
+  // Parse notes to resolve creator, product and tysonpe_order_id
+  const notesMap: Record<string, string> = {};
+  if (Array.isArray(jodoOrder.notes)) {
+    for (const n of jodoOrder.notes) {
+      if (n && n.key) notesMap[n.key] = String(n.value || "");
+    }
+  } else if (typeof jodoOrder.notes === "object" && jodoOrder.notes !== null) {
+    for (const [k, v] of Object.entries(jodoOrder.notes)) {
+      notesMap[k] = String(v);
+    }
+  }
+
+  const targetTysonpeOrderId = options?.tysonpeOrderId || notesMap.tysonpe_order_id;
+
   // Idempotency: check if already recorded as paid
-  const existingOrder = await db.order.findUnique({
+  let existingOrder = await db.order.findUnique({
     where: { providerOrderId: orderId },
     include: { product: true, user: true },
   });
+
+  if (!existingOrder && targetTysonpeOrderId) {
+    existingOrder = await db.order.findUnique({
+      where: { id: targetTysonpeOrderId },
+      include: { product: true, user: true },
+    });
+  }
 
   if (existingOrder && existingOrder.status === "paid") {
     return {
@@ -221,20 +272,8 @@ export async function completeJodoOrderAndUnlock(orderId: string, options?: {
     };
   }
 
-  // Parse notes to resolve creator and product if not supplied
-  const notesMap: Record<string, string> = {};
-  if (Array.isArray(jodoOrder.notes)) {
-    for (const n of jodoOrder.notes) {
-      if (n && n.key) notesMap[n.key] = String(n.value || "");
-    }
-  } else if (typeof jodoOrder.notes === "object" && jodoOrder.notes !== null) {
-    for (const [k, v] of Object.entries(jodoOrder.notes)) {
-      notesMap[k] = String(v);
-    }
-  }
-
-  const targetCreatorId = options?.creatorId || notesMap.creator_id;
-  const targetProductId = options?.productId || notesMap.product_id;
+  const targetCreatorId = options?.creatorId || notesMap.creator_id || existingOrder?.creatorId;
+  const targetProductId = options?.productId || notesMap.product_id || existingOrder?.productId;
 
   // Resolve creator
   const creator = targetCreatorId
@@ -259,7 +298,9 @@ export async function completeJodoOrderAndUnlock(orderId: string, options?: {
 
   // Calculate amount
   const itemAmount = jodoOrder.details?.[0]?.amount;
-  const amountPaise = itemAmount && itemAmount > 0 ? Math.round(itemAmount * 100) : product.pricePaise;
+  const amountPaise = itemAmount && itemAmount > 0
+    ? Math.round(itemAmount * 100)
+    : existingOrder?.totalPaise || product.pricePaise;
 
   const paidDate = jodoOrder.paid_at ? new Date(jodoOrder.paid_at) : new Date();
   const fy = fiscalYear(paidDate);
@@ -270,6 +311,12 @@ export async function completeJodoOrderAndUnlock(orderId: string, options?: {
       let buyer = await tx.user.findUnique({
         where: { email: jodoOrder.email.toLowerCase().trim() },
       });
+
+      if (!buyer && existingOrder) {
+        buyer = await tx.user.findUnique({
+          where: { id: existingOrder.userId },
+        });
+      }
 
       if (!buyer) {
         buyer = await tx.user.create({
@@ -292,30 +339,45 @@ export async function completeJodoOrderAndUnlock(orderId: string, options?: {
       const gstPaise = Math.round((amountPaise * 18) / 118);
 
       // 3. Create or update Order
-      const savedOrder = await tx.order.upsert({
-        where: { providerOrderId: orderId },
-        create: {
-          userId: buyer.id,
-          productId: product.id,
-          creatorId: creator.id,
-          provider: "jodo",
-          providerOrderId: orderId,
-          providerPaymentId: jodoOrder.transaction_id || `jodo_${Date.now()}`,
-          subtotalPaise: amountPaise,
-          totalPaise: amountPaise,
-          gstPaise,
-          gstRatePct: 18,
-          status: "paid",
-          paidAt: paidDate,
-          invoiceNo,
-        },
-        update: {
-          status: "paid",
-          paidAt: paidDate,
-          invoiceNo,
-          providerPaymentId: jodoOrder.transaction_id || undefined,
-        },
-      });
+      let savedOrder;
+      if (existingOrder) {
+        savedOrder = await tx.order.update({
+          where: { id: existingOrder.id },
+          data: {
+            provider: "jodo",
+            providerOrderId: orderId,
+            providerPaymentId: jodoOrder.transaction_id || `jodo_${Date.now()}`,
+            status: "paid",
+            paidAt: paidDate,
+            invoiceNo,
+          },
+        });
+      } else {
+        savedOrder = await tx.order.upsert({
+          where: { providerOrderId: orderId },
+          create: {
+            userId: buyer.id,
+            productId: product.id,
+            creatorId: creator.id,
+            provider: "jodo",
+            providerOrderId: orderId,
+            providerPaymentId: jodoOrder.transaction_id || `jodo_${Date.now()}`,
+            subtotalPaise: amountPaise,
+            totalPaise: amountPaise,
+            gstPaise,
+            gstRatePct: 18,
+            status: "paid",
+            paidAt: paidDate,
+            invoiceNo,
+          },
+          update: {
+            status: "paid",
+            paidAt: paidDate,
+            invoiceNo,
+            providerPaymentId: jodoOrder.transaction_id || undefined,
+          },
+        });
+      }
 
       // 4. Create Enrollment (unlocking course content)
       const existingEnrollment = await tx.enrollment.findUnique({

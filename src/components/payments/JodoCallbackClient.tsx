@@ -7,9 +7,10 @@ import { verifyAndUnlockJodoOrderAction, queryJodoOrderStatusAction } from "@/ap
 
 interface CallbackProps {
   initialOrderId?: string;
+  tysonpeOrderId?: string;
 }
 
-export function JodoCallbackClient({ initialOrderId }: CallbackProps) {
+export function JodoCallbackClient({ initialOrderId, tysonpeOrderId }: CallbackProps) {
   const [orderId, setOrderId] = useState<string>(initialOrderId || "");
   const [isPending, startTransition] = useTransition();
   const [statusResult, setStatusResult] = useState<{
@@ -29,8 +30,8 @@ export function JodoCallbackClient({ initialOrderId }: CallbackProps) {
   const checkAndUnlock = (targetOrderId: string) => {
     if (!targetOrderId.trim()) return;
     startTransition(async () => {
-      // First attempt complete unlock
-      const unlockRes = await verifyAndUnlockJodoOrderAction(targetOrderId.trim());
+      // First attempt complete unlock with tysonpeOrderId if present
+      const unlockRes = await verifyAndUnlockJodoOrderAction(targetOrderId.trim(), tysonpeOrderId);
 
       if (unlockRes.ok) {
         setStatusResult({
@@ -144,6 +145,15 @@ export function JodoCallbackClient({ initialOrderId }: CallbackProps) {
 
           {/* Action CTAs */}
           <div className="flex flex-col sm:flex-row items-center gap-3">
+            {tysonpeOrderId ? (
+              <Link
+                href={`/checkout/success/${tysonpeOrderId}`}
+                className="w-full sm:w-auto flex-1 py-3 px-4 rounded-xl bg-brand text-brand-ink font-bold text-xs tracking-wide text-center hover:opacity-95 active:scale-[0.98] transition-all shadow-md shadow-brand/20"
+              >
+                View Order Receipt &amp; Access →
+              </Link>
+            ) : null}
+
             <Link
               href="/library"
               className="w-full sm:w-auto flex-1 py-3 px-4 rounded-xl bg-ink text-surface font-bold text-xs tracking-wide text-center hover:opacity-95 active:scale-[0.98] transition-all"

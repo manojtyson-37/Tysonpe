@@ -60,6 +60,27 @@ export const DEFAULT_INTEGRATIONS_CONFIG: CreatorIntegrationsConfig = {
   },
   inboundEndpoints: [],
   inboundLogs: [],
+  paymentGateways: {
+    jodo: {
+      enabled: true,
+      baseUrl: "https://ext.devtest1.jodopay.com",
+      apiKey: "81329eb5c322",
+      apiSecret: "818a40d7-fc13-4480-9b7a-4fc6de2bd74a",
+      authHeader: "Basic ODEzMjllYjVjMzIyOjgxOGE0MGQ3LWZjMTMtNDQ4MC05YjdhLTRmYzZkZTJiZDc0YQ==",
+    },
+    razorpay: {
+      enabled: true,
+      keyId: "",
+      keySecret: "",
+      webhookSecret: "",
+    },
+    easebuzz: {
+      enabled: true,
+      key: "",
+      salt: "",
+      env: "test",
+    },
+  },
 };
 
 /**
@@ -80,6 +101,7 @@ export async function getCreatorIntegrations(
   try {
     const raw = JSON.parse(creator.storefrontConfig);
     if (raw.integrations) {
+      const gateways = raw.integrations.paymentGateways || {};
       return {
         ...DEFAULT_INTEGRATIONS_CONFIG,
         ...raw.integrations,
@@ -94,6 +116,11 @@ export async function getCreatorIntegrations(
         customDomain: { ...DEFAULT_INTEGRATIONS_CONFIG.customDomain, ...(raw.integrations.customDomain || {}) },
         inboundEndpoints: raw.integrations.inboundEndpoints || [],
         inboundLogs: raw.integrations.inboundLogs || [],
+        paymentGateways: {
+          jodo: { ...DEFAULT_INTEGRATIONS_CONFIG.paymentGateways!.jodo, ...(gateways.jodo || {}) },
+          razorpay: { ...DEFAULT_INTEGRATIONS_CONFIG.paymentGateways!.razorpay, ...(gateways.razorpay || {}) },
+          easebuzz: { ...DEFAULT_INTEGRATIONS_CONFIG.paymentGateways!.easebuzz, ...(gateways.easebuzz || {}) },
+        },
       };
     }
   } catch (err) {

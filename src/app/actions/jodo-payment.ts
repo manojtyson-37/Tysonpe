@@ -104,12 +104,17 @@ export async function initiateJodoPaymentAction(
 /**
  * Checks order status with Jodo API and executes course unlock if paid
  */
-export async function verifyAndUnlockJodoOrderAction(orderId: string): Promise<JodoUnlockResult> {
+export async function verifyAndUnlockJodoOrderAction(
+  orderId: string,
+  tysonpeOrderId?: string
+): Promise<JodoUnlockResult> {
   if (!orderId) {
     return { ok: false, orderId: "", status: "unknown", error: "Order ID is required" };
   }
 
-  const result = await completeJodoOrderAndUnlock(orderId);
+  const result = await completeJodoOrderAndUnlock(orderId, {
+    tysonpeOrderId: tysonpeOrderId || undefined,
+  });
 
   if (result.ok) {
     revalidatePath("/dashboard/orders");

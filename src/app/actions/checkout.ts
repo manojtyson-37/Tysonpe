@@ -2,6 +2,7 @@
 
 import { simulatedPaymentsAllowed } from "@/lib/payments/demo-mode";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { createLimiter } from "@/lib/auth/rate-limit";
@@ -10,6 +11,8 @@ import { getEasebuzzProvider, getProvider } from "@/lib/payments";
 import { attemptTxnid } from "@/lib/payments/easebuzz";
 import { signMockPayment } from "@/lib/payments/mock";
 import { type DemoOutcome, settleDemoPayment } from "@/lib/payments/demo";
+import { getCreatorIntegrations } from "@/lib/integrations/service";
+import { createJodoPayOrder } from "@/lib/payments/jodo";
 import type { FormState } from "./auth";
 
 // Stops order spam and coupon-code guessing through the distinct error messages.
@@ -248,4 +251,86 @@ export async function startEasebuzzPayment(orderId: string, _prev: FormState, fd
     return { error: "We couldn't reach the payment gateway. Please try again." };
   }
   redirect(payUrl);
+}
+
+/**
+ * Initiates Jodo Pay hosted order for an existing Tysonpe checkout order.
+ * Uses the creator's custom Jodo credentials if configured in dashboard,
+ * falling back to platform DevTest1 defaults.
+ */
+export async function startJodoCheckoutForOrderAction(
+  orderId: string,
+  buyerInput: { name: string; phone: string; email: string }
+): Promise<{ ok: boolean; redirectUrl?: string; error?: string }> {
+  const user = await requireUser();
+  const order = await db.order.findFirst({
+    where: { id: orderId, userId: user.id },
+    include: { product: true, creator: true },
+  });
+
+  if (!order) return { ok: false, error: "Order not found." };
+  if (order.status === "paid") return { ok: true, redirectUrl: `/checkout/success/${order.id}` };
+  if (order.status === "refunded") return { ok: false, error: "This order was refunded." };
+
+  const name = (buyerInput.name || "").trim() || user.name || "Customer";
+  const email = (buyerInput.email || "").trim() || user.email;
+  const phone = (buyerInput.phone || "").replace(/\D/g, "").slice(-10);
+
+  if (phone.length < 10) {
+    return { ok: false, error: "Please enter a valid 10-digit mobile number for Jodo checkout." };
+  }
+
+  // Retrieve creator's custom Jodo credentials if configured
+  const integrations = await getCreatorIntegrations(order.creatorId);
+  const jodoSettings = integrations.paymentGateways?.jodo;
+
+  // Origin for callback URL
+  const reqHeaders = await headers();
+  const host = reqHeaders.get("host") || "tysonpe.vercel.app";
+  const proto = reqHeaders.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
+  const origin = `${proto}://${host}`;
+  const callbackUrl = `${origin}/payment/jodo/callback?order_id={order_id}&tysonpe_order_id=${order.id}`;
+
+  const amountRupees = Math.max(1, Math.round(order.totalPaise / 100));
+
+  const jodoRes = await createJodoPayOrder(
+    {
+      name,
+      phone,
+      email,
+      amountRupees,
+      callbackUrl,
+      creatorId: order.creatorId,
+      productId: order.productId,
+      notes: [
+        { key: "tysonpe_order_id", value: order.id },
+        { key: "creator_id", value: order.creatorId },
+        { key: "product_id", value: order.productId },
+        { key: "product_title", value: order.product.title },
+      ],
+    },
+    jodoSettings?.apiKey && jodoSettings?.apiSecret
+      ? {
+          baseUrl: jodoSettings.baseUrl,
+          apiKey: jodoSettings.apiKey,
+          apiSecret: jodoSettings.apiSecret,
+          authHeader: jodoSettings.authHeader,
+        }
+      : undefined
+  );
+
+  if (!jodoRes.ok || !jodoRes.redirectUrl || !jodoRes.orderId) {
+    return { ok: false, error: jodoRes.error || "Failed to initiate Jodo order. Please verify credentials." };
+  }
+
+  // Update order with provider jodo and providerOrderId
+  await db.order.update({
+    where: { id: order.id },
+    data: {
+      provider: "jodo",
+      providerOrderId: jodoRes.orderId,
+    },
+  });
+
+  return { ok: true, redirectUrl: jodoRes.redirectUrl };
 }

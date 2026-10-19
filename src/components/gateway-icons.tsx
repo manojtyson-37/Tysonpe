@@ -359,6 +359,21 @@ export function JodoPayIcon({ className = "w-6 h-6" }: { className?: string }) {
   );
 }
 
+export function RazorpayIcon({ className = "w-6 h-6" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect width="32" height="32" rx="7" fill="#0C2340" />
+      <path d="M19.5 9L11.5 17.5H16L12.5 23L21.5 14H16.5L19.5 9Z" fill="#3395FF" />
+    </svg>
+  );
+}
 
-
-
+export function EasebuzzIcon({ className = "w-6 h-6" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect width="32" height="32" rx="7" fill="#FFF7ED" stroke="#F97316" strokeWidth="1.5" />
+      <path d="M10 11H22M10 16H19M10 21H22" stroke="#EA580C" strokeWidth="2.5" strokeLinecap="round" />
+      <circle cx="21" cy="16" r="2" fill="#EA580C" />
+    </svg>
+  );
+}

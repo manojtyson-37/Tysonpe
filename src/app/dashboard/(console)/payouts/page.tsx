@@ -4,12 +4,14 @@ import { UpiIcon, JodoPayIcon } from "@/components/gateway-icons";
 import { Empty, Money, PageHeader, Stat, dateFmt } from "@/components/ui";
 import { requireCreator } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { getCreatorIntegrations } from "@/lib/integrations/service";
+import { CreatorGatewaysConfigPanel } from "@/components/dashboard/CreatorGatewaysConfigPanel";
 
 export const metadata: Metadata = { title: "Payouts & Payment Methods" };
 
 export default async function PayoutsPage() {
   const { creator } = await requireCreator();
-  const [entries, total, count] = await Promise.all([
+  const [entries, total, count, integrations] = await Promise.all([
     db.ledgerEntry.findMany({
       where: { creatorId: creator.id, order: { status: "paid" } }, // refunded orders drop out
       orderBy: { createdAt: "desc" },
@@ -21,11 +23,15 @@ export default async function PayoutsPage() {
       _sum: { grossPaise: true, platformFeePaise: true, gatewayFeePaise: true, netPaise: true },
     }),
     db.ledgerEntry.count({ where: { creatorId: creator.id, order: { status: "paid" } } }),
+    getCreatorIntegrations(creator.id),
   ]);
   const sum = (k: "grossPaise" | "platformFeePaise" | "gatewayFeePaise" | "netPaise") => total._sum[k] ?? 0;
   return (
     <>
       <PageHeader title="Payouts & Payment Gateway" sub={`Plan: ${creator.planKey}. Reconciles your payment gateways, UPI settlements, and sales ledger.`} />
+
+      {/* Payment Gateways Dynamic Configuration */}
+      <CreatorGatewaysConfigPanel initialConfig={integrations.paymentGateways} />
 
       {/* Gateway Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
