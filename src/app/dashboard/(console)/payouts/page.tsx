@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { UpiIcon } from "@/components/gateway-icons";
+import { UpiIcon, JodoPayIcon } from "@/components/gateway-icons";
 import { Empty, Money, PageHeader, Stat, dateFmt } from "@/components/ui";
 import { requireCreator } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 
-export const metadata: Metadata = { title: "Payouts" };
+export const metadata: Metadata = { title: "Payouts & Payment Methods" };
 
 export default async function PayoutsPage() {
   const { creator } = await requireCreator();
@@ -25,35 +25,75 @@ export default async function PayoutsPage() {
   const sum = (k: "grossPaise" | "platformFeePaise" | "gatewayFeePaise" | "netPaise") => total._sum[k] ?? 0;
   return (
     <>
-      <PageHeader title="Payouts" sub={`Plan: ${creator.planKey}. This ledger shows what each sale earns you.`} />
+      <PageHeader title="Payouts & Payment Gateway" sub={`Plan: ${creator.planKey}. Reconciles your payment gateways, UPI settlements, and sales ledger.`} />
 
-      {/* Receiving Settlement UPI Card */}
-      <div className="card p-4 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-line/80 bg-surface">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-good-soft flex items-center justify-center text-good font-bold shrink-0">
-            <UpiIcon className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold text-muted uppercase tracking-wider">Settlement UPI Handle</span>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                creator.payoutUpiId ? "bg-good-soft text-good" : "bg-amber-500/10 text-amber-800"
-              }`}>
-                {creator.payoutUpiId ? "Connected" : "Action Needed"}
-              </span>
+      {/* Gateway Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+        {/* Receiving Settlement UPI Card */}
+        <div className="card p-4 flex flex-col justify-between gap-3 border-line/80 bg-surface">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-good-soft flex items-center justify-center text-good font-bold shrink-0">
+              <UpiIcon className="w-5 h-5" />
             </div>
-            <p className="text-sm font-mono font-semibold text-ink mt-0.5">
-              {creator.payoutUpiId || "No UPI ID configured"}
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold text-muted uppercase tracking-wider">Settlement UPI Handle</span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                  creator.payoutUpiId ? "bg-good-soft text-good" : "bg-amber-500/10 text-amber-800"
+                }`}>
+                  {creator.payoutUpiId ? "Connected" : "Action Needed"}
+                </span>
+              </div>
+              <p className="text-sm font-mono font-semibold text-ink mt-0.5">
+                {creator.payoutUpiId || "No UPI ID configured"}
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/settings"
+            className="text-xs font-semibold text-brand hover:underline self-start shrink-0"
+          >
+            {creator.payoutUpiId ? "Update UPI ID →" : "Set Up UPI ID →"}
+          </Link>
+        </div>
+
+        {/* Jodo Payment Gateway Card */}
+        <div className="card p-4 flex flex-col justify-between gap-3 border-line/80 bg-surface">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#0C1B33] flex items-center justify-center shrink-0">
+              <JodoPayIcon className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold text-muted uppercase tracking-wider">Jodo Pay Gateway</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-400">
+                  DevTest1 Live
+                </span>
+              </div>
+              <p className="text-xs text-muted mt-0.5">
+                Create Order API · Hosted Checkout · Auto Course Unlock
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/payment/jodo"
+              target="_blank"
+              className="text-xs font-bold text-brand hover:underline"
+            >
+              Test Live Jodo Checkout ↗
+            </Link>
+            <span className="text-line">·</span>
+            <Link
+              href="/dashboard/integrations"
+              className="text-xs font-medium text-muted hover:text-ink hover:underline"
+            >
+              Inbound Webhooks
+            </Link>
           </div>
         </div>
-        <Link
-          href="/dashboard/settings"
-          className="text-xs font-semibold text-brand hover:underline self-start sm:self-auto shrink-0"
-        >
-          {creator.payoutUpiId ? "Update UPI ID →" : "Set Up UPI ID →"}
-        </Link>
       </div>
+
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Gross sales" value={<Money paise={sum("grossPaise")} />} />

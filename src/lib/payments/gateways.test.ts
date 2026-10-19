@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 import { GATEWAYS, isGatewayId, resolveGateway } from "./gateways";
 
 describe("gateways", () => {
-  it("offers exactly Razorpay and Easebuzz", () => {
-    expect(GATEWAYS.map((g) => g.id)).toEqual(["razorpay", "easebuzz"]);
+  it("offers Razorpay, Easebuzz, and Jodo", () => {
+    expect(GATEWAYS.map((g) => g.id)).toEqual(["razorpay", "easebuzz", "jodo"]);
   });
   it("isGatewayId accepts only known ids", () => {
     expect(isGatewayId("razorpay")).toBe(true);
     expect(isGatewayId("easebuzz")).toBe(true);
+    expect(isGatewayId("jodo")).toBe(true);
     for (const bad of ["Razorpay", "stripe", "", null, undefined, 3, {}]) expect(isGatewayId(bad)).toBe(false);
   });
   it("resolveGateway takes the first valid candidate and falls back to razorpay", () => {

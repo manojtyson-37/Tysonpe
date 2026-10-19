@@ -349,5 +349,16 @@ export function InboundWebhookIcon({ className = "w-6 h-6" }: { className?: stri
   );
 }
 
+export function JodoPayIcon({ className = "w-6 h-6" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect width="32" height="32" rx="7" fill="#0C1B33" />
+      <circle cx="11" cy="16" r="4.5" fill="#3B82F6" />
+      <path d="M16 11.5C16 11.5 21 11.5 21 16.5C21 21.5 16 21.5 16 21.5" stroke="#F97316" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+
 
 
