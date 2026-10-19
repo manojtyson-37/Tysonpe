@@ -337,4 +337,17 @@ export function WebhookApiIcon({ className = "w-6 h-6" }: { className?: string }
   );
 }
 
+export function InboundWebhookIcon({ className = "w-6 h-6" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 2v10" />
+      <path d="m16 8-4 4-4-4" />
+      <rect x="3" y="14" width="18" height="8" rx="2" />
+      <line x1="7" y1="18" x2="7.01" y2="18" strokeWidth="3" />
+      <line x1="11" y1="18" x2="11.01" y2="18" strokeWidth="3" />
+    </svg>
+  );
+}
+
+
 

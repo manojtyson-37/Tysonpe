@@ -58,6 +58,8 @@ export const DEFAULT_INTEGRATIONS_CONFIG: CreatorIntegrationsConfig = {
     groupName: "",
     autoInviteOnPurchase: false,
   },
+  inboundEndpoints: [],
+  inboundLogs: [],
 };
 
 /**
@@ -90,6 +92,8 @@ export async function getCreatorIntegrations(
         discord: { ...DEFAULT_INTEGRATIONS_CONFIG.discord, ...(raw.integrations.discord || {}) },
         sms: { ...DEFAULT_INTEGRATIONS_CONFIG.sms, ...(raw.integrations.sms || {}) },
         customDomain: { ...DEFAULT_INTEGRATIONS_CONFIG.customDomain, ...(raw.integrations.customDomain || {}) },
+        inboundEndpoints: raw.integrations.inboundEndpoints || [],
+        inboundLogs: raw.integrations.inboundLogs || [],
       };
     }
   } catch (err) {

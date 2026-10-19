@@ -81,6 +81,39 @@ export interface CustomDomainConfig {
   lastCheckedAt?: string;
 }
 
+export interface InboundWebhookEndpoint {
+  id: string; // e.g. "inwh_8a9b7c12"
+  token: string; // secure secret token in URL path
+  name: string; // e.g. "Jodo Partner Gateway"
+  partner: "jodo" | "generic" | "custom";
+  secret?: string; // optional HMAC or bearer secret
+  enabled: boolean;
+  createdAt: string;
+  totalReceived: number;
+  lastReceivedAt?: string;
+  lastStatus?: number;
+  lastEvent?: string;
+  lastOrderId?: string;
+}
+
+export interface InboundWebhookLog {
+  id: string;
+  endpointId?: string;
+  eventId: string;
+  event: string;
+  orderId?: string;
+  customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  amountPaise?: number;
+  status: "processed" | "ignored" | "failed";
+  statusCode: number;
+  receivedAt: string;
+  invoiceNo?: string;
+  rawPayload: Record<string, unknown>;
+  error?: string;
+}
+
 export interface CreatorIntegrationsConfig {
   webhooks: CreatorWebhookEndpoint[];
   tracking: TrackingPixelsConfig;
@@ -91,4 +124,6 @@ export interface CreatorIntegrationsConfig {
   discord: DiscordConfig;
   sms: SmsConfig;
   customDomain: CustomDomainConfig;
+  inboundEndpoints?: InboundWebhookEndpoint[];
+  inboundLogs?: InboundWebhookLog[];
 }

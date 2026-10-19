@@ -12,6 +12,8 @@ import type {
   SmsConfig,
   EmailMarketingConfig,
   CustomDomainConfig,
+  InboundWebhookEndpoint,
+  InboundWebhookLog,
   WebhookEventName,
 } from "@/lib/integrations/types";
 import {
@@ -34,6 +36,12 @@ import {
   verifyCustomDomainAction,
 } from "@/app/actions/integrations";
 import {
+  generateInboundEndpointAction,
+  toggleInboundEndpointAction,
+  deleteInboundEndpointAction,
+  testInboundWebhookAction,
+} from "@/app/actions/inbound-webhooks";
+import {
   GoogleSheetsIcon,
   DiscordIcon,
   SmsIcon,
@@ -43,6 +51,7 @@ import {
   ZoomMeetingIcon,
   TelegramChannelIcon,
   WebhookApiIcon,
+  InboundWebhookIcon,
 } from "@/components/gateway-icons";
 
 interface IntegrationsDashboardProps {
@@ -70,7 +79,8 @@ type ModalAppId =
   | "pixels"
   | "webhooks"
   | "zoom"
-  | "telegram";
+  | "telegram"
+  | "inbound";
 
 export function IntegrationsDashboard({
   initialConfig,
@@ -80,7 +90,7 @@ export function IntegrationsDashboard({
   const [selectedCategory, setSelectedCategory] = useState<AppCategory>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeModal, setActiveModal] = useState<ModalAppId>(null);
-  const [modalTab, setModalTab] = useState<"settings" | "test">("settings");
+  const [modalTab, setModalTab] = useState<"settings" | "test" | "logs">("settings");
 
   const [isPending, startTransition] = useTransition();
   const [toastMsg, setToastMsg] = useState<{ text: string; ok: boolean } | null>(null);
@@ -123,7 +133,62 @@ export function IntegrationsDashboard({
   const [liveClassForm, setLiveClassForm] = useState<LiveClassConfig>(config.liveClass);
   const [telegramForm, setTelegramForm] = useState<TelegramConfig>(config.telegram);
 
-  // Webhooks management state
+  // Inbound Webhooks State
+  const [showAddInbound, setShowAddInbound] = useState(false);
+  const [newInboundName, setNewInboundName] = useState("Jodo / Institutional Gateway");
+  const [newInboundPartner, setNewInboundPartner] = useState<"jodo" | "generic" | "custom">("jodo");
+  const [newInboundSecret, setNewInboundSecret] = useState("");
+  const [selectedInboundEndpointId, setSelectedInboundEndpointId] = useState<string>("");
+
+  const DEFAULT_SAMPLE_PAYLOAD = JSON.stringify(
+    {
+      event_id: "45bb1387-2a83-4fdb-a149-e7dec81043f0",
+      event: "order.payment.debited",
+      version: "1.0",
+      timestamp: 1691143279,
+      payload: {
+        order_id: "order_12343532424",
+        order: {
+          name: "Ron Rivest",
+          phone: "9876543210",
+          identifier: "STUDENT_IDENTIFIER",
+          email: "customer@example.com",
+          paid_at: "2023-04-05T07:07:20Z",
+          status: "paid",
+          details: [
+            {
+              component_type: "Admission Fee",
+              amount: 10000.0,
+            },
+          ],
+          notes: [
+            {
+              key: "erp_reference_id",
+              value: "REF123",
+            },
+          ],
+        },
+      },
+    },
+    null,
+    2
+  );
+
+  const [inboundPayloadText, setInboundPayloadText] = useState(DEFAULT_SAMPLE_PAYLOAD);
+  const [inboundTestResult, setInboundTestResult] = useState<{
+    ok: boolean;
+    latencyMs?: number;
+    orderId?: string;
+    invoiceNo?: string;
+    amountPaise?: number;
+    customerName?: string;
+    customerEmail?: string;
+    alreadyProcessed?: boolean;
+    error?: string;
+  } | null>(null);
+  const [selectedLogForInspect, setSelectedLogForInspect] = useState<InboundWebhookLog | null>(null);
+
+  // Outbound Webhooks management state
   const [showAddWebhook, setShowAddWebhook] = useState(false);
   const [newWebhookUrl, setNewWebhookUrl] = useState("");
   const [newWebhookSecret, setNewWebhookSecret] = useState("");
@@ -191,16 +256,144 @@ export function IntegrationsDashboard({
     if (config.webhooks?.some((h) => h.enabled)) count++;
     if (config.liveClass?.meetingUrl) count++;
     if (config.telegram?.channelUrl) count++;
+    if ((config.inboundEndpoints?.length ?? 0) > 0) count++;
     return count;
   }, [config]);
 
   // Open modal helper
-  const openAppModal = (appId: ModalAppId, initialTab: "settings" | "test" = "settings") => {
+  const openAppModal = (appId: ModalAppId, initialTab: "settings" | "test" | "logs" = "settings") => {
     setActiveModal(appId);
     setModalTab(initialTab);
   };
 
-  // Save Handlers
+  // Inbound Webhooks Handlers
+  const handleGenerateInboundEndpoint = (e: React.FormEvent) => {
+    e.preventDefault();
+    startTransition(async () => {
+      const res = await generateInboundEndpointAction({
+        name: newInboundName,
+        partner: newInboundPartner,
+        secret: newInboundSecret || undefined,
+      });
+      if (res.ok && res.endpoint) {
+        setConfig((prev) => ({
+          ...prev,
+          inboundEndpoints: [res.endpoint!, ...(prev.inboundEndpoints || [])],
+        }));
+        setShowAddInbound(false);
+        setNewInboundName("Jodo / Institutional Gateway");
+        setNewInboundSecret("");
+        showToast("Inbound webhook endpoint generated!");
+      } else {
+        showToast(res.error || "Failed to generate endpoint", false);
+      }
+    });
+  };
+
+  const handleAutoProvisionInbound = () => {
+    startTransition(async () => {
+      const res = await generateInboundEndpointAction({
+        name: "Jodo / Institutional Gateway",
+        partner: "jodo",
+      });
+      if (res.ok && res.endpoint) {
+        setConfig((prev) => ({
+          ...prev,
+          inboundEndpoints: [res.endpoint!, ...(prev.inboundEndpoints || [])],
+        }));
+        showToast("Inbound webhook generated successfully!");
+      }
+    });
+  };
+
+  const handleToggleInboundEndpoint = (id: string, enabled: boolean) => {
+    startTransition(async () => {
+      const res = await toggleInboundEndpointAction(id, enabled);
+      if (res.ok) {
+        setConfig((prev) => ({
+          ...prev,
+          inboundEndpoints: (prev.inboundEndpoints || []).map((ep) =>
+            ep.id === id ? { ...ep, enabled } : ep
+          ),
+        }));
+        showToast(`Endpoint ${enabled ? "enabled" : "paused"}`);
+      } else {
+        showToast(res.error || "Failed to update endpoint", false);
+      }
+    });
+  };
+
+  const handleDeleteInboundEndpoint = (id: string) => {
+    if (!confirm("Are you sure you want to delete this inbound webhook endpoint?")) return;
+    startTransition(async () => {
+      const res = await deleteInboundEndpointAction(id);
+      if (res.ok) {
+        setConfig((prev) => ({
+          ...prev,
+          inboundEndpoints: (prev.inboundEndpoints || []).filter((ep) => ep.id !== id),
+        }));
+        showToast("Endpoint deleted");
+      } else {
+        showToast(res.error || "Failed to delete endpoint", false);
+      }
+    });
+  };
+
+  const handleTestInboundWebhook = async () => {
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(inboundPayloadText);
+    } catch {
+      showToast("Invalid JSON syntax. Please correct before testing.", false);
+      return;
+    }
+
+    const endpointId =
+      selectedInboundEndpointId ||
+      config.inboundEndpoints?.[0]?.id ||
+      `inwh_default_${creatorHandle}`;
+
+    setTestLoading(true);
+    setInboundTestResult(null);
+
+    const res = await testInboundWebhookAction({
+      endpointId,
+      payload: parsed,
+    });
+
+    setInboundTestResult(res);
+    setTestLoading(false);
+
+    if (res.ok) {
+      showToast(`Payment automated! Tax Invoice: ${res.invoiceNo || "Generated"}`);
+      // Refresh local logs
+      setConfig((prev) => {
+        const newLog: InboundWebhookLog = {
+          id: `inlog_${Date.now()}`,
+          endpointId,
+          eventId: String(parsed.event_id || "evt_test"),
+          event: String(parsed.event || "order.payment.debited"),
+          orderId: res.orderId,
+          customerName: res.customerName,
+          customerEmail: res.customerEmail,
+          amountPaise: res.amountPaise,
+          status: "processed",
+          statusCode: 200,
+          receivedAt: new Date().toISOString(),
+          invoiceNo: res.invoiceNo,
+          rawPayload: parsed,
+        };
+        return {
+          ...prev,
+          inboundLogs: [newLog, ...(prev.inboundLogs || [])].slice(0, 30),
+        };
+      });
+    } else {
+      showToast(res.error || "Webhook test failed", false);
+    }
+  };
+
+  // Outbound & Channel Handlers
   const handleSaveSheets = (e: React.FormEvent) => {
     e.preventDefault();
     startTransition(async () => {
@@ -367,7 +560,7 @@ export function IntegrationsDashboard({
     });
   };
 
-  // Webhooks CRUD
+  // Outbound Webhooks CRUD
   const handleAddWebhookSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newWebhookUrl.trim()) return;
@@ -408,6 +601,16 @@ export function IntegrationsDashboard({
   };
 
   const appDirectory = [
+    {
+      id: "inbound",
+      name: "Inbound Payment Webhooks",
+      category: "automation" as AppCategory,
+      badge: "Automate Payment Records",
+      icon: <InboundWebhookIcon className="w-6 h-6 text-brand" />,
+      connected: (config.inboundEndpoints?.length ?? 0) > 0,
+      headline: "Consume partner & ERP webhooks to automate payment records",
+      description: "Generates unique receiver endpoints to ingest external payment payloads (Jodo, ERPs, gateways), allocate GST tax invoices, and record ledger credits.",
+    },
     {
       id: "sheets",
       name: "Google Sheets",
@@ -539,10 +742,10 @@ export function IntegrationsDashboard({
               Creator Integration Hub
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-ink font-display">
-              Connect Tools, Communities & Automations
+              Connect Tools, Communities & Inbound Webhooks
             </h1>
             <p className="text-sm text-ink-muted leading-relaxed">
-              Supercharge your creator operations like Graphy and Stripe. Stream leads to Google Sheets, broadcast orders to Discord, dispatch DLT SMS receipts, and fire precision ad pixels.
+              Supercharge your creator operations like Graphy and Stripe. Generate inbound webhook endpoints to ingest partner payments, auto-stream leads to Google Sheets, broadcast orders to Discord, and dispatch DLT SMS receipts.
             </p>
           </div>
 
@@ -560,10 +763,10 @@ export function IntegrationsDashboard({
 
             <div className="p-3.5 rounded-xl bg-warm-cream/40 border border-line flex flex-col">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
-                Webhooks
+                Inbound Ingest
               </span>
               <span className="text-xl font-bold text-ink tabular-nums mt-0.5">
-                {config.webhooks.filter((w) => w.enabled).length}
+                {config.inboundEndpoints?.length || 0}
               </span>
               <span className="text-[10px] text-ink-muted font-medium mt-1">Endpoints</span>
             </div>
@@ -681,6 +884,430 @@ export function IntegrationsDashboard({
           </div>
         ))}
       </div>
+
+      {/* ========================================================= */}
+      {/* MODAL: Inbound Webhooks & Automated Payment Records       */}
+      {/* ========================================================= */}
+      {activeModal === "inbound" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="card max-w-3xl w-full bg-surface border-line shadow-2xl p-6 relative max-h-[92vh] overflow-y-auto space-y-5">
+            <div className="flex items-start justify-between pb-4 border-b border-line">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-warm-cream/50 border border-line flex items-center justify-center p-2">
+                  <InboundWebhookIcon className="w-6 h-6 text-brand" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-ink font-display">Inbound Webhooks & Payment Automation</h3>
+                  <p className="text-xs text-ink-muted">Consume partner & ERP webhooks (Jodo, etc.) to automate payment records</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="text-ink-muted hover:text-ink text-sm p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Tabs */}
+            <div className="flex items-center gap-2 border-b border-line pb-1">
+              <button
+                onClick={() => setModalTab("settings")}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
+                  modalTab === "settings" ? "bg-warm-cream text-ink border border-line" : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                Endpoints & URLs ({config.inboundEndpoints?.length || 0})
+              </button>
+              <button
+                onClick={() => setModalTab("test")}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
+                  modalTab === "test" ? "bg-warm-cream text-ink border border-line" : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                <span>⚡ Live Inbound Sandbox</span>
+              </button>
+              <button
+                onClick={() => setModalTab("logs")}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
+                  modalTab === "logs" ? "bg-warm-cream text-ink border border-line" : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                <span>Event History ({config.inboundLogs?.length || 0})</span>
+              </button>
+            </div>
+
+            {/* Tab 1: Endpoints & URLs */}
+            {modalTab === "settings" && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-ink uppercase tracking-wider">Your Inbound Receivers</h4>
+                    <p className="text-[11px] text-ink-muted">Configure your payment gateway partner or ERP to POST payment events to these URLs.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddInbound(!showAddInbound)}
+                    className="btn-primary text-xs px-3 py-1.5"
+                  >
+                    {showAddInbound ? "Hide Form" : "+ Generate Endpoint"}
+                  </button>
+                </div>
+
+                {/* Form to generate new endpoint */}
+                {showAddInbound && (
+                  <form onSubmit={handleGenerateInboundEndpoint} className="p-4 rounded-xl bg-warm-cream/40 border border-line space-y-3">
+                    <div>
+                      <label className="text-xs font-semibold text-ink block mb-1">
+                        Endpoint Friendly Name
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={newInboundName}
+                        onChange={(e) => setNewInboundName(e.target.value)}
+                        placeholder="e.g. Jodo Fee Partner, College ERP Payment Hook"
+                        className="w-full text-xs px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-semibold text-ink block mb-1">
+                          Partner Preset
+                        </label>
+                        <select
+                          value={newInboundPartner}
+                          onChange={(e) => setNewInboundPartner(e.target.value as any)}
+                          className="w-full text-xs px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                        >
+                          <option value="jodo">Jodo / Institutional Gateway (Default)</option>
+                          <option value="generic">Generic E-Commerce Payment</option>
+                          <option value="custom">Custom Webhook Schema</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-ink block mb-1">
+                          Auth Secret (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={newInboundSecret}
+                          onChange={(e) => setNewInboundSecret(e.target.value)}
+                          placeholder="Optional Bearer token or secret"
+                          className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowAddInbound(false)}
+                        className="btn-secondary text-xs px-3 py-1.5"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isPending}
+                        className="btn-primary text-xs px-3 py-1.5"
+                      >
+                        {isPending ? "Generating..." : "Generate Webhook URL"}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* List of active endpoints */}
+                <div className="space-y-3">
+                  {(!config.inboundEndpoints || config.inboundEndpoints.length === 0) ? (
+                    <div className="p-8 text-center border border-dashed border-line rounded-xl text-ink-muted text-xs space-y-3">
+                      <p>You haven't generated an inbound endpoint yet.</p>
+                      <button
+                        type="button"
+                        onClick={handleAutoProvisionInbound}
+                        className="btn-primary text-xs px-4 py-2"
+                      >
+                        ⚡ Generate My Inbound Jodo Webhook URL
+                      </button>
+                    </div>
+                  ) : (
+                    config.inboundEndpoints.map((ep) => {
+                      const fullUrl = `${typeof window !== "undefined" ? window.location.origin : "https://tysonpe.com"}/api/webhooks/inbound/${ep.token}`;
+                      return (
+                        <div
+                          key={ep.id}
+                          className="p-4 rounded-xl bg-surface border border-line space-y-3 hover:border-brand/40 transition-colors"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h5 className="text-xs font-bold text-ink font-display">{ep.name}</h5>
+                                <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded bg-brand/10 text-brand border border-brand/20">
+                                  {ep.partner}
+                                </span>
+                              </div>
+                              <span className="text-[11px] text-ink-muted">
+                                Created on {new Date(ep.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleInboundEndpoint(ep.id, !ep.enabled)}
+                                className={`text-[11px] px-2.5 py-1 rounded-full font-semibold transition-all ${
+                                  ep.enabled
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    : "bg-warm-cream text-ink-muted border border-line"
+                                }`}
+                              >
+                                {ep.enabled ? "Live & Ingesting" : "Paused"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteInboundEndpoint(ep.id)}
+                                className="text-xs text-amber-700 hover:text-amber-900"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Endpoint URL bar with copy */}
+                          <div className="flex items-center gap-2 p-2 rounded-lg bg-warm-cream/50 border border-line">
+                            <span className="text-[10px] font-mono font-bold text-ink-muted uppercase">POST</span>
+                            <input
+                              type="text"
+                              readOnly
+                              value={fullUrl}
+                              className="text-xs font-mono bg-transparent text-ink flex-1 outline-none truncate"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(fullUrl);
+                                showToast("Inbound webhook URL copied to clipboard!");
+                              }}
+                              className="btn-secondary text-[11px] px-2.5 py-1 shrink-0"
+                            >
+                              Copy URL
+                            </button>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] text-ink-muted font-mono pt-1 border-t border-line/60">
+                            <span>Total Ingested: <strong>{ep.totalReceived || 0}</strong></span>
+                            {ep.lastEvent && <span>Last Event: <code>{ep.lastEvent}</code></span>}
+                            {ep.lastReceivedAt && (
+                              <span>Last active: {new Date(ep.lastReceivedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Tab 2: Live Inbound Sandbox */}
+            {modalTab === "test" && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-ink-muted">
+                    Paste any JSON webhook payload from your payment gateway partner (e.g. Jodo, Razorpay, ERP) to test automated payment record creation.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setInboundPayloadText(DEFAULT_SAMPLE_PAYLOAD)}
+                      className="text-[11px] text-brand hover:underline font-semibold"
+                    >
+                      Reset to Jodo Partner Payload
+                    </button>
+                  </div>
+                </div>
+
+                <div className="relative">
+                  <textarea
+                    rows={12}
+                    value={inboundPayloadText}
+                    onChange={(e) => setInboundPayloadText(e.target.value)}
+                    className="w-full text-[11px] font-mono p-3.5 rounded-xl bg-ink text-white/90 border border-line focus:outline-none focus:ring-2 focus:ring-brand/40 leading-relaxed scrollbar-thin"
+                    spellCheck={false}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleTestInboundWebhook}
+                  disabled={testLoading}
+                  className="btn-primary text-xs px-4 py-2.5 flex items-center gap-2 w-full justify-center"
+                >
+                  {testLoading ? "Processing inbound webhook..." : "⚡ Simulate Inbound Payment Webhook Delivery"}
+                </button>
+
+                {inboundTestResult && (
+                  <div
+                    className={`p-4 rounded-xl border text-xs space-y-3 transition-all ${
+                      inboundTestResult.ok
+                        ? "bg-emerald-50/60 border-emerald-200 text-ink"
+                        : "bg-amber-50/60 border-amber-200 text-ink"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="font-bold text-ink">
+                          {inboundTestResult.ok ? "✅ Inbound Webhook Processed & Payment Automated" : "❌ Processing Failed"}
+                        </span>
+                      </div>
+                      {inboundTestResult.latencyMs && (
+                        <span className="text-[11px] font-mono font-medium text-ink-muted">
+                          {inboundTestResult.latencyMs}ms execution
+                        </span>
+                      )}
+                    </div>
+
+                    {inboundTestResult.error ? (
+                      <p className="text-amber-800">{inboundTestResult.error}</p>
+                    ) : (
+                      <div className="space-y-3 pt-1">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-[11px]">
+                          <div className="p-2.5 rounded-lg bg-surface border border-line">
+                            <span className="text-[10px] text-ink-muted uppercase block font-semibold">Order ID</span>
+                            <span className="font-bold text-ink truncate block">{inboundTestResult.orderId}</span>
+                          </div>
+                          <div className="p-2.5 rounded-lg bg-surface border border-line">
+                            <span className="text-[10px] text-ink-muted uppercase block font-semibold">Tax Invoice No</span>
+                            <span className="font-bold text-brand truncate block">{inboundTestResult.invoiceNo || "Allocated"}</span>
+                          </div>
+                          <div className="p-2.5 rounded-lg bg-surface border border-line">
+                            <span className="text-[10px] text-ink-muted uppercase block font-semibold">Total Amount</span>
+                            <span className="font-bold text-emerald-700 block">
+                              ₹{((inboundTestResult.amountPaise || 1000000) / 100).toLocaleString("en-IN")}
+                            </span>
+                          </div>
+                          <div className="p-2.5 rounded-lg bg-surface border border-line">
+                            <span className="text-[10px] text-ink-muted uppercase block font-semibold">Status Gate</span>
+                            <span className="font-bold text-good block">PAID (Reconciled)</span>
+                          </div>
+                        </div>
+
+                        <div className="p-3 rounded-lg bg-surface border border-line space-y-1 text-xs">
+                          <div className="font-semibold text-ink flex items-center justify-between">
+                            <span>Customer: {inboundTestResult.customerName}</span>
+                            <span className="text-[11px] text-ink-muted font-mono">{inboundTestResult.customerEmail}</span>
+                          </div>
+                          <p className="text-ink-muted text-[11px]">
+                            • Buyer account verified & enrolled into course catalog.
+                            <br />
+                            • Net ledger credit calculated & queued for next T+1 automated UPI settlement.
+                            <br />
+                            • Lead status converted to Customer with updated LTV in CRM dashboard.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab 3: Event History Logs */}
+            {modalTab === "logs" && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-ink uppercase tracking-wider">Ingested Webhook Feed</h4>
+                  <span className="text-[11px] text-ink-muted font-mono">{config.inboundLogs?.length || 0} payloads stored</span>
+                </div>
+
+                {(!config.inboundLogs || config.inboundLogs.length === 0) ? (
+                  <div className="p-8 text-center border border-dashed border-line rounded-xl text-ink-muted text-xs">
+                    No webhooks received yet. Use the "Live Inbound Sandbox" tab to simulate your first partner webhook!
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {config.inboundLogs.map((log) => (
+                      <div
+                        key={log.id}
+                        className="p-3 rounded-xl bg-surface border border-line flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:border-brand/40 transition-colors"
+                      >
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            <span className="text-xs font-bold font-mono text-ink">{log.event}</span>
+                            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              HTTP {log.statusCode || 200}
+                            </span>
+                            {log.invoiceNo && (
+                              <span className="text-[10px] font-mono text-brand font-semibold">
+                                {log.invoiceNo}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-ink-muted">
+                            Order: <code className="font-mono text-ink">{log.orderId}</code> • Customer: <strong>{log.customerName || "Customer"}</strong> {log.amountPaise && `(₹${(log.amountPaise / 100).toLocaleString("en-IN")})`}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-[10px] font-mono text-ink-muted">
+                            {new Date(log.receivedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedLogForInspect(log)}
+                            className="text-[11px] font-semibold text-brand hover:underline px-2 py-1 rounded bg-brand/5 border border-brand/20"
+                          >
+                            Inspect JSON
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* JSON Inspector Popover */}
+      {selectedLogForInspect && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-ink/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="card max-w-2xl w-full bg-surface border-line shadow-2xl p-6 relative max-h-[85vh] overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between border-b border-line pb-3">
+              <div>
+                <h4 className="text-sm font-bold text-ink font-display">Inbound Webhook Payload Inspector</h4>
+                <p className="text-[11px] font-mono text-ink-muted">Event: {selectedLogForInspect.event} • ID: {selectedLogForInspect.eventId}</p>
+              </div>
+              <button
+                onClick={() => setSelectedLogForInspect(null)}
+                className="text-ink-muted hover:text-ink text-sm p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <pre className="p-3.5 rounded-xl bg-ink text-white/90 text-[11px] font-mono overflow-x-auto leading-relaxed max-h-[60vh] scrollbar-thin">
+              {JSON.stringify(selectedLogForInspect.rawPayload || selectedLogForInspect, null, 2)}
+            </pre>
+
+            <div className="flex justify-end pt-2 border-t border-line">
+              <button
+                type="button"
+                onClick={() => setSelectedLogForInspect(null)}
+                className="btn-secondary text-xs px-4 py-2"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================= */}
       {/* MODAL: Google Sheets                                      */}
