@@ -12,7 +12,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const next = safeNext(typeof sp.next === "string" ? sp.next : undefined, "");
   if (await getCurrentUser()) redirect(next || "/library");
   return (
-    <div className="mx-auto w-full max-w-md px-4 py-16">
+    <div className="mx-auto w-full max-w-xl px-4 py-12 sm:py-16">
       <h1 className="text-3xl font-bold">Welcome back</h1>
       <p className="mt-1 text-sm text-muted">Log in to your library or dashboard.</p>
       <div className="card mt-6 p-6">

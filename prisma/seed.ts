@@ -131,6 +131,23 @@ async function main() {
     create: { email: "learner@demo.tysonpe.test", name: "Ravi Kumar", passwordHash },
   });
 
+  // 6 fresh customer logins without prior course enrollments for clean checkout testing
+  const freshLearners = [
+    { email: "priya@demo.tysonpe.test", name: "Priya Sharma" },
+    { email: "rohan@demo.tysonpe.test", name: "Rohan Mehta" },
+    { email: "ananya@demo.tysonpe.test", name: "Ananya Iyer" },
+    { email: "vikram@demo.tysonpe.test", name: "Vikram Patel" },
+    { email: "neha@demo.tysonpe.test", name: "Neha Verma" },
+    { email: "kabir@demo.tysonpe.test", name: "Kabir Das" },
+  ];
+  for (const fl of freshLearners) {
+    await db.user.upsert({
+      where: { email: fl.email },
+      update: { passwordHash, name: fl.name },
+      create: { email: fl.email, name: fl.name, passwordHash },
+    });
+  }
+
   const demoOrder = await db.order.upsert({
     where: { providerOrderId: "order_mock_seed_ravi_course" },
     update: {},
