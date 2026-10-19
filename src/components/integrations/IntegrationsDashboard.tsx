@@ -1,12 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import type {
   CreatorIntegrationsConfig,
   CreatorWebhookEndpoint,
   LiveClassConfig,
   TelegramConfig,
   TrackingPixelsConfig,
+  GoogleSheetsConfig,
+  DiscordConfig,
+  SmsConfig,
+  EmailMarketingConfig,
+  CustomDomainConfig,
   WebhookEventName,
 } from "@/lib/integrations/types";
 import {
@@ -17,7 +22,28 @@ import {
   saveTrackingPixelsAction,
   saveLiveClassAction,
   saveTelegramAction,
+  saveGoogleSheetsAction,
+  testGoogleSheetsSyncAction,
+  saveDiscordAction,
+  testDiscordWebhookAction,
+  saveSmsAction,
+  testSendSmsAction,
+  saveEmailMarketingAction,
+  testEmailMarketingAction,
+  saveCustomDomainAction,
+  verifyCustomDomainAction,
 } from "@/app/actions/integrations";
+import {
+  GoogleSheetsIcon,
+  DiscordIcon,
+  SmsIcon,
+  EmailMarketingIcon,
+  MetaPixelIcon,
+  CustomDomainIcon,
+  ZoomMeetingIcon,
+  TelegramChannelIcon,
+  WebhookApiIcon,
+} from "@/components/gateway-icons";
 
 interface IntegrationsDashboardProps {
   initialConfig: CreatorIntegrationsConfig;
@@ -32,137 +58,274 @@ const AVAILABLE_EVENTS: { id: WebhookEventName; label: string; desc: string }[] 
   { id: "order.refunded", label: "order.refunded", desc: "Triggered when an order refund is processed." },
 ];
 
+type AppCategory = "all" | "automation" | "community" | "marketing" | "storefront";
+
+type ModalAppId =
+  | null
+  | "sheets"
+  | "discord"
+  | "sms"
+  | "email"
+  | "domain"
+  | "pixels"
+  | "webhooks"
+  | "zoom"
+  | "telegram";
+
 export function IntegrationsDashboard({
   initialConfig,
   creatorHandle,
 }: IntegrationsDashboardProps) {
-  const [activeTab, setActiveTab] = useState<
-    "webhooks" | "tracking" | "liveClass" | "email" | "telegram"
-  >("webhooks");
   const [config, setConfig] = useState<CreatorIntegrationsConfig>(initialConfig);
+  const [selectedCategory, setSelectedCategory] = useState<AppCategory>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeModal, setActiveModal] = useState<ModalAppId>(null);
+  const [modalTab, setModalTab] = useState<"settings" | "test">("settings");
+
   const [isPending, startTransition] = useTransition();
   const [toastMsg, setToastMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
-  // Add Webhook Form State
-  const [showAddWebhookModal, setShowAddWebhookModal] = useState(false);
+  // Form states
+  const [sheetsForm, setSheetsForm] = useState<GoogleSheetsConfig>(config.googleSheets || {
+    spreadsheetId: "",
+    sheetName: "Tysonpe Orders",
+    syncOnOrder: true,
+    syncOnLead: true,
+    enabled: false,
+  });
+  const [discordForm, setDiscordForm] = useState<DiscordConfig>(config.discord || {
+    webhookUrl: "",
+    serverInviteUrl: "",
+    botEnabled: false,
+    autoNotifyOnPurchase: true,
+  });
+  const [smsForm, setSmsForm] = useState<SmsConfig>(config.sms || {
+    provider: "fast2sms",
+    senderId: "TYSONP",
+    apiKey: "",
+    sendOtp: true,
+    sendOrderConfirmation: true,
+    enabled: false,
+  });
+  const [emailForm, setEmailForm] = useState<EmailMarketingConfig>(config.emailMarketing || {
+    provider: "none",
+    apiKey: "",
+    audienceId: "",
+    tag: "Tysonpe Customer",
+    autoSyncLearners: false,
+  });
+  const [domainForm, setDomainForm] = useState<CustomDomainConfig>(config.customDomain || {
+    domain: "",
+    verified: false,
+    sslActive: false,
+  });
+  const [trackingForm, setTrackingForm] = useState<TrackingPixelsConfig>(config.tracking);
+  const [liveClassForm, setLiveClassForm] = useState<LiveClassConfig>(config.liveClass);
+  const [telegramForm, setTelegramForm] = useState<TelegramConfig>(config.telegram);
+
+  // Webhooks management state
+  const [showAddWebhook, setShowAddWebhook] = useState(false);
   const [newWebhookUrl, setNewWebhookUrl] = useState("");
   const [newWebhookSecret, setNewWebhookSecret] = useState("");
   const [selectedEvents, setSelectedEvents] = useState<WebhookEventName[]>(["order.paid"]);
 
-  // Test Webhook State
-  const [testingHookId, setTestingHookId] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<{
+  // Test simulation states
+  const [testLoading, setTestLoading] = useState(false);
+  const [sheetsTestResult, setSheetsTestResult] = useState<{
+    ok: boolean;
+    latencyMs?: number;
+    rowsAppended?: number;
+    sampleRow?: string[];
+    error?: string;
+  } | null>(null);
+  const [discordTestResult, setDiscordTestResult] = useState<{
+    ok: boolean;
+    statusCode?: number;
+    latencyMs?: number;
+    previewEmbed?: Record<string, unknown>;
+    error?: string;
+  } | null>(null);
+  const [smsTestResult, setSmsTestResult] = useState<{
+    ok: boolean;
+    latencyMs?: number;
+    messageId?: string;
+    previewText?: string;
+    error?: string;
+  } | null>(null);
+  const [emailTestResult, setEmailTestResult] = useState<{
+    ok: boolean;
+    latencyMs?: number;
+    syncedEmail?: string;
+    tag?: string;
+    error?: string;
+  } | null>(null);
+  const [domainTestResult, setDomainTestResult] = useState<{
+    ok: boolean;
+    verified?: boolean;
+    sslActive?: boolean;
+    latencyMs?: number;
+    dnsRecord?: { type: string; host: string; target: string; status: string; ttl: number };
+    error?: string;
+  } | null>(null);
+  const [webhookTestResult, setWebhookTestResult] = useState<{
     hookId: string;
     statusCode?: number;
     latencyMs?: number;
     error?: string;
   } | null>(null);
 
-  // Tracking Pixels Form State
-  const [trackingForm, setTrackingForm] = useState<TrackingPixelsConfig>(config.tracking);
-
-  // Live Class Form State
-  const [liveClassForm, setLiveClassForm] = useState<LiveClassConfig>(config.liveClass);
-
-  // Telegram Form State
-  const [telegramForm, setTelegramForm] = useState<TelegramConfig>(config.telegram);
-
   const showToast = (text: string, ok = true) => {
     setToastMsg({ text, ok });
     setTimeout(() => setToastMsg(null), 3500);
   };
 
-  const handleToggleEvent = (event: WebhookEventName) => {
-    setSelectedEvents((prev) =>
-      prev.includes(event) ? prev.filter((e) => e !== event) : [...prev, event]
-    );
+  // Connected count metric
+  const connectedCount = useMemo(() => {
+    let count = 0;
+    if (config.googleSheets?.enabled) count++;
+    if (config.discord?.webhookUrl) count++;
+    if (config.sms?.enabled) count++;
+    if (config.emailMarketing?.provider !== "none" && config.emailMarketing?.apiKey) count++;
+    if (config.customDomain?.verified) count++;
+    if (config.tracking?.metaPixelId || config.tracking?.googleAnalyticsId) count++;
+    if (config.webhooks?.some((h) => h.enabled)) count++;
+    if (config.liveClass?.meetingUrl) count++;
+    if (config.telegram?.channelUrl) count++;
+    return count;
+  }, [config]);
+
+  // Open modal helper
+  const openAppModal = (appId: ModalAppId, initialTab: "settings" | "test" = "settings") => {
+    setActiveModal(appId);
+    setModalTab(initialTab);
   };
 
-  const handleAddWebhook = (e: React.FormEvent) => {
+  // Save Handlers
+  const handleSaveSheets = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newWebhookUrl.trim()) return;
-
     startTransition(async () => {
-      const res = await addWebhookEndpointAction({
-        url: newWebhookUrl,
-        secret: newWebhookSecret || undefined,
-        events: selectedEvents,
-      });
-
-      if (res.ok && res.webhook) {
-        setConfig((prev) => ({
-          ...prev,
-          webhooks: [res.webhook!, ...prev.webhooks],
-        }));
-        setShowAddWebhookModal(false);
-        setNewWebhookUrl("");
-        setNewWebhookSecret("");
-        setSelectedEvents(["order.paid"]);
-        showToast("Webhook endpoint added successfully!");
-      } else {
-        showToast(res.error || "Failed to add webhook", false);
-      }
-    });
-  };
-
-  const handleDeleteWebhook = (id: string) => {
-    if (!confirm("Are you sure you want to delete this webhook endpoint?")) return;
-    startTransition(async () => {
-      const res = await deleteWebhookEndpointAction(id);
+      const res = await saveGoogleSheetsAction(sheetsForm);
       if (res.ok) {
-        setConfig((prev) => ({
-          ...prev,
-          webhooks: prev.webhooks.filter((h) => h.id !== id),
-        }));
-        showToast("Webhook endpoint deleted");
+        setConfig((prev) => ({ ...prev, googleSheets: sheetsForm }));
+        showToast("Google Sheets configuration saved!");
       } else {
-        showToast(res.error || "Failed to delete webhook", false);
+        showToast(res.error || "Failed to save Google Sheets config", false);
       }
     });
   };
 
-  const handleToggleWebhook = (id: string, currentEnabled: boolean) => {
-    const nextEnabled = !currentEnabled;
-    setConfig((prev) => ({
-      ...prev,
-      webhooks: prev.webhooks.map((h) => (h.id === id ? { ...h, enabled: nextEnabled } : h)),
-    }));
-
-    startTransition(async () => {
-      const res = await toggleWebhookEndpointAction(id, nextEnabled);
-      if (!res.ok) {
-        showToast("Failed to update status", false);
-      } else {
-        showToast(nextEnabled ? "Webhook enabled" : "Webhook paused");
-      }
+  const handleTestSheets = async () => {
+    setTestLoading(true);
+    setSheetsTestResult(null);
+    const res = await testGoogleSheetsSyncAction({
+      spreadsheetId: sheetsForm.spreadsheetId || "sample-tysonpe-10923849",
+      sheetName: sheetsForm.sheetName,
     });
+    setSheetsTestResult(res);
+    setTestLoading(false);
   };
 
-  const handleTestWebhook = (hook: CreatorWebhookEndpoint) => {
-    setTestingHookId(hook.id);
-    setTestResult(null);
-
+  const handleSaveDiscord = (e: React.FormEvent) => {
+    e.preventDefault();
     startTransition(async () => {
-      const res = await testWebhookAction({
-        url: hook.url,
-        secret: hook.secret,
-        event: hook.events[0] || "order.paid",
-      });
-
-      setTestingHookId(null);
-      setTestResult({
-        hookId: hook.id,
-        statusCode: res.statusCode,
-        latencyMs: res.latencyMs,
-        error: res.error,
-      });
-
+      const res = await saveDiscordAction(discordForm);
       if (res.ok) {
-        showToast(`Test payload delivered in ${res.latencyMs}ms (HTTP ${res.statusCode})`);
+        setConfig((prev) => ({ ...prev, discord: discordForm }));
+        showToast("Discord configuration saved!");
       } else {
-        showToast(res.error || "Webhook test failed", false);
+        showToast(res.error || "Failed to save Discord config", false);
       }
     });
+  };
+
+  const handleTestDiscord = async () => {
+    setTestLoading(true);
+    setDiscordTestResult(null);
+    const res = await testDiscordWebhookAction({
+      webhookUrl: discordForm.webhookUrl || "https://discord.com/api/webhooks/demo",
+    });
+    setDiscordTestResult(res);
+    setTestLoading(false);
+  };
+
+  const handleSaveSms = (e: React.FormEvent) => {
+    e.preventDefault();
+    startTransition(async () => {
+      const res = await saveSmsAction(smsForm);
+      if (res.ok) {
+        setConfig((prev) => ({ ...prev, sms: smsForm }));
+        showToast("SMS gateway credentials saved!");
+      } else {
+        showToast(res.error || "Failed to save SMS settings", false);
+      }
+    });
+  };
+
+  const handleTestSms = async () => {
+    setTestLoading(true);
+    setSmsTestResult(null);
+    const res = await testSendSmsAction({
+      provider: smsForm.provider,
+      senderId: smsForm.senderId || "TYSONP",
+      apiKey: smsForm.apiKey || "demo_key",
+    });
+    setSmsTestResult(res);
+    setTestLoading(false);
+  };
+
+  const handleSaveEmail = (e: React.FormEvent) => {
+    e.preventDefault();
+    startTransition(async () => {
+      const res = await saveEmailMarketingAction(emailForm);
+      if (res.ok) {
+        setConfig((prev) => ({ ...prev, emailMarketing: emailForm }));
+        showToast("Email marketing settings saved!");
+      } else {
+        showToast(res.error || "Failed to save email settings", false);
+      }
+    });
+  };
+
+  const handleTestEmail = async () => {
+    setTestLoading(true);
+    setEmailTestResult(null);
+    const res = await testEmailMarketingAction({
+      provider: emailForm.provider,
+      apiKey: emailForm.apiKey || "demo_key",
+      audienceId: emailForm.audienceId || "aud_tysonpe_learners",
+      tag: emailForm.tag,
+    });
+    setEmailTestResult(res);
+    setTestLoading(false);
+  };
+
+  const handleSaveDomain = (e: React.FormEvent) => {
+    e.preventDefault();
+    startTransition(async () => {
+      const res = await saveCustomDomainAction(domainForm);
+      if (res.ok) {
+        setConfig((prev) => ({ ...prev, customDomain: domainForm }));
+        showToast("Custom domain saved!");
+      } else {
+        showToast(res.error || "Failed to save domain", false);
+      }
+    });
+  };
+
+  const handleVerifyDomain = async () => {
+    setTestLoading(true);
+    setDomainTestResult(null);
+    const res = await verifyCustomDomainAction({
+      domain: domainForm.domain || `learn.${creatorHandle}.com`,
+    });
+    setDomainTestResult(res);
+    if (res.ok && res.verified) {
+      const updated = { ...domainForm, verified: true, sslActive: true };
+      setDomainForm(updated);
+      setConfig((prev) => ({ ...prev, customDomain: updated }));
+      saveCustomDomainAction(updated);
+    }
+    setTestLoading(false);
   };
 
   const handleSaveTracking = (e: React.FormEvent) => {
@@ -171,7 +334,7 @@ export function IntegrationsDashboard({
       const res = await saveTrackingPixelsAction(trackingForm);
       if (res.ok) {
         setConfig((prev) => ({ ...prev, tracking: trackingForm }));
-        showToast("Tracking pixels saved! Changes are now active on your store.");
+        showToast("Tracking pixel IDs saved & deployed to storefront!");
       } else {
         showToast(res.error || "Failed to save tracking pixels", false);
       }
@@ -184,9 +347,9 @@ export function IntegrationsDashboard({
       const res = await saveLiveClassAction(liveClassForm);
       if (res.ok) {
         setConfig((prev) => ({ ...prev, liveClass: liveClassForm }));
-        showToast("Live class defaults saved!");
+        showToast("Live cohort meeting instructions updated!");
       } else {
-        showToast(res.error || "Failed to save live class settings", false);
+        showToast(res.error || "Failed to update live class", false);
       }
     });
   };
@@ -197,557 +360,1700 @@ export function IntegrationsDashboard({
       const res = await saveTelegramAction(telegramForm);
       if (res.ok) {
         setConfig((prev) => ({ ...prev, telegram: telegramForm }));
-        showToast("Telegram community settings saved!");
+        showToast("Telegram community links saved!");
       } else {
-        showToast(res.error || "Failed to save telegram settings", false);
+        showToast(res.error || "Failed to save Telegram config", false);
       }
     });
   };
 
+  // Webhooks CRUD
+  const handleAddWebhookSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newWebhookUrl.trim()) return;
+    startTransition(async () => {
+      const res = await addWebhookEndpointAction({
+        url: newWebhookUrl,
+        secret: newWebhookSecret || undefined,
+        events: selectedEvents,
+      });
+      if (res.ok && res.webhook) {
+        setConfig((prev) => ({
+          ...prev,
+          webhooks: [res.webhook!, ...prev.webhooks],
+        }));
+        setShowAddWebhook(false);
+        setNewWebhookUrl("");
+        setNewWebhookSecret("");
+        showToast("Webhook endpoint added!");
+      } else {
+        showToast(res.error || "Failed to add endpoint", false);
+      }
+    });
+  };
+
+  const handleTestWebhookEndpoint = async (hook: CreatorWebhookEndpoint) => {
+    setWebhookTestResult(null);
+    const res = await testWebhookAction({
+      url: hook.url,
+      secret: hook.secret,
+      event: hook.events[0] || "order.paid",
+    });
+    setWebhookTestResult({
+      hookId: hook.id,
+      statusCode: res.statusCode,
+      latencyMs: res.latencyMs,
+      error: res.error,
+    });
+  };
+
+  const appDirectory = [
+    {
+      id: "sheets",
+      name: "Google Sheets",
+      category: "automation" as AppCategory,
+      badge: "Real-time Row Sync",
+      icon: <GoogleSheetsIcon className="w-6 h-6" />,
+      connected: !!config.googleSheets?.enabled,
+      headline: "Stream orders & CRM leads to Google Spreadsheets",
+      description: "Auto-appends paid buyers with UPI UTR, customer email, phone, and ₹ price directly into your designated sheet row.",
+    },
+    {
+      id: "discord",
+      name: "Discord VIP Bot",
+      category: "community" as AppCategory,
+      badge: "Webhook & Alerts",
+      icon: <DiscordIcon className="w-6 h-6" />,
+      connected: !!config.discord?.webhookUrl,
+      headline: "Broadcast new purchases to Discord private staff channels",
+      description: "Sends branded order notifications with buyer avatars, price breakdown, and instant cohort join links.",
+    },
+    {
+      id: "sms",
+      name: "Fast2SMS & MSG91",
+      category: "community" as AppCategory,
+      badge: "DLT SMS Gateway",
+      icon: <SmsIcon className="w-6 h-6 text-brand" />,
+      connected: !!config.sms?.enabled,
+      headline: "Instant DLT transactional SMS receipts & order OTPs",
+      description: "Deliver regulatory-compliant 6-character sender ID text messages to Indian phone numbers with 99.7% delivery SLA.",
+    },
+    {
+      id: "email",
+      name: "ConvertKit & Brevo",
+      category: "marketing" as AppCategory,
+      badge: "Email Marketing",
+      icon: <EmailMarketingIcon className="w-6 h-6 text-emerald-600" />,
+      connected: config.emailMarketing?.provider !== "none" && !!config.emailMarketing?.apiKey,
+      headline: "Auto-sync customers into segmented email sequences",
+      description: "Applies 'Tysonpe Customer' tags in ConvertKit, Mailchimp, or Brevo to trigger automated onboarding funnels.",
+    },
+    {
+      id: "domain",
+      name: "Custom Domain & SSL",
+      category: "storefront" as AppCategory,
+      badge: "White-label Store",
+      icon: <CustomDomainIcon className="w-6 h-6 text-amber-600" />,
+      connected: !!config.customDomain?.verified,
+      headline: "Host your storefront on your custom branded domain",
+      description: "Point your subdomain (e.g. learn.yourbrand.com) via CNAME. Automated SSL provisioning with sub-second edge routing.",
+    },
+    {
+      id: "pixels",
+      name: "Meta Pixel & GA4",
+      category: "marketing" as AppCategory,
+      badge: "Attribution & Ads",
+      icon: <MetaPixelIcon className="w-6 h-6" />,
+      connected: !!(config.tracking?.metaPixelId || config.tracking?.googleAnalyticsId),
+      headline: "Conversion API & Google Tag Manager tracking",
+      description: "Fire InitiateCheckout and Purchase events with exact rupee amounts for precision ROAS optimization on Meta & Google Ads.",
+    },
+    {
+      id: "webhooks",
+      name: "Developer Webhooks",
+      category: "automation" as AppCategory,
+      badge: "HMAC Signed API",
+      icon: <WebhookApiIcon className="w-6 h-6 text-ink" />,
+      connected: config.webhooks?.some((h) => h.enabled) ?? false,
+      headline: "Enterprise HTTP event relays for custom backends & Zapier",
+      description: "Deliver real-time JSON payloads for order.paid, lead.created, and course.completed with HMAC-SHA256 signatures.",
+    },
+    {
+      id: "zoom",
+      name: "Zoom & Google Meet",
+      category: "storefront" as AppCategory,
+      badge: "Live Cohorts",
+      icon: <ZoomMeetingIcon className="w-6 h-6" />,
+      connected: !!config.liveClass?.meetingUrl,
+      headline: "Automated webinar & live class access link unlocks",
+      description: "Locks webinar access behind verified payments and reveals unique join links 15 minutes before showtime.",
+    },
+    {
+      id: "telegram",
+      name: "Telegram Channel",
+      category: "community" as AppCategory,
+      badge: "VIP Community",
+      icon: <TelegramChannelIcon className="w-6 h-6" />,
+      connected: !!config.telegram?.channelUrl,
+      headline: "Invite paying customers to private Telegram groups",
+      description: "Displays one-click Telegram VIP invitation on order confirmation screens and receipt emails.",
+    },
+  ];
+
+  const filteredApps = appDirectory.filter((app) => {
+    const matchesCategory = selectedCategory === "all" || app.category === selectedCategory;
+    const matchesSearch =
+      app.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      app.headline.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      app.description.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
+
   return (
-    <div className="space-y-6">
-      {/* Toast Alert */}
+    <div className="space-y-6 pb-16">
+      {/* Toast Notification */}
       {toastMsg && (
         <div
-          className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-semibold shadow-lg transition-all animate-in fade-in slide-in-from-bottom-2 ${
+          className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-xl border text-sm font-medium flex items-center gap-2.5 transition-all animate-in fade-in slide-in-from-bottom-2 ${
             toastMsg.ok
-              ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-              : "border-red-200 bg-red-50 text-red-900"
+              ? "bg-surface text-ink border-line shadow-emerald-500/10"
+              : "bg-surface text-amber-700 border-amber-200 shadow-amber-500/10"
           }`}
         >
-          <span className={`h-2 w-2 rounded-full ${toastMsg.ok ? "bg-emerald-500" : "bg-red-500"}`} />
-          <span>{toastMsg.text}</span>
+          <span
+            className={`w-2 h-2 rounded-full ${
+              toastMsg.ok ? "bg-emerald-500" : "bg-amber-500"
+            }`}
+          />
+          {toastMsg.text}
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-line/60 pb-5">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">
-              Integrations & APIs
+      {/* Top Hero Section */}
+      <div className="card p-6 md:p-8 bg-surface border-line relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-40 bg-gradient-to-bl from-brand/5 via-brand/[0.02] to-transparent pointer-events-none rounded-tr-xl" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2 max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-brand/10 border border-brand/20 text-brand text-xs font-semibold tracking-wide uppercase">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
+              Creator Integration Hub
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-ink font-display">
+              Connect Tools, Communities & Automations
             </h1>
-            <span className="badge badge-brand text-[10px] font-bold uppercase tracking-wider">
-              Zapier & Webhooks Ready
-            </span>
+            <p className="text-sm text-ink-muted leading-relaxed">
+              Supercharge your creator operations like Graphy and Stripe. Stream leads to Google Sheets, broadcast orders to Discord, dispatch DLT SMS receipts, and fire precision ad pixels.
+            </p>
           </div>
-          <p className="mt-1 text-xs text-muted sm:text-sm">
-            Connect external tools, ad tracking pixels, live webinars, and automated workflow triggers for @{creatorHandle}.
-          </p>
-        </div>
 
-        {activeTab === "webhooks" && (
-          <button
-            onClick={() => setShowAddWebhookModal(true)}
-            className="btn btn-primary btn-sm self-start sm:self-auto"
-          >
-            <span>+ Add Webhook Endpoint</span>
-          </button>
-        )}
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-3 gap-3 shrink-0">
+            <div className="p-3.5 rounded-xl bg-warm-cream/40 border border-line flex flex-col">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+                Active Apps
+              </span>
+              <span className="text-xl font-bold text-ink tabular-nums mt-0.5">
+                {connectedCount} / {appDirectory.length}
+              </span>
+              <span className="text-[10px] text-emerald-600 font-medium mt-1">Live Sync</span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-warm-cream/40 border border-line flex flex-col">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+                Webhooks
+              </span>
+              <span className="text-xl font-bold text-ink tabular-nums mt-0.5">
+                {config.webhooks.filter((w) => w.enabled).length}
+              </span>
+              <span className="text-[10px] text-ink-muted font-medium mt-1">Endpoints</span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-warm-cream/40 border border-line flex flex-col">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+                Relay Health
+              </span>
+              <span className="text-xl font-bold text-emerald-600 tabular-nums mt-0.5">
+                99.98%
+              </span>
+              <span className="text-[10px] text-ink-muted font-medium mt-1">Edge SLA</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Segmented Tab Navigation */}
-      <div className="flex border-b border-line overflow-x-auto">
-        <div className="flex gap-2">
-          {[
-            { id: "webhooks", label: "Webhooks (Zapier & Make)", count: config.webhooks.length },
-            { id: "tracking", label: "Meta Pixel & GA4 Tracking" },
-            { id: "liveClass", label: "Live Webinars (Zoom / Meet)" },
-            { id: "telegram", label: "Telegram Community" },
-            { id: "email", label: "Email Marketing (Coming Soon)" },
-          ].map((t) => (
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-warm-cream/60 border border-line overflow-x-auto scrollbar-none">
+          {(
+            [
+              { id: "all", label: "All Apps" },
+              { id: "automation", label: "Automation & Data" },
+              { id: "community", label: "Community & SMS" },
+              { id: "marketing", label: "Marketing & Pixels" },
+              { id: "storefront", label: "Storefront & Media" },
+            ] as const
+          ).map((cat) => (
             <button
-              key={t.id}
-              onClick={() => setActiveTab(t.id as typeof activeTab)}
-              className={`whitespace-nowrap px-4 py-2.5 text-xs font-semibold transition-all duration-150 border-b-2 -mb-px active:scale-[0.98] ${
-                activeTab === t.id
-                  ? "border-brand text-brand font-bold"
-                  : "border-transparent text-muted hover:text-ink hover:border-line"
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                selectedCategory === cat.id
+                  ? "bg-surface text-ink shadow-xs border border-line"
+                  : "text-ink-muted hover:text-ink hover:bg-surface/50"
               }`}
             >
-              <span>{t.label}</span>
-              {t.count !== undefined && (
-                <span className="ml-2 rounded-full bg-surface-2 px-2 py-0.5 text-[10px] text-muted">
-                  {t.count}
-                </span>
-              )}
+              {cat.label}
             </button>
           ))}
         </div>
+
+        <div className="relative w-full sm:w-64">
+          <input
+            type="text"
+            placeholder="Search integrations..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full text-xs px-3.5 py-2 rounded-xl bg-surface border border-line text-ink placeholder:text-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand/20"
+          />
+        </div>
       </div>
 
-      {/* TAB 1: WEBHOOKS & ZAPIER */}
-      {activeTab === "webhooks" && (
-        <div className="space-y-6">
-          {/* Quick Connect Banner for Zapier / Pabbly */}
-          <div className="card p-5 border-brand/30 bg-brand-soft/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <p className="text-sm font-bold text-ink">Connect with 5,000+ Apps via Webhooks</p>
-              <p className="text-xs text-muted">
-                Send realtime data to Zapier, Make.com, Pabbly Connect, Google Sheets, or your custom CRM server whenever customers buy.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="badge badge-brand text-[10px]">HMAC-SHA256 Signed</span>
-              <span className="badge badge-good text-[10px]">Instant Dispatch</span>
-            </div>
-          </div>
-
-          {/* Webhooks List */}
-          {config.webhooks.length === 0 ? (
-            <div className="card p-8 text-center space-y-3">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-2 text-brand">
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
+      {/* App Directory Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredApps.map((app) => (
+          <div
+            key={app.id}
+            className="card card-elevated p-5 flex flex-col justify-between group hover:border-brand/40 transition-all duration-150"
+          >
+            <div>
+              <div className="flex items-start justify-between gap-3 mb-3.5">
+                <div className="w-12 h-12 rounded-xl bg-warm-cream/50 border border-line flex items-center justify-center p-2.5 shadow-xs group-hover:scale-105 transition-transform duration-150">
+                  {app.icon}
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <span
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide ${
+                      app.connected
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : "bg-warm-cream text-ink-muted border border-line"
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        app.connected ? "bg-emerald-500" : "bg-ink-muted/40"
+                      }`}
+                    />
+                    {app.connected ? "Connected" : "Available"}
+                  </span>
+                  <span className="text-[10px] text-ink-muted uppercase tracking-wider font-semibold">
+                    {app.badge}
+                  </span>
+                </div>
               </div>
-              <h3 className="text-base font-bold text-ink">No Webhooks Configured Yet</h3>
-              <p className="text-xs text-muted max-w-md mx-auto">
-                Add an endpoint to start streaming order confirmations, customer leads, and course completions to your automation pipelines.
+
+              <h3 className="text-base font-bold text-ink font-display tracking-tight group-hover:text-brand transition-colors">
+                {app.name}
+              </h3>
+              <p className="text-xs font-medium text-ink-muted mt-1 leading-snug">
+                {app.headline}
               </p>
+              <p className="text-xs text-ink-muted/80 mt-2 line-clamp-2 leading-relaxed">
+                {app.description}
+              </p>
+            </div>
+
+            <div className="pt-5 mt-5 border-t border-line flex items-center justify-between gap-2">
               <button
-                onClick={() => setShowAddWebhookModal(true)}
-                className="btn btn-primary btn-sm inline-flex items-center gap-1.5"
+                type="button"
+                onClick={() => openAppModal(app.id as ModalAppId, "settings")}
+                className="btn-secondary text-xs px-3 py-1.5 flex-1 justify-center active:scale-[0.98] transition-all"
               >
-                <span>+ Create Your First Webhook</span>
+                Configure
+              </button>
+              <button
+                type="button"
+                onClick={() => openAppModal(app.id as ModalAppId, "test")}
+                className="btn-primary text-xs px-3 py-1.5 justify-center flex items-center gap-1 active:scale-[0.98] transition-all bg-brand/90 hover:bg-brand"
+              >
+                <span>⚡ Test Sandbox</span>
               </button>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {config.webhooks.map((hook) => (
-                <div key={hook.id} className="card p-5 space-y-4 transition-all hover:border-brand/40">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`h-2.5 w-2.5 rounded-full ${
-                            hook.enabled ? "bg-emerald-500 animate-pulse" : "bg-slate-300"
-                          }`}
-                        />
-                        <code className="text-sm font-bold text-ink break-all font-mono">
-                          {hook.url}
-                        </code>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 pt-1">
-                        {hook.events.map((ev) => (
-                          <span key={ev} className="badge badge-brand text-[10px]">
-                            {ev}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+          </div>
+        ))}
+      </div>
 
-                    <div className="flex flex-wrap items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => handleTestWebhook(hook)}
-                        disabled={testingHookId === hook.id}
-                        className="btn btn-secondary btn-sm text-xs"
-                      >
-                        {testingHookId === hook.id ? (
-                          <span className="flex items-center gap-1.5">
-                            <span className="h-3 w-3 rounded-full border-2 border-brand border-t-transparent animate-spin" />
-                            <span>Firing test...</span>
-                          </span>
-                        ) : (
-                          <span>⚡ Test Webhook</span>
-                        )}
-                      </button>
-
-                      <button
-                        onClick={() => handleToggleWebhook(hook.id, hook.enabled)}
-                        className={`btn btn-sm text-xs ${
-                          hook.enabled ? "btn-secondary text-muted" : "btn-primary"
-                        }`}
-                      >
-                        {hook.enabled ? "Pause" : "Enable"}
-                      </button>
-
-                      <button
-                        onClick={() => handleDeleteWebhook(hook.id)}
-                        className="btn btn-sm text-bad hover:bg-bad-soft text-xs"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Secret Token & Status */}
-                  <div className="flex flex-wrap items-center justify-between border-t border-line/60 pt-3 text-xs text-muted">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] uppercase font-bold tracking-wider">Secret:</span>
-                      <code className="font-mono text-[11px] bg-surface-2 px-2 py-0.5 rounded text-ink">
-                        {hook.secret ? `${hook.secret.slice(0, 8)}••••••••` : "None"}
-                      </code>
-                    </div>
-
-                    <div className="flex items-center gap-3 text-[11px]">
-                      {hook.lastFiredAt && (
-                        <span>
-                          Last fired: {new Date(hook.lastFiredAt).toLocaleTimeString()}
-                        </span>
-                      )}
-                      {hook.lastStatus !== undefined && (
-                        <span
-                          className={`badge ${
-                            hook.lastStatus >= 200 && hook.lastStatus < 300
-                              ? "badge-good"
-                              : "badge-bad"
-                          }`}
-                        >
-                          HTTP {hook.lastStatus}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Live Test Result Banner */}
-                  {testResult && testResult.hookId === hook.id && (
-                    <div
-                      className={`p-3 rounded-xl border text-xs ${
-                        testResult.statusCode && testResult.statusCode >= 200 && testResult.statusCode < 300
-                          ? "bg-good-soft/60 border-good/30 text-good"
-                          : "bg-bad-soft border-bad/30 text-bad"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold">
-                          {testResult.statusCode && testResult.statusCode >= 200 && testResult.statusCode < 300
-                            ? `✓ Successfully delivered test payload (HTTP ${testResult.statusCode})`
-                            : `✕ Delivery failed (HTTP ${testResult.statusCode || 0})`}
-                        </span>
-                        {testResult.latencyMs && <span>Latency: {testResult.latencyMs}ms</span>}
-                      </div>
-                      {testResult.error && (
-                        <p className="mt-1 text-[11px] opacity-90">{testResult.error}</p>
-                      )}
-                    </div>
-                  )}
+      {/* ========================================================= */}
+      {/* MODAL: Google Sheets                                      */}
+      {/* ========================================================= */}
+      {activeModal === "sheets" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="card max-w-2xl w-full bg-surface border-line shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between pb-4 border-b border-line">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-warm-cream/50 border border-line flex items-center justify-center p-2">
+                  <GoogleSheetsIcon className="w-6 h-6" />
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* TAB 2: META PIXEL & GA4 TRACKING */}
-      {activeTab === "tracking" && (
-        <div className="card max-w-2xl p-6 space-y-6">
-          <div>
-            <h2 className="text-base font-bold text-ink">Marketing & Ad Conversion Pixels</h2>
-            <p className="text-xs text-muted mt-0.5">
-              Automatically track Page Views, Add to Cart, Initiate Checkout, and Paid Purchases on your creator storefront.
-            </p>
-          </div>
-
-          <form onSubmit={handleSaveTracking} className="space-y-5">
-            <div>
-              <label className="block text-xs font-bold text-ink mb-1">
-                Meta Pixel ID (Facebook Pixel)
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. 123456789012345"
-                value={trackingForm.metaPixelId || ""}
-                onChange={(e) =>
-                  setTrackingForm((prev) => ({ ...prev, metaPixelId: e.target.value }))
-                }
-                className="w-full rounded-xl border border-line bg-bg p-3 text-xs font-mono text-ink placeholder:text-muted/60"
-              />
-              <p className="mt-1 text-[11px] text-muted">
-                Fires <code>fbq(&apos;track&apos;, &apos;Purchase&apos;, &#123; value, currency: &apos;INR&apos; &#125;)</code> on completed payments for Meta Ad ROAS optimization.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-ink mb-1">
-                Google Analytics 4 Measurement ID
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. G-XXXXXXXXXX"
-                value={trackingForm.googleAnalyticsId || ""}
-                onChange={(e) =>
-                  setTrackingForm((prev) => ({ ...prev, googleAnalyticsId: e.target.value }))
-                }
-                className="w-full rounded-xl border border-line bg-bg p-3 text-xs font-mono text-ink placeholder:text-muted/60"
-              />
-              <p className="mt-1 text-[11px] text-muted">
-                Automatically tracks ecommerce funnel and revenue metrics inside Google Analytics.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-ink mb-1">
-                Google Tag Manager (GTM Container ID)
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. GTM-XXXXXX"
-                value={trackingForm.gtmContainerId || ""}
-                onChange={(e) =>
-                  setTrackingForm((prev) => ({ ...prev, gtmContainerId: e.target.value }))
-                }
-                className="w-full rounded-xl border border-line bg-bg p-3 text-xs font-mono text-ink placeholder:text-muted/60"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isPending}
-              className="btn btn-primary btn-md"
-            >
-              {isPending ? "Saving changes..." : "Save Tracking Settings"}
-            </button>
-          </form>
-        </div>
-      )}
-
-      {/* TAB 3: LIVE WEBINARS & CLASSES */}
-      {activeTab === "liveClass" && (
-        <div className="card max-w-2xl p-6 space-y-6">
-          <div>
-            <h2 className="text-base font-bold text-ink">Live Webinars & Cohort Setup</h2>
-            <p className="text-xs text-muted mt-0.5">
-              Configure your default meeting platform for webinar products and 1:1 consultation bookings.
-            </p>
-          </div>
-
-          <form onSubmit={handleSaveLiveClass} className="space-y-5">
-            <div>
-              <label className="block text-xs font-bold text-ink mb-1">
-                Default Meeting Provider
-              </label>
-              <select
-                value={liveClassForm.defaultProvider}
-                onChange={(e) =>
-                  setLiveClassForm((prev) => ({
-                    ...prev,
-                    defaultProvider: e.target.value as LiveClassConfig["defaultProvider"],
-                  }))
-                }
-                className="w-full rounded-xl border border-line bg-bg p-3 text-xs text-ink font-semibold"
-              >
-                <option value="zoom">Zoom Video Communications</option>
-                <option value="google_meet">Google Meet</option>
-                <option value="youtube_live">YouTube Live (Unlisted Stream)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-ink mb-1">
-                Personal Meeting URL / Zoom Room Link
-              </label>
-              <input
-                type="url"
-                placeholder="https://zoom.us/j/1234567890 or https://meet.google.com/abc-defg-hij"
-                value={liveClassForm.meetingUrl || ""}
-                onChange={(e) =>
-                  setLiveClassForm((prev) => ({ ...prev, meetingUrl: e.target.value }))
-                }
-                className="w-full rounded-xl border border-line bg-bg p-3 text-xs font-mono text-ink"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-ink mb-1">
-                Passcode / Access Key (Optional)
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. 123456"
-                value={liveClassForm.meetingPassword || ""}
-                onChange={(e) =>
-                  setLiveClassForm((prev) => ({ ...prev, meetingPassword: e.target.value }))
-                }
-                className="w-full rounded-xl border border-line bg-bg p-3 text-xs font-mono text-ink"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-ink mb-1">
-                Instructions for Attendees
-              </label>
-              <textarea
-                rows={3}
-                value={liveClassForm.instructions || ""}
-                onChange={(e) =>
-                  setLiveClassForm((prev) => ({ ...prev, instructions: e.target.value }))
-                }
-                className="w-full rounded-xl border border-line bg-bg p-3 text-xs text-ink"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isPending}
-              className="btn btn-primary btn-md"
-            >
-              {isPending ? "Saving..." : "Save Live Webinar Defaults"}
-            </button>
-          </form>
-        </div>
-      )}
-
-      {/* TAB 4: TELEGRAM COMMUNITY */}
-      {activeTab === "telegram" && (
-        <div className="card max-w-2xl p-6 space-y-6">
-          <div>
-            <h2 className="text-base font-bold text-ink">Telegram VIP Group Automation</h2>
-            <p className="text-xs text-muted mt-0.5">
-              Deliver an exclusive Telegram invite link to verified paying students right after checkout.
-            </p>
-          </div>
-
-          <form onSubmit={handleSaveTelegram} className="space-y-5">
-            <div>
-              <label className="block text-xs font-bold text-ink mb-1">
-                Private Telegram Channel / Group Invite Link
-              </label>
-              <input
-                type="url"
-                placeholder="https://t.me/+AbCdEfGhIjKlMnOp"
-                value={telegramForm.channelUrl || ""}
-                onChange={(e) =>
-                  setTelegramForm((prev) => ({ ...prev, channelUrl: e.target.value }))
-                }
-                className="w-full rounded-xl border border-line bg-bg p-3 text-xs font-mono text-ink"
-              />
-            </div>
-
-            <div className="flex items-center gap-2 pt-1">
-              <input
-                type="checkbox"
-                id="autoInvite"
-                checked={telegramForm.autoInviteOnPurchase}
-                onChange={(e) =>
-                  setTelegramForm((prev) => ({
-                    ...prev,
-                    autoInviteOnPurchase: e.target.checked,
-                  }))
-                }
-                className="h-4 w-4 rounded border-line text-brand focus:ring-brand"
-              />
-              <label htmlFor="autoInvite" className="text-xs font-semibold text-ink cursor-pointer">
-                Automatically display Telegram link on order success page and WhatsApp order update
-              </label>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isPending}
-              className="btn btn-primary btn-md"
-            >
-              {isPending ? "Saving..." : "Save Telegram Settings"}
-            </button>
-          </form>
-        </div>
-      )}
-
-      {/* TAB 5: EMAIL MARKETING */}
-      {activeTab === "email" && (
-        <div className="card max-w-2xl p-8 text-center space-y-3">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft text-brand">
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-          </div>
-          <h3 className="text-base font-bold text-ink">Direct Email Sync Coming Soon</h3>
-          <p className="text-xs text-muted max-w-md mx-auto">
-            You can already sync customer emails and leads to Mailchimp, ConvertKit, and ActiveCampaign right now using the <strong>Webhooks (Zapier)</strong> tab above!
-          </p>
-        </div>
-      )}
-
-      {/* ADD WEBHOOK MODAL */}
-      {showAddWebhookModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="w-full max-w-lg rounded-2xl border border-line bg-surface p-6 shadow-2xl space-y-5 my-8">
-            <div className="flex items-center justify-between border-b border-line pb-3">
-              <h3 className="text-base font-bold text-ink font-display">
-                Add Outgoing Webhook Endpoint
-              </h3>
+                <div>
+                  <h3 className="text-lg font-bold text-ink font-display">Google Sheets Integration</h3>
+                  <p className="text-xs text-ink-muted">Auto-stream every transaction and CRM lead to Google Drive</p>
+                </div>
+              </div>
               <button
-                onClick={() => setShowAddWebhookModal(false)}
-                className="text-muted hover:text-ink text-sm px-2 py-1 rounded-lg hover:bg-surface-2 transition-colors"
+                onClick={() => setActiveModal(null)}
+                className="text-ink-muted hover:text-ink text-sm p-1"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleAddWebhook} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-ink mb-1">
-                  Destination Webhook URL (HTTPS)
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://hooks.zapier.com/hooks/catch/... or https://yourdomain.com/webhook"
-                  value={newWebhookUrl}
-                  onChange={(e) => setNewWebhookUrl(e.target.value)}
-                  className="w-full rounded-xl border border-line bg-bg p-3 text-xs font-mono text-ink"
-                  required
-                />
-              </div>
+            {/* Modal Tabs */}
+            <div className="flex items-center gap-2 border-b border-line mt-4 mb-5 pb-1">
+              <button
+                onClick={() => setModalTab("settings")}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
+                  modalTab === "settings" ? "bg-warm-cream text-ink border border-line" : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                Settings & Credentials
+              </button>
+              <button
+                onClick={() => setModalTab("test")}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
+                  modalTab === "test" ? "bg-warm-cream text-ink border border-line" : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                <span>⚡ Live Test Simulator</span>
+              </button>
+            </div>
 
+            {modalTab === "settings" ? (
+              <form onSubmit={handleSaveSheets} className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                    Google Spreadsheet ID
+                  </label>
+                  <input
+                    type="text"
+                    value={sheetsForm.spreadsheetId || ""}
+                    onChange={(e) => setSheetsForm({ ...sheetsForm, spreadsheetId: e.target.value })}
+                    placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+                    className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink placeholder:text-ink-muted/50 focus:outline-none focus:ring-2 focus:ring-brand/20"
+                  />
+                  <p className="text-[11px] text-ink-muted mt-1">
+                    Found in your Google Sheet URL between <code>/d/</code> and <code>/edit</code>. Share edit access with <code>integrations@tysonpe.com</code>.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                    Sheet Tab Name
+                  </label>
+                  <input
+                    type="text"
+                    value={sheetsForm.sheetName || "Tysonpe Orders"}
+                    onChange={(e) => setSheetsForm({ ...sheetsForm, sheetName: e.target.value })}
+                    className="w-full text-xs px-3.5 py-2 rounded-xl bg-surface border border-line text-ink"
+                  />
+                </div>
+
+                <div className="space-y-2 pt-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={sheetsForm.syncOnOrder}
+                      onChange={(e) => setSheetsForm({ ...sheetsForm, syncOnOrder: e.target.checked })}
+                      className="rounded border-line text-brand focus:ring-brand"
+                    />
+                    <span className="text-xs font-medium text-ink">Sync when an order is paid (with price, customer, UTR)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={sheetsForm.syncOnLead}
+                      onChange={(e) => setSheetsForm({ ...sheetsForm, syncOnLead: e.target.checked })}
+                      className="rounded border-line text-brand focus:ring-brand"
+                    />
+                    <span className="text-xs font-medium text-ink">Sync prospective leads captured from storefront</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer pt-2 border-t border-line">
+                    <input
+                      type="checkbox"
+                      checked={sheetsForm.enabled}
+                      onChange={(e) => setSheetsForm({ ...sheetsForm, enabled: e.target.checked })}
+                      className="rounded border-line text-brand focus:ring-brand"
+                    />
+                    <span className="text-xs font-semibold text-ink">Enable live sync to this spreadsheet</span>
+                  </label>
+                </div>
+
+                <div className="pt-4 border-t border-line flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveModal(null)}
+                    className="btn-secondary text-xs px-4 py-2"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="btn-primary text-xs px-4 py-2"
+                  >
+                    {isPending ? "Saving..." : "Save Configuration"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-ink-muted">
+                  Test your connection by simulating a real customer purchase and observing row generation.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={handleTestSheets}
+                  disabled={testLoading}
+                  className="btn-primary text-xs px-4 py-2 flex items-center gap-2 w-full justify-center"
+                >
+                  {testLoading ? "Testing Google Sheets sync..." : "⚡ Run Live Sheet Append Test"}
+                </button>
+
+                {sheetsTestResult && (
+                  <div
+                    className={`p-4 rounded-xl border text-xs space-y-3 ${
+                      sheetsTestResult.ok
+                        ? "bg-emerald-50/50 border-emerald-200"
+                        : "bg-amber-50/50 border-amber-200"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-ink">
+                        {sheetsTestResult.ok ? "✅ Test Row Successfully Appended" : "❌ Connection Failed"}
+                      </span>
+                      {sheetsTestResult.latencyMs && (
+                        <span className="text-[11px] font-mono font-medium text-ink-muted">
+                          {sheetsTestResult.latencyMs}ms roundtrip
+                        </span>
+                      )}
+                    </div>
+
+                    {sheetsTestResult.error && (
+                      <p className="text-amber-800">{sheetsTestResult.error}</p>
+                    )}
+
+                    {sheetsTestResult.sampleRow && (
+                      <div>
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                          Appended Row Preview:
+                        </span>
+                        <div className="overflow-x-auto rounded-lg border border-line bg-surface p-2">
+                          <table className="w-full text-[11px] font-mono text-ink text-left">
+                            <tbody>
+                              <tr className="border-b border-line text-ink-muted">
+                                <th className="p-1.5">Timestamp</th>
+                                <th className="p-1.5">Order ID</th>
+                                <th className="p-1.5">Customer</th>
+                                <th className="p-1.5">Email</th>
+                                <th className="p-1.5">Phone</th>
+                                <th className="p-1.5">Amount</th>
+                                <th className="p-1.5">Status</th>
+                              </tr>
+                              <tr>
+                                {sheetsTestResult.sampleRow.slice(0, 7).map((cell, idx) => (
+                                  <td key={idx} className="p-1.5 whitespace-nowrap">
+                                    {cell}
+                                  </td>
+                                ))}
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: Discord                                            */}
+      {/* ========================================================= */}
+      {activeModal === "discord" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="card max-w-2xl w-full bg-surface border-line shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between pb-4 border-b border-line">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-warm-cream/50 border border-line flex items-center justify-center p-2">
+                  <DiscordIcon className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-ink font-display">Discord VIP Webhook</h3>
+                  <p className="text-xs text-ink-muted">Broadcast sales & new customer alerts to your Discord server</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="text-ink-muted hover:text-ink text-sm p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 border-b border-line mt-4 mb-5 pb-1">
+              <button
+                onClick={() => setModalTab("settings")}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
+                  modalTab === "settings" ? "bg-warm-cream text-ink border border-line" : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                Settings
+              </button>
+              <button
+                onClick={() => setModalTab("test")}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
+                  modalTab === "test" ? "bg-warm-cream text-ink border border-line" : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                <span>⚡ Test Embed Message</span>
+              </button>
+            </div>
+
+            {modalTab === "settings" ? (
+              <form onSubmit={handleSaveDiscord} className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                    Discord Incoming Webhook URL
+                  </label>
+                  <input
+                    type="url"
+                    value={discordForm.webhookUrl || ""}
+                    onChange={(e) => setDiscordForm({ ...discordForm, webhookUrl: e.target.value })}
+                    placeholder="https://discord.com/api/webhooks/..."
+                    className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink placeholder:text-ink-muted/50 focus:outline-none focus:ring-2 focus:ring-brand/20"
+                  />
+                  <p className="text-[11px] text-ink-muted mt-1">
+                    In Discord: Server Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                    Community Server Invite Link (Optional)
+                  </label>
+                  <input
+                    type="url"
+                    value={discordForm.serverInviteUrl || ""}
+                    onChange={(e) => setDiscordForm({ ...discordForm, serverInviteUrl: e.target.value })}
+                    placeholder="https://discord.gg/yourbrand"
+                    className="w-full text-xs px-3.5 py-2 rounded-xl bg-surface border border-line text-ink"
+                  />
+                  <p className="text-[11px] text-ink-muted mt-1">
+                    Displayed to buyers on the confirmation screen for one-click community onboarding.
+                  </p>
+                </div>
+
+                <div className="pt-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={discordForm.autoNotifyOnPurchase}
+                      onChange={(e) => setDiscordForm({ ...discordForm, autoNotifyOnPurchase: e.target.checked })}
+                      className="rounded border-line text-brand focus:ring-brand"
+                    />
+                    <span className="text-xs font-semibold text-ink">
+                      Send rich embed notification for every paid transaction
+                    </span>
+                  </label>
+                </div>
+
+                <div className="pt-4 border-t border-line flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveModal(null)}
+                    className="btn-secondary text-xs px-4 py-2"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="btn-primary text-xs px-4 py-2"
+                  >
+                    {isPending ? "Saving..." : "Save Discord Settings"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-ink-muted">
+                  Send a test embed notification to verify formatting, role triggers, and network connectivity.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={handleTestDiscord}
+                  disabled={testLoading}
+                  className="btn-primary text-xs px-4 py-2 flex items-center gap-2 w-full justify-center"
+                >
+                  {testLoading ? "Dispatching Discord Embed..." : "⚡ Dispatch Test Discord Embed"}
+                </button>
+
+                {discordTestResult && (
+                  <div
+                    className={`p-4 rounded-xl border text-xs space-y-3 ${
+                      discordTestResult.ok
+                        ? "bg-[#2f3136] text-white border-zinc-700"
+                        : "bg-amber-50/50 border-amber-200 text-ink"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">
+                        {discordTestResult.ok ? "✅ Discord Webhook Dispatched" : "❌ Dispatch Failed"}
+                      </span>
+                      {discordTestResult.latencyMs && (
+                        <span className="text-[11px] font-mono opacity-80">
+                          {discordTestResult.latencyMs}ms latency
+                        </span>
+                      )}
+                    </div>
+
+                    {discordTestResult.error && (
+                      <p className="text-amber-400">{discordTestResult.error}</p>
+                    )}
+
+                    {/* Discord message UI preview */}
+                    <div className="bg-[#36393f] p-3 rounded-lg border-l-4 border-brand space-y-2 text-zinc-100">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-brand flex items-center justify-center text-[10px] font-bold text-white">
+                          T
+                        </span>
+                        <span className="font-bold text-sm">Tysonpe Bot</span>
+                        <span className="text-[10px] bg-brand/30 px-1 rounded text-brand-light">BOT</span>
+                      </div>
+                      <div className="font-bold text-sm">🎉 New Paid Order - Tysonpe Storefront</div>
+                      <p className="text-xs text-zinc-300">
+                        <strong>Rahul Sharma</strong> just purchased <strong>Creator Commerce Masterclass</strong>!
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
+                        <div>
+                          <div className="text-[10px] text-zinc-400 uppercase font-semibold">Amount</div>
+                          <div className="font-mono">₹4,999.00</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-zinc-400 uppercase font-semibold">Gateway</div>
+                          <div>UPI Intent (T+1 Payout)</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: SMS Gateway                                        */}
+      {/* ========================================================= */}
+      {activeModal === "sms" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="card max-w-2xl w-full bg-surface border-line shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between pb-4 border-b border-line">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-warm-cream/50 border border-line flex items-center justify-center p-2">
+                  <SmsIcon className="w-6 h-6 text-brand" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-ink font-display">DLT SMS Gateway (Fast2SMS / MSG91)</h3>
+                  <p className="text-xs text-ink-muted">High-priority transactional receipts & OTPs</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="text-ink-muted hover:text-ink text-sm p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 border-b border-line mt-4 mb-5 pb-1">
+              <button
+                onClick={() => setModalTab("settings")}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
+                  modalTab === "settings" ? "bg-warm-cream text-ink border border-line" : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                Credentials & Sender ID
+              </button>
+              <button
+                onClick={() => setModalTab("test")}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
+                  modalTab === "test" ? "bg-warm-cream text-ink border border-line" : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                <span>⚡ Test SMS Dispatch</span>
+              </button>
+            </div>
+
+            {modalTab === "settings" ? (
+              <form onSubmit={handleSaveSms} className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                      Provider
+                    </label>
+                    <select
+                      value={smsForm.provider}
+                      onChange={(e) => setSmsForm({ ...smsForm, provider: e.target.value as "fast2sms" | "msg91" })}
+                      className="w-full text-xs px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                    >
+                      <option value="fast2sms">Fast2SMS (Quick DLT)</option>
+                      <option value="msg91">MSG91 Enterprise</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                      Sender ID (6 Chars)
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={smsForm.senderId || "TYSONP"}
+                      onChange={(e) => setSmsForm({ ...smsForm, senderId: e.target.value.toUpperCase() })}
+                      className="w-full text-xs font-mono uppercase px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                    SMS Gateway API Key
+                  </label>
+                  <input
+                    type="password"
+                    value={smsForm.apiKey || ""}
+                    onChange={(e) => setSmsForm({ ...smsForm, apiKey: e.target.value })}
+                    placeholder="Enter provider API authorization key"
+                    className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                  />
+                </div>
+
+                <div className="space-y-2 pt-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={smsForm.sendOrderConfirmation}
+                      onChange={(e) => setSmsForm({ ...smsForm, sendOrderConfirmation: e.target.checked })}
+                      className="rounded border-line text-brand focus:ring-brand"
+                    />
+                    <span className="text-xs font-medium text-ink">
+                      Send instant SMS order confirmation with access link to buyer
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={smsForm.sendOtp}
+                      onChange={(e) => setSmsForm({ ...smsForm, sendOtp: e.target.checked })}
+                      className="rounded border-line text-brand focus:ring-brand"
+                    />
+                    <span className="text-xs font-medium text-ink">
+                      Use SMS for high-speed phone login OTPs
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer pt-2 border-t border-line">
+                    <input
+                      type="checkbox"
+                      checked={smsForm.enabled}
+                      onChange={(e) => setSmsForm({ ...smsForm, enabled: e.target.checked })}
+                      className="rounded border-line text-brand focus:ring-brand"
+                    />
+                    <span className="text-xs font-semibold text-ink">
+                      Enable SMS notifications
+                    </span>
+                  </label>
+                </div>
+
+                <div className="pt-4 border-t border-line flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveModal(null)}
+                    className="btn-secondary text-xs px-4 py-2"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="btn-primary text-xs px-4 py-2"
+                  >
+                    {isPending ? "Saving..." : "Save SMS Gateway"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-ink-muted">
+                  Test SMS formatting with your configured DLT Sender ID.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={handleTestSms}
+                  disabled={testLoading}
+                  className="btn-primary text-xs px-4 py-2 flex items-center gap-2 w-full justify-center"
+                >
+                  {testLoading ? "Testing SMS dispatch..." : "⚡ Dispatch Test SMS"}
+                </button>
+
+                {smsTestResult && (
+                  <div
+                    className={`p-4 rounded-xl border text-xs space-y-3 ${
+                      smsTestResult.ok
+                        ? "bg-emerald-50/50 border-emerald-200"
+                        : "bg-amber-50/50 border-amber-200"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-ink">
+                        {smsTestResult.ok ? "✅ SMS Gateway Validated" : "❌ SMS Dispatch Failed"}
+                      </span>
+                      {smsTestResult.latencyMs && (
+                        <span className="text-[11px] font-mono text-ink-muted">
+                          {smsTestResult.latencyMs}ms delivery latency
+                        </span>
+                      )}
+                    </div>
+
+                    {smsTestResult.error && (
+                      <p className="text-amber-800">{smsTestResult.error}</p>
+                    )}
+
+                    {smsTestResult.previewText && (
+                      <div>
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                          Simulated Phone Screen:
+                        </span>
+                        <div className="max-w-xs mx-auto p-3.5 rounded-2xl bg-surface border border-line shadow-sm space-y-2">
+                          <div className="flex items-center justify-between text-[10px] text-ink-muted border-b border-line pb-1">
+                            <span>SMS from {smsForm.senderId || "TYSONP"}</span>
+                            <span>Just now</span>
+                          </div>
+                          <div className="p-2.5 rounded-xl bg-warm-cream/50 text-ink text-xs font-sans leading-relaxed">
+                            {smsTestResult.previewText}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: Custom Domain & SSL                                */}
+      {/* ========================================================= */}
+      {activeModal === "domain" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="card max-w-2xl w-full bg-surface border-line shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between pb-4 border-b border-line">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-warm-cream/50 border border-line flex items-center justify-center p-2">
+                  <CustomDomainIcon className="w-6 h-6 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-ink font-display">Custom Domain & White-Label SSL</h3>
+                  <p className="text-xs text-ink-muted">Run your storefront on your own brand's web address</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="text-ink-muted hover:text-ink text-sm p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 border-b border-line mt-4 mb-5 pb-1">
+              <button
+                onClick={() => setModalTab("settings")}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
+                  modalTab === "settings" ? "bg-warm-cream text-ink border border-line" : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                Domain Settings
+              </button>
+              <button
+                onClick={() => setModalTab("test")}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
+                  modalTab === "test" ? "bg-warm-cream text-ink border border-line" : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                <span>⚡ Verify DNS & SSL</span>
+              </button>
+            </div>
+
+            {modalTab === "settings" ? (
+              <form onSubmit={handleSaveDomain} className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                    Your Domain or Subdomain
+                  </label>
+                  <input
+                    type="text"
+                    value={domainForm.domain || ""}
+                    onChange={(e) => setDomainForm({ ...domainForm, domain: e.target.value })}
+                    placeholder="e.g. learn.mycreatorhub.com"
+                    className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                  />
+                  <p className="text-[11px] text-ink-muted mt-1">
+                    Default storefront URL: <code>https://tysonpe.com/c/{creatorHandle}</code>
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-warm-cream/50 border border-line space-y-2 text-xs">
+                  <span className="font-semibold text-ink block">DNS Configuration Instructions:</span>
+                  <div className="font-mono text-[11px] space-y-1">
+                    <p>Type: <strong>CNAME</strong></p>
+                    <p>Name / Host: <strong>{domainForm.domain ? domainForm.domain.split(".")[0] : "learn"}</strong></p>
+                    <p>Target / Points to: <strong>cname.tysonpe.com</strong></p>
+                    <p>Proxy status: <strong>DNS only (TTL: Auto)</strong></p>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-line flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveModal(null)}
+                    className="btn-secondary text-xs px-4 py-2"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="btn-primary text-xs px-4 py-2"
+                  >
+                    {isPending ? "Saving..." : "Save Custom Domain"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-ink-muted">
+                  Perform automated DNS edge resolution and check SSL certificate issuance.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={handleVerifyDomain}
+                  disabled={testLoading}
+                  className="btn-primary text-xs px-4 py-2 flex items-center gap-2 w-full justify-center"
+                >
+                  {testLoading ? "Resolving DNS & SSL..." : "⚡ Verify DNS & Check SSL Status"}
+                </button>
+
+                {domainTestResult && (
+                  <div
+                    className={`p-4 rounded-xl border text-xs space-y-3 ${
+                      domainTestResult.ok
+                        ? "bg-emerald-50/50 border-emerald-200"
+                        : "bg-amber-50/50 border-amber-200"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-ink">
+                        {domainTestResult.ok ? "✅ Domain Verified & SSL Active" : "❌ Verification Pending"}
+                      </span>
+                      {domainTestResult.latencyMs && (
+                        <span className="text-[11px] font-mono text-ink-muted">
+                          {domainTestResult.latencyMs}ms DNS probe
+                        </span>
+                      )}
+                    </div>
+
+                    {domainTestResult.dnsRecord && (
+                      <div className="font-mono text-[11px] p-2.5 rounded-lg bg-surface border border-line space-y-1">
+                        <div className="text-emerald-700 font-semibold">✓ CNAME record found: cname.tysonpe.com</div>
+                        <div className="text-emerald-700 font-semibold">✓ Let's Encrypt TLS 1.3 Active</div>
+                        <div className="text-ink-muted">Edge Location: BOM1 (Mumbai AWS CloudFront)</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: Email Marketing                                    */}
+      {/* ========================================================= */}
+      {activeModal === "email" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="card max-w-2xl w-full bg-surface border-line shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between pb-4 border-b border-line">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-warm-cream/50 border border-line flex items-center justify-center p-2">
+                  <EmailMarketingIcon className="w-6 h-6 text-emerald-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-ink font-display">Email Marketing & Audience Sync</h3>
+                  <p className="text-xs text-ink-muted">ConvertKit, Brevo, Mailchimp & ActiveCampaign</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="text-ink-muted hover:text-ink text-sm p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 border-b border-line mt-4 mb-5 pb-1">
+              <button
+                onClick={() => setModalTab("settings")}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
+                  modalTab === "settings" ? "bg-warm-cream text-ink border border-line" : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                Settings
+              </button>
+              <button
+                onClick={() => setModalTab("test")}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
+                  modalTab === "test" ? "bg-warm-cream text-ink border border-line" : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                <span>⚡ Test Audience Sync</span>
+              </button>
+            </div>
+
+            {modalTab === "settings" ? (
+              <form onSubmit={handleSaveEmail} className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                      Provider
+                    </label>
+                    <select
+                      value={emailForm.provider}
+                      onChange={(e) => setEmailForm({ ...emailForm, provider: e.target.value as any })}
+                      className="w-full text-xs px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                    >
+                      <option value="none">Disabled</option>
+                      <option value="convertkit">ConvertKit (Kit)</option>
+                      <option value="brevo">Brevo (Sendinblue)</option>
+                      <option value="mailchimp">Mailchimp</option>
+                      <option value="activecampaign">ActiveCampaign</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                      Audience / List ID
+                    </label>
+                    <input
+                      type="text"
+                      value={emailForm.audienceId || ""}
+                      onChange={(e) => setEmailForm({ ...emailForm, audienceId: e.target.value })}
+                      placeholder="e.g. aud_98234 or tag_id"
+                      className="w-full text-xs px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                    API Key
+                  </label>
+                  <input
+                    type="password"
+                    value={emailForm.apiKey || ""}
+                    onChange={(e) => setEmailForm({ ...emailForm, apiKey: e.target.value })}
+                    placeholder="Enter email service API key"
+                    className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                    Customer Tag
+                  </label>
+                  <input
+                    type="text"
+                    value={emailForm.tag || "Tysonpe Customer"}
+                    onChange={(e) => setEmailForm({ ...emailForm, tag: e.target.value })}
+                    className="w-full text-xs px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                  />
+                </div>
+
+                <div className="pt-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={emailForm.autoSyncLearners}
+                      onChange={(e) => setEmailForm({ ...emailForm, autoSyncLearners: e.target.checked })}
+                      className="rounded border-line text-brand focus:ring-brand"
+                    />
+                    <span className="text-xs font-semibold text-ink">
+                      Automatically add every learner to this list upon purchase
+                    </span>
+                  </label>
+                </div>
+
+                <div className="pt-4 border-t border-line flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveModal(null)}
+                    className="btn-secondary text-xs px-4 py-2"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="btn-primary text-xs px-4 py-2"
+                  >
+                    {isPending ? "Saving..." : "Save Email Settings"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-ink-muted">
+                  Simulate contact tagging and list synchronization for a test buyer.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={handleTestEmail}
+                  disabled={testLoading}
+                  className="btn-primary text-xs px-4 py-2 flex items-center gap-2 w-full justify-center"
+                >
+                  {testLoading ? "Testing email sync..." : "⚡ Run Test Audience Sync"}
+                </button>
+
+                {emailTestResult && (
+                  <div
+                    className={`p-4 rounded-xl border text-xs space-y-2 ${
+                      emailTestResult.ok
+                        ? "bg-emerald-50/50 border-emerald-200"
+                        : "bg-amber-50/50 border-amber-200"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-ink">
+                        {emailTestResult.ok ? "✅ Contact Synced & Tagged" : "❌ Sync Failed"}
+                      </span>
+                      {emailTestResult.latencyMs && (
+                        <span className="text-[11px] font-mono text-ink-muted">
+                          {emailTestResult.latencyMs}ms latency
+                        </span>
+                      )}
+                    </div>
+                    {emailTestResult.syncedEmail && (
+                      <p className="text-ink">
+                        Contact <code>{emailTestResult.syncedEmail}</code> tagged with:{" "}
+                        <span className="inline-block px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">
+                          {emailTestResult.tag}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: Tracking Pixels                                    */}
+      {/* ========================================================= */}
+      {activeModal === "pixels" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="card max-w-2xl w-full bg-surface border-line shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between pb-4 border-b border-line">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-warm-cream/50 border border-line flex items-center justify-center p-2">
+                  <MetaPixelIcon className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-ink font-display">Tracking Pixels & Analytics</h3>
+                  <p className="text-xs text-ink-muted">Meta Pixel, Google Analytics 4, and GTM Container</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="text-ink-muted hover:text-ink text-sm p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveTracking} className="space-y-4 mt-5">
               <div>
-                <label className="block text-xs font-bold text-ink mb-1">
-                  HMAC Secret Key (Optional)
+                <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                  Meta (Facebook) Pixel ID
                 </label>
                 <input
                   type="text"
-                  placeholder="Leave blank to auto-generate a secure random secret"
-                  value={newWebhookSecret}
-                  onChange={(e) => setNewWebhookSecret(e.target.value)}
-                  className="w-full rounded-xl border border-line bg-bg p-3 text-xs font-mono text-ink"
+                  value={trackingForm.metaPixelId || ""}
+                  onChange={(e) => setTrackingForm({ ...trackingForm, metaPixelId: e.target.value })}
+                  placeholder="e.g. 192837465019283"
+                  className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-ink mb-2">
-                  Subscribe to Events:
+                <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                  Google Analytics 4 Measurement ID
                 </label>
-                <div className="space-y-2">
-                  {AVAILABLE_EVENTS.map((ev) => {
-                    const checked = selectedEvents.includes(ev.id);
-                    return (
-                      <label
-                        key={ev.id}
-                        className={`flex items-start gap-3 p-2.5 rounded-xl border cursor-pointer transition-all ${
-                          checked
-                            ? "border-brand bg-brand-soft/20 text-ink"
-                            : "border-line bg-surface text-muted hover:border-line/80"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => handleToggleEvent(ev.id)}
-                          className="mt-0.5 h-4 w-4 rounded border-line text-brand focus:ring-brand"
-                        />
-                        <div className="text-xs">
-                          <p className="font-bold text-ink font-mono">{ev.label}</p>
-                          <p className="text-[11px] text-muted mt-0.5">{ev.desc}</p>
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
+                <input
+                  type="text"
+                  value={trackingForm.googleAnalyticsId || ""}
+                  onChange={(e) => setTrackingForm({ ...trackingForm, googleAnalyticsId: e.target.value })}
+                  placeholder="e.g. G-ABC123XYZ"
+                  className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                />
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-line">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                  Google Tag Manager Container ID
+                </label>
+                <input
+                  type="text"
+                  value={trackingForm.gtmContainerId || ""}
+                  onChange={(e) => setTrackingForm({ ...trackingForm, gtmContainerId: e.target.value })}
+                  placeholder="e.g. GTM-XXXXXXX"
+                  className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                />
+              </div>
+
+              <div className="pt-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={trackingForm.enabled}
+                    onChange={(e) => setTrackingForm({ ...trackingForm, enabled: e.target.checked })}
+                    className="rounded border-line text-brand focus:ring-brand"
+                  />
+                  <span className="text-xs font-semibold text-ink">
+                    Inject pixels into live storefront checkout pages
+                  </span>
+                </label>
+              </div>
+
+              <div className="pt-4 border-t border-line flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowAddWebhookModal(false)}
-                  className="btn btn-secondary btn-sm"
+                  onClick={() => setActiveModal(null)}
+                  className="btn-secondary text-xs px-4 py-2"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={isPending || !newWebhookUrl || selectedEvents.length === 0}
-                  className="btn btn-primary btn-sm"
+                  disabled={isPending}
+                  className="btn-primary text-xs px-4 py-2"
                 >
-                  {isPending ? "Saving..." : "Create Webhook"}
+                  {isPending ? "Saving..." : "Save Tracking Pixels"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: Developer Webhooks                                 */}
+      {/* ========================================================= */}
+      {activeModal === "webhooks" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="card max-w-3xl w-full bg-surface border-line shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto space-y-5">
+            <div className="flex items-start justify-between pb-4 border-b border-line">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-warm-cream/50 border border-line flex items-center justify-center p-2">
+                  <WebhookApiIcon className="w-6 h-6 text-ink" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-ink font-display">Developer Webhook Endpoints</h3>
+                  <p className="text-xs text-ink-muted">HMAC-SHA256 authenticated event relays</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="text-ink-muted hover:text-ink text-sm p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-ink-muted">
+                Receive instant HTTP POST callbacks whenever payments, leads, or course completions occur.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowAddWebhook(!showAddWebhook)}
+                className="btn-primary text-xs px-3 py-1.5"
+              >
+                {showAddWebhook ? "Hide Form" : "+ Add Endpoint"}
+              </button>
+            </div>
+
+            {/* Add Webhook Form */}
+            {showAddWebhook && (
+              <form onSubmit={handleAddWebhookSubmit} className="p-4 rounded-xl bg-warm-cream/40 border border-line space-y-3">
+                <div>
+                  <label className="text-xs font-semibold text-ink block mb-1">
+                    Endpoint URL
+                  </label>
+                  <input
+                    type="url"
+                    required
+                    placeholder="https://api.yourdomain.com/webhooks/tysonpe"
+                    value={newWebhookUrl}
+                    onChange={(e) => setNewWebhookUrl(e.target.value)}
+                    className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-ink block mb-1">
+                    Signing Secret (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Leave empty to auto-generate secret"
+                    value={newWebhookSecret}
+                    onChange={(e) => setNewWebhookSecret(e.target.value)}
+                    className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-ink block mb-1">
+                    Events to Listen For
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {AVAILABLE_EVENTS.map((ev) => (
+                      <label key={ev.id} className="flex items-center gap-2 cursor-pointer text-xs">
+                        <input
+                          type="checkbox"
+                          checked={selectedEvents.includes(ev.id)}
+                          onChange={() => {
+                            setSelectedEvents((prev) =>
+                              prev.includes(ev.id) ? prev.filter((x) => x !== ev.id) : [...prev, ev.id]
+                            );
+                          }}
+                          className="rounded border-line text-brand"
+                        />
+                        <span className="font-mono text-[11px]">{ev.id}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddWebhook(false)}
+                    className="btn-secondary text-xs px-3 py-1.5"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="btn-primary text-xs px-3 py-1.5"
+                  >
+                    {isPending ? "Adding..." : "Add Endpoint"}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* List of Webhooks */}
+            <div className="space-y-3">
+              {config.webhooks.length === 0 ? (
+                <div className="p-8 text-center border border-dashed border-line rounded-xl text-ink-muted text-xs">
+                  No webhook endpoints registered yet. Click "+ Add Endpoint" to register your first endpoint.
+                </div>
+              ) : (
+                config.webhooks.map((hook) => (
+                  <div
+                    key={hook.id}
+                    className="p-4 rounded-xl bg-surface border border-line space-y-2 hover:border-brand/40 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-mono font-bold text-ink truncate">
+                        {hook.url}
+                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleTestWebhookEndpoint(hook)}
+                          className="text-[11px] font-semibold text-brand hover:underline px-2 py-0.5 rounded bg-brand/5 border border-brand/20"
+                        >
+                          ⚡ Test Ping
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            startTransition(async () => {
+                              await toggleWebhookEndpointAction(hook.id, !hook.enabled);
+                              setConfig((prev) => ({
+                                ...prev,
+                                webhooks: prev.webhooks.map((h) =>
+                                  h.id === hook.id ? { ...h, enabled: !h.enabled } : h
+                                ),
+                              }));
+                            });
+                          }}
+                          className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
+                            hook.enabled
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : "bg-warm-cream text-ink-muted border border-line"
+                          }`}
+                        >
+                          {hook.enabled ? "Active" : "Paused"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!confirm("Delete this webhook?")) return;
+                            startTransition(async () => {
+                              await deleteWebhookEndpointAction(hook.id);
+                              setConfig((prev) => ({
+                                ...prev,
+                                webhooks: prev.webhooks.filter((h) => h.id !== hook.id),
+                              }));
+                            });
+                          }}
+                          className="text-xs text-amber-700 hover:text-amber-900"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      {hook.events.map((ev) => (
+                        <span
+                          key={ev}
+                          className="text-[10px] font-mono px-2 py-0.5 rounded bg-warm-cream text-ink-muted border border-line"
+                        >
+                          {ev}
+                        </span>
+                      ))}
+                    </div>
+
+                    {webhookTestResult && webhookTestResult.hookId === hook.id && (
+                      <div className="mt-2 p-2 rounded-lg bg-warm-cream/50 border border-line text-[11px] font-mono flex items-center justify-between">
+                        <span>
+                          Status: HTTP {webhookTestResult.statusCode || 200}
+                        </span>
+                        <span>Latency: {webhookTestResult.latencyMs}ms</span>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: Zoom & Cohorts                                     */}
+      {/* ========================================================= */}
+      {activeModal === "zoom" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="card max-w-2xl w-full bg-surface border-line shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between pb-4 border-b border-line">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-warm-cream/50 border border-line flex items-center justify-center p-2">
+                  <ZoomMeetingIcon className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-ink font-display">Zoom & Live Cohorts</h3>
+                  <p className="text-xs text-ink-muted">Webinar links unlocked automatically upon paid checkout</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="text-ink-muted hover:text-ink text-sm p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveLiveClass} className="space-y-4 mt-5">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                  Default Platform
+                </label>
+                <select
+                  value={liveClassForm.defaultProvider}
+                  onChange={(e) => setLiveClassForm({ ...liveClassForm, defaultProvider: e.target.value as any })}
+                  className="w-full text-xs px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                >
+                  <option value="zoom">Zoom Video</option>
+                  <option value="google_meet">Google Meet</option>
+                  <option value="youtube_live">YouTube Live (Unlisted)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                  Meeting Join URL
+                </label>
+                <input
+                  type="url"
+                  value={liveClassForm.meetingUrl || ""}
+                  onChange={(e) => setLiveClassForm({ ...liveClassForm, meetingUrl: e.target.value })}
+                  placeholder="https://zoom.us/j/123456789"
+                  className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                  Meeting Passcode (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={liveClassForm.meetingPassword || ""}
+                  onChange={(e) => setLiveClassForm({ ...liveClassForm, meetingPassword: e.target.value })}
+                  placeholder="e.g. TYSON2026"
+                  className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                  Student Instructions
+                </label>
+                <textarea
+                  rows={3}
+                  value={liveClassForm.instructions || ""}
+                  onChange={(e) => setLiveClassForm({ ...liveClassForm, instructions: e.target.value })}
+                  className="w-full text-xs px-3.5 py-2 rounded-xl bg-surface border border-line text-ink"
+                />
+              </div>
+
+              <div className="pt-4 border-t border-line flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveModal(null)}
+                  className="btn-secondary text-xs px-4 py-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="btn-primary text-xs px-4 py-2"
+                >
+                  {isPending ? "Saving..." : "Save Meeting Configuration"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: Telegram                                           */}
+      {/* ========================================================= */}
+      {activeModal === "telegram" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="card max-w-2xl w-full bg-surface border-line shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between pb-4 border-b border-line">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-warm-cream/50 border border-line flex items-center justify-center p-2">
+                  <TelegramChannelIcon className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-ink font-display">Telegram VIP Community</h3>
+                  <p className="text-xs text-ink-muted">Private broadcast channels & student chat groups</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="text-ink-muted hover:text-ink text-sm p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveTelegram} className="space-y-4 mt-5">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                  Telegram Group / Channel Invite URL
+                </label>
+                <input
+                  type="url"
+                  value={telegramForm.channelUrl || ""}
+                  onChange={(e) => setTelegramForm({ ...telegramForm, channelUrl: e.target.value })}
+                  placeholder="https://t.me/+AbCdEfGhIjKlMnOp"
+                  className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-ink-muted block mb-1">
+                  Community Name
+                </label>
+                <input
+                  type="text"
+                  value={telegramForm.groupName || ""}
+                  onChange={(e) => setTelegramForm({ ...telegramForm, groupName: e.target.value })}
+                  placeholder="e.g. VIP Mastermind Community"
+                  className="w-full text-xs px-3.5 py-2.5 rounded-xl bg-surface border border-line text-ink"
+                />
+              </div>
+
+              <div className="pt-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={telegramForm.autoInviteOnPurchase}
+                    onChange={(e) => setTelegramForm({ ...telegramForm, autoInviteOnPurchase: e.target.checked })}
+                    className="rounded border-line text-brand focus:ring-brand"
+                  />
+                  <span className="text-xs font-semibold text-ink">
+                    Display VIP Telegram invite badge prominently on order confirmation screens
+                  </span>
+                </label>
+              </div>
+
+              <div className="pt-4 border-t border-line flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveModal(null)}
+                  className="btn-secondary text-xs px-4 py-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="btn-primary text-xs px-4 py-2"
+                >
+                  {isPending ? "Saving..." : "Save Telegram Settings"}
                 </button>
               </div>
             </form>

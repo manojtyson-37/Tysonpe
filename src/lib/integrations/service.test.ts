@@ -35,6 +35,58 @@ describe("integrations service", () => {
       expect(DEFAULT_INTEGRATIONS_CONFIG.liveClass.defaultProvider).toBe("zoom");
       expect(DEFAULT_INTEGRATIONS_CONFIG.emailMarketing.provider).toBe("none");
       expect(DEFAULT_INTEGRATIONS_CONFIG.telegram.autoInviteOnPurchase).toBe(false);
+      expect(DEFAULT_INTEGRATIONS_CONFIG.googleSheets.sheetName).toBe("Tysonpe Orders");
+      expect(DEFAULT_INTEGRATIONS_CONFIG.discord.autoNotifyOnPurchase).toBe(true);
+      expect(DEFAULT_INTEGRATIONS_CONFIG.sms.senderId).toBe("TYSONP");
+      expect(DEFAULT_INTEGRATIONS_CONFIG.customDomain.verified).toBe(false);
+    });
+  });
+
+  describe("testGoogleSheetsSync", () => {
+    it("rejects empty spreadsheet IDs", async () => {
+      const { testGoogleSheetsSync } = await import("./service");
+      const res = await testGoogleSheetsSync("");
+      expect(res.success).toBe(false);
+      expect(res.error).toContain("Google Spreadsheet ID");
+    });
+
+    it("simulates row append when spreadsheet ID is valid", async () => {
+      const { testGoogleSheetsSync } = await import("./service");
+      const res = await testGoogleSheetsSync("1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms");
+      expect(res.success).toBe(true);
+      expect(res.rowsAppended).toBe(1);
+      expect(res.sampleRow?.length).toBeGreaterThan(5);
+    });
+  });
+
+  describe("testSendSms", () => {
+    it("enforces exact 6-character DLT sender IDs", async () => {
+      const { testSendSms } = await import("./service");
+      const badRes = await testSendSms("fast2sms", "TOOLONG123", "key");
+      expect(badRes.success).toBe(false);
+      expect(badRes.error).toContain("6-character");
+
+      const goodRes = await testSendSms("fast2sms", "TYSONP", "key");
+      expect(goodRes.success).toBe(true);
+      expect(goodRes.previewText).toContain("[TYSONP]");
+    });
+  });
+
+  describe("verifyCustomDomain", () => {
+    it("rejects invalid domains missing dots", async () => {
+      const { verifyCustomDomain } = await import("./service");
+      const bad = await verifyCustomDomain("invalidlocalhost");
+      expect(bad.verified).toBe(false);
+      expect(bad.error).toContain("valid domain");
+    });
+
+    it("verifies clean subdomains and returns CNAME target", async () => {
+      const { verifyCustomDomain } = await import("./service");
+      const res = await verifyCustomDomain("https://learn.creator.com/");
+      expect(res.verified).toBe(true);
+      expect(res.sslActive).toBe(true);
+      expect(res.dnsRecord?.target).toBe("cname.tysonpe.com");
+      expect(res.dnsRecord?.host).toBe("learn.creator.com");
     });
   });
 });

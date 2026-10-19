@@ -74,6 +74,7 @@ const navSections: NavSection[] = [
         href: "/dashboard/integrations",
         label: "Integrations & APIs",
         icon: IntegrationsIcon,
+        badge: "8 Apps",
       },
       { href: "/dashboard/coupons", label: "Coupons", icon: TicketIcon },
       { href: "/dashboard/settings", label: "Settings", icon: SettingsIcon },

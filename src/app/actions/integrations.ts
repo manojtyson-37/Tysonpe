@@ -6,6 +6,11 @@ import {
   getCreatorIntegrations,
   saveCreatorIntegrations,
   testSendWebhook,
+  testGoogleSheetsSync,
+  testDiscordWebhook,
+  testSendSms,
+  testEmailMarketingSync,
+  verifyCustomDomain,
 } from "@/lib/integrations/service";
 import type {
   CreatorIntegrationsConfig,
@@ -13,6 +18,11 @@ import type {
   LiveClassConfig,
   TelegramConfig,
   TrackingPixelsConfig,
+  GoogleSheetsConfig,
+  DiscordConfig,
+  SmsConfig,
+  EmailMarketingConfig,
+  CustomDomainConfig,
   WebhookEventName,
 } from "@/lib/integrations/types";
 
@@ -163,6 +173,223 @@ export async function saveTelegramAction(
     await saveCreatorIntegrations(creator.id, config);
     revalidatePath("/dashboard/integrations");
     return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function saveGoogleSheetsAction(
+  googleSheets: GoogleSheetsConfig
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { creator } = await requireCreator();
+    const config = await getCreatorIntegrations(creator.id);
+    config.googleSheets = googleSheets;
+    await saveCreatorIntegrations(creator.id, config);
+    revalidatePath("/dashboard/integrations");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function testGoogleSheetsSyncAction(input: {
+  spreadsheetId: string;
+  sheetName?: string;
+}): Promise<{
+  ok: boolean;
+  latencyMs?: number;
+  rowsAppended?: number;
+  sampleRow?: string[];
+  error?: string;
+}> {
+  try {
+    await requireCreator();
+    const res = await testGoogleSheetsSync(input.spreadsheetId, input.sheetName);
+    return {
+      ok: res.success,
+      latencyMs: res.latencyMs,
+      rowsAppended: res.rowsAppended,
+      sampleRow: res.sampleRow,
+      error: res.error,
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function saveDiscordAction(
+  discord: DiscordConfig
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { creator } = await requireCreator();
+    const config = await getCreatorIntegrations(creator.id);
+    config.discord = discord;
+    await saveCreatorIntegrations(creator.id, config);
+    revalidatePath("/dashboard/integrations");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function testDiscordWebhookAction(input: {
+  webhookUrl: string;
+}): Promise<{
+  ok: boolean;
+  statusCode?: number;
+  latencyMs?: number;
+  previewEmbed?: Record<string, unknown>;
+  error?: string;
+}> {
+  try {
+    await requireCreator();
+    const res = await testDiscordWebhook(input.webhookUrl);
+    return {
+      ok: res.success,
+      statusCode: res.statusCode,
+      latencyMs: res.latencyMs,
+      previewEmbed: res.previewEmbed,
+      error: res.error,
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function saveSmsAction(
+  sms: SmsConfig
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { creator } = await requireCreator();
+    const config = await getCreatorIntegrations(creator.id);
+    config.sms = sms;
+    await saveCreatorIntegrations(creator.id, config);
+    revalidatePath("/dashboard/integrations");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function testSendSmsAction(input: {
+  provider: "fast2sms" | "msg91";
+  senderId: string;
+  apiKey: string;
+  phone?: string;
+}): Promise<{
+  ok: boolean;
+  latencyMs?: number;
+  messageId?: string;
+  previewText?: string;
+  error?: string;
+}> {
+  try {
+    await requireCreator();
+    const res = await testSendSms(input.provider, input.senderId, input.apiKey, input.phone);
+    return {
+      ok: res.success,
+      latencyMs: res.latencyMs,
+      messageId: res.messageId,
+      previewText: res.previewText,
+      error: res.error,
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function saveEmailMarketingAction(
+  emailMarketing: EmailMarketingConfig
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { creator } = await requireCreator();
+    const config = await getCreatorIntegrations(creator.id);
+    config.emailMarketing = emailMarketing;
+    await saveCreatorIntegrations(creator.id, config);
+    revalidatePath("/dashboard/integrations");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function testEmailMarketingAction(input: {
+  provider: string;
+  apiKey: string;
+  audienceId: string;
+  tag?: string;
+}): Promise<{
+  ok: boolean;
+  latencyMs?: number;
+  contactCount?: number;
+  syncedEmail?: string;
+  tag?: string;
+  error?: string;
+}> {
+  try {
+    await requireCreator();
+    const res = await testEmailMarketingSync(
+      input.provider,
+      input.apiKey,
+      input.audienceId,
+      input.tag
+    );
+    return {
+      ok: res.success,
+      latencyMs: res.latencyMs,
+      contactCount: res.contactCount,
+      syncedEmail: res.syncedEmail,
+      tag: res.tag,
+      error: res.error,
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function saveCustomDomainAction(
+  customDomain: CustomDomainConfig
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { creator } = await requireCreator();
+    const config = await getCreatorIntegrations(creator.id);
+    config.customDomain = customDomain;
+    await saveCreatorIntegrations(creator.id, config);
+    revalidatePath("/dashboard/integrations");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function verifyCustomDomainAction(input: {
+  domain: string;
+}): Promise<{
+  ok: boolean;
+  verified?: boolean;
+  sslActive?: boolean;
+  latencyMs?: number;
+  dnsRecord?: {
+    type: string;
+    host: string;
+    target: string;
+    status: string;
+    ttl: number;
+  };
+  error?: string;
+}> {
+  try {
+    await requireCreator();
+    const res = await verifyCustomDomain(input.domain);
+    return {
+      ok: res.verified,
+      verified: res.verified,
+      sslActive: res.sslActive,
+      latencyMs: res.latencyMs,
+      dnsRecord: res.dnsRecord,
+      error: res.error,
+    };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }

@@ -32,11 +32,13 @@ export interface LiveClassConfig {
 }
 
 export interface EmailMarketingConfig {
-  provider: "none" | "mailchimp" | "convertkit" | "activecampaign";
+  provider: "none" | "convertkit" | "mailchimp" | "brevo" | "activecampaign";
   apiKey?: string;
   audienceId?: string;
   tag?: string;
   autoSyncLearners: boolean;
+  enabled?: boolean;
+  lastSyncedAt?: string;
 }
 
 export interface TelegramConfig {
@@ -45,10 +47,48 @@ export interface TelegramConfig {
   autoInviteOnPurchase: boolean;
 }
 
+export interface GoogleSheetsConfig {
+  spreadsheetId?: string;
+  sheetName?: string;
+  syncOnOrder: boolean;
+  syncOnLead: boolean;
+  enabled: boolean;
+  lastSyncedAt?: string;
+}
+
+export interface DiscordConfig {
+  webhookUrl?: string;
+  serverInviteUrl?: string;
+  botEnabled: boolean;
+  autoNotifyOnPurchase: boolean;
+  lastFiredAt?: string;
+}
+
+export interface SmsConfig {
+  provider: "fast2sms" | "msg91";
+  senderId?: string;
+  apiKey?: string;
+  sendOtp: boolean;
+  sendOrderConfirmation: boolean;
+  enabled: boolean;
+  lastFiredAt?: string;
+}
+
+export interface CustomDomainConfig {
+  domain?: string;
+  verified: boolean;
+  sslActive: boolean;
+  lastCheckedAt?: string;
+}
+
 export interface CreatorIntegrationsConfig {
   webhooks: CreatorWebhookEndpoint[];
   tracking: TrackingPixelsConfig;
   liveClass: LiveClassConfig;
   emailMarketing: EmailMarketingConfig;
   telegram: TelegramConfig;
+  googleSheets: GoogleSheetsConfig;
+  discord: DiscordConfig;
+  sms: SmsConfig;
+  customDomain: CustomDomainConfig;
 }

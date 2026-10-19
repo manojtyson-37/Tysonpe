@@ -1,10 +1,17 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import { Plus_Jakarta_Sans, Bricolage_Grotesque } from "next/font/google";
 import "./globals.css";
 
 const sans = Plus_Jakarta_Sans({
   variable: "--font-sans-var",
   subsets: ["latin"],
+  display: "swap",
+});
+
+const display = Bricolage_Grotesque({
+  variable: "--font-display-var",
+  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -15,7 +22,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${sans.variable} h-full`}>
+    <html lang="en" className={`${sans.variable} ${display.variable} h-full`}>
       <body className="min-h-full flex flex-col font-sans antialiased">{children}</body>
     </html>
   );
